@@ -1,0 +1,14 @@
+---
+description: Core technical standards, conventions, and dependencies for HatchPal
+globs: *
+alwaysApply: true
+---
+# HatchPal Tech Stack & Standards
+
+- **Runtime**: React Native via Expo (managed workflow, latest SDK).
+- **Language**: TypeScript with strict mode enabled (`noImplicitAny: true`, `strictNullChecks: true`).
+- **State Management**: Zustand with `react-native-mmkv` for storage persistence.
+- **Animation**: `@rive-app/react-native` for character/egg state machines; `react-native-reanimated` for app transitions.
+- **Styling**: NativeWind (Tailwind CSS) or `StyleSheet.create`. Do not introduce styling libraries requiring native linking beyond Expo defaults.
+- **Haptics & Sound**: `expo-haptics` and `expo-audio`.
+- **Offline First**: All game logic must work with zero network connection. Never add server-side requirements for time calculation.

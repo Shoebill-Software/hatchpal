@@ -1,0 +1,33 @@
+---
+description: Rules for timestamp calculation, incubation pacing, and animal growth state machines
+globs: src/domain/**,src/simulation/**,src/hooks/**
+alwaysApply: false
+---
+# Simulation Engine & Time Determinism
+
+### 1. The Time Engine Rule
+
+- **Never use `setInterval` or background services to advance age.**
+- Growth stage is calculated deterministically:
+  `elapsedSeconds = Math.max(0, (Date.now() - pet.startedAtEpoch) / 1000)`
+- All biological milestones are derived from species configuration files (`src/data/species/*.json`).
+
+### 2. Time Tampering Mitigation
+
+- Always cross-reference `Date.now()` with stored `lastSavedEpoch`.
+- If `Date.now() < lastSavedEpoch`, flag clock rollback; gracefully halt growth until real-time catches up rather than crashing or punishing the player.
+
+### 3. State Schema Integrity
+
+Every pet instance must conform to this immutable core schema:
+
+```typescript
+interface PetInstance {
+  id: string;
+  speciesId: 'silkie_chicken' | 'leopard_gecko' | 'green_sea_turtle';
+  nickname: string;
+  laidAtEpoch: number;
+  lastInteractedEpoch: number;
+  healthIndex: number; // 0.0 to 1.0 (affects visual sheen, never causes death)
+  currentStage: 'egg' | 'pip' | 'hatchling' | 'juvenile' | 'adult';
+}

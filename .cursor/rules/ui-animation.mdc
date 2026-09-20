@@ -1,0 +1,55 @@
+---
+description: UI, Rive state machine conventions, Skia candling shaders, gestures, and haptic patterns for HatchPal
+globs: src/components/**,src/screens/**,src/ui/**
+alwaysApply: false
+---
+# UI, Animation & Sensory Interaction Guidelines
+
+### 1. Rive Integration & State Machines
+
+- **Runtime Target**: Use `@rive-app/react-native` for dynamic egg and animal character rendering.
+- **State Machine Binding**:
+  - Always verify input properties exist before driving state transitions:
+
+    ```typescript
+    if (riveRef.current) {
+      riveRef.current.setInputState('EggStateMachine', 'incubationProgress', progress);
+      riveRef.current.fireState('EggStateMachine', 'tapTrigger');
+    }
+    ```
+
+  - Bind continuous growth via numeric inputs (e.g., `growthProgress` from `0.0` to `1.0`) to avoid hard transitions between static assets.
+  - Provide a graceful fallback view (such as an SVG placeholder or loading activity indicator) while `.riv` assets stream from the bundle.
+- **Dynamic Bone Scaling**:
+  - For post-hatch stages, scale skeletal elements dynamically using species-defined morph target constraints instead of swapping sprites abruptly.
+
+### 2. Candling Visuals with React Native Skia
+
+- **Candling Shader Requirements**:
+  - Use Skia's `Canvas`, `Mask`, and `RadialGradient` components to render the optical candling effect.
+  - Place the virtual light source at the user's touch coordinate (`touchX`, `touchY`) or screen center when using device torch mode.
+  - Attenuate eggshell opacity radially around the light focus point. Shell interior visibility scales directly with touch pressure/proximity and developmental stage transparency properties.
+  - Blood vessel meshes must render as semi-translucent red veins (`#8B0000`, alpha modulated by milestone stage) projecting outward from the embryo center.
+  - The air cell must sit fixed at the blunt pole of the egg, represented as an opaque crescent whose boundary line deepens as incubation progresses.
+
+### 3. Haptics & Audio Synchronization
+
+- **Heartbeat Rhythm**:
+  - The candling screen must run an interval loop triggering tactile pulses synchronized with the species base BPM:
+
+    ```typescript
+    const intervalMs = (60 / currentBpm) * 1000;
+    // Uses light impact for rhythmic embryonic pulse
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    ```
+
+  - Heartbeat haptics must immediately cease when unmounting `CandlingScreen` or lifting touch interaction.
+- **Interactive Shell Feedback**:
+  - Single tap on unpipped egg: `Haptics.ImpactFeedbackStyle.Light`.
+  - Tap on internal pip / active fracture: `Haptics.ImpactFeedbackStyle.Medium` accompanied by an acoustic tap/chirp sample via `expo-audio`.
+  - Hatching sequence breakthrough: `Haptics.NotificationFeedbackType.Success`.
+
+### 4. Layout & UI Performance
+
+- Avoid re-rendering root layouts during continuous drag or candling gestures. Encapsulate high-frequency gesture coordinates in Reanimated shared values (`useSharedValue`) and drive Skia canvas paints on the UI thread without bridging to the JS thread.
+- Maintain a minimum 60 FPS budget during candling and nest manipulation.
