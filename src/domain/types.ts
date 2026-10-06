@@ -34,21 +34,35 @@ export interface CandlingFeatures {
   movementDetectable: boolean;
 }
 
+/** Display copy stored for every supported locale. English is the fallback. */
+export interface LocalizedCopy {
+  en: string;
+  de: string;
+}
+
+export function localized(en: string, de: string): LocalizedCopy {
+  return { en, de };
+}
+
 export interface BiologicalMilestone {
   day: number;
   stage: DevelopmentStage;
-  title: string;
-  scientificSummary: string;
+  title: LocalizedCopy;
+  scientificSummary: LocalizedCopy;
   candling: CandlingFeatures;
   audioTrigger: AudioMilestoneTrigger;
 }
 
 export interface SpeciesConfig {
   id: SpeciesId;
-  commonName: string;
+  commonName: LocalizedCopy;
   scientificName: string;
   incubationDays: number;
   adultMaturationDays: number;
+  /** Typical mass at emergence, in grams. */
+  hatchWeightGrams: number;
+  /** Typical mature mass, in grams. Growth plateaus here. */
+  adultWeightGrams: number;
   baseHeartRateBpm: number;
   temperatureTargetCelsius: number;
   humidityTargetPct: number;
@@ -66,6 +80,10 @@ export interface PetInstance {
   healthMultiplier: number; // 0.0 to 1.0 (modulates visual vibrancy, never kills)
   lastTurnedEpoch: number;
   lastMistedEpoch: number;
+  /** Set by a post-hatch feeding. Absent until the first logged meal. */
+  lastFedEpoch?: number;
+  /** Set by a post-hatch weighing. Absent until the first weigh-in. */
+  lastWeighedEpoch?: number;
   isHatched: boolean;
   hatchedAtEpoch?: number;
 }
@@ -99,6 +117,12 @@ export interface PetSnapshot {
   incubationProgress: number;
   /** Post-hatch growth toward adulthood in [0, 1]. 0 before hatch. */
   maturationProgress: number;
+  /** Days since `hatchedAtEpoch`. Fractional; 0 before hatch. Frozen on clock rollback. */
+  postHatchAgeDays: number;
+  /** Deterministic mass in grams. 0 before hatch; plateaus at the species adult weight. */
+  currentWeightGrams: number;
+  /** Whole days remaining until `adultMaturationDays`. 0 before hatch and once adult. */
+  daysUntilAdult: number;
   currentMilestone: BiologicalMilestone;
   currentHeartRate: number;
   lifeStage: LifeStage;
@@ -109,4 +133,4 @@ export interface PetSnapshot {
   clockAnomaly: ClockAnomaly;
 }
 
-export type PetInteractionKind = 'turn_egg' | 'mist_nest';
+export type PetInteractionKind = 'turn_egg' | 'mist_nest' | 'feed' | 'weigh' | 'pet';

@@ -2,6 +2,8 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { hexToRgba, useNestPalette, type NestPaletteTokens } from '@/constants/nest';
 import { Spacing } from '@/constants/theme';
+import { useTranslation } from '@/i18n';
+import type { TranslationKey } from '@/i18n/en';
 
 export type MetricStatus = 'optimal' | 'warning' | 'neutral';
 
@@ -10,16 +12,19 @@ export interface MetricCardProps {
   value: string | number;
   unit?: string;
   status?: MetricStatus;
+  badgeLabel?: string;
 }
 
-const STATUS_LABEL: Record<MetricStatus, string> = {
-  optimal: 'Optimal',
-  warning: 'Needs care',
-  neutral: 'Stable',
+const STATUS_KEY: Record<MetricStatus, TranslationKey> = {
+  optimal: 'metric.optimal',
+  warning: 'metric.needsCare',
+  neutral: 'metric.stable',
 };
 
-export function MetricCard({ label, value, unit, status = 'neutral' }: MetricCardProps) {
+export function MetricCard({ label, value, unit, status = 'neutral', badgeLabel }: MetricCardProps) {
   const palette = useNestPalette();
+  const { t } = useTranslation();
+  const statusLabel = badgeLabel ?? t(STATUS_KEY[status]);
   const accent = statusAccent(palette, status);
   const displayValue = typeof value === 'number' && Number.isFinite(value) ? String(value) : String(value);
   const accessibilityValue = unit ? `${displayValue} ${unit}` : displayValue;
@@ -27,7 +32,7 @@ export function MetricCard({ label, value, unit, status = 'neutral' }: MetricCar
   return (
     <View
       accessibilityRole="summary"
-      accessibilityLabel={`${label}: ${accessibilityValue}, ${STATUS_LABEL[status]}`}
+      accessibilityLabel={`${label}: ${accessibilityValue}, ${statusLabel}`}
       style={[
         styles.card,
         {
@@ -41,7 +46,7 @@ export function MetricCard({ label, value, unit, status = 'neutral' }: MetricCar
           <Text style={[styles.label, { color: palette.textMuted }]}>{label}</Text>
           <View style={[styles.badge, { backgroundColor: hexToRgba(accent, 0.16) }]}>
             <View style={[styles.statusDot, { backgroundColor: accent }]} />
-            <Text style={[styles.badgeLabel, { color: accent }]}>{STATUS_LABEL[status]}</Text>
+            <Text style={[styles.badgeLabel, { color: accent }]}>{statusLabel}</Text>
           </View>
         </View>
         <View style={styles.valueRow}>

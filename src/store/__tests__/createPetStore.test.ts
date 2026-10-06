@@ -131,4 +131,100 @@ describe('Pet store', () => {
     expect(recovered.getState().pets).toEqual({});
     expect(recovered.getState().hasHydrated).toBe(true);
   });
+
+  it('abandons the active egg and then adopts a single replacement', () => {
+    let nextId = 0;
+    const store = createPetStoreApi({
+      storage: createMemoryStateStorage(),
+      now: () => baseEpoch,
+      createId: () => {
+        nextId += 1;
+        return `pet-${nextId}`;
+      },
+    });
+
+    const first = store.getState().adoptPet('silkie_chicken', 'Pip', baseEpoch);
+    store.getState().recordInteraction('turn_egg', baseEpoch + 1000);
+    expect(store.getState().activePetId).toBe(first.id);
+    expect(store.getState().pets[first.id]?.lastTurnedEpoch).toBe(baseEpoch + 1000);
+
+    store.getState().abandonActivePet();
+    expect(store.getState().activePetId).toBeNull();
+    expect(store.getState().pets).toEqual({});
+
+    const second = store.getState().adoptPet('leopard_gecko', 'Nova', baseEpoch + 5000);
+    expect(second.id).not.toBe(first.id);
+    expect(second.speciesId).toBe('leopard_gecko');
+    expect(second.nickname).toBe('Nova');
+    expect(second.laidAtEpoch).toBe(baseEpoch + 5000);
+    expect(store.getState().activePetId).toBe(second.id);
+    expect(Object.keys(store.getState().pets)).toEqual([second.id]);
+    expect(store.getState().pets[first.id]).toBeUndefined();
+  });
+
+  it('replaces an in-progress incubation instead of keeping two eggs', () => {
+    let nextId = 0;
+    const store = createPetStoreApi({
+      storage: createMemoryStateStorage(),
+      now: () => baseEpoch,
+      createId: () => {
+        nextId += 1;
+        return `pet-${nextId}`;
+      },
+    });
+
+    store.getState().adoptPet('silkie_chicken', 'Pip', baseEpoch);
+    store.getState().adoptPet('green_sea_turtle', 'Cove', baseEpoch + dayMs);
+    const pets = store.getState().pets;
+    const ids = Object.keys(pets);
+
+    expect(ids).toHaveLength(1);
+    expect(pets[ids[0] ?? '']?.speciesId).toBe('green_sea_turtle');
+    expect(store.getState().activePetId).toBe(ids[0]);
+  });
+
+  it('collapses a persisted multi-egg record down to the active incubation', () => {
+    const petFields = {
+      laidAtEpoch: baseEpoch,
+      lastVerifiedEpoch: baseEpoch,
+      lastInteractedEpoch: baseEpoch,
+      healthMultiplier: 1,
+      lastTurnedEpoch: baseEpoch,
+      lastMistedEpoch: baseEpoch,
+      isHatched: false,
+    };
+    const storage = createMemoryStateStorage({
+      [PET_STORE_PERSIST_KEY]: JSON.stringify({
+        state: {
+          pets: {
+            'pet-a': {
+              id: 'pet-a',
+              speciesId: 'silkie_chicken',
+              nickname: 'Pip',
+              ...petFields,
+            },
+            'pet-b': {
+              id: 'pet-b',
+              speciesId: 'leopard_gecko',
+              nickname: 'Nova',
+              ...petFields,
+            },
+          },
+          activePetId: 'pet-b',
+        },
+        version: 1,
+      }),
+    });
+
+    const store = createPetStoreApi({
+      storage,
+      now: () => baseEpoch,
+      createId: () => 'unused',
+    });
+
+    expect(store.getState().activePetId).toBe('pet-b');
+    expect(Object.keys(store.getState().pets)).toEqual(['pet-b']);
+    expect(store.getState().pets['pet-b']?.speciesId).toBe('leopard_gecko');
+    expect(store.getState().pets['pet-a']).toBeUndefined();
+  });
 });

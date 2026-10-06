@@ -22,7 +22,9 @@ export type ActivePetView = {
   nowEpoch: number;
   isClockTampered: boolean;
   adoptPet: (speciesId: SpeciesId | string, nickname: string, nowEpoch?: number) => PetInstance;
+  abandonActivePet: () => void;
   recordInteraction: (kind: PetInteractionKind, nowEpoch?: number) => void;
+  markHatched: (nowEpoch?: number) => void;
 };
 
 export function useActivePet(): ActivePetView {
@@ -35,19 +37,19 @@ export function useActivePet(): ActivePetView {
     return state.pets[state.activePetId] ?? null;
   });
   const refreshClock = usePetStore((state) => state.refreshClock);
-  const syncHatchState = usePetStore((state) => state.syncHatchState);
   const adoptPet = usePetStore((state) => state.adoptPet);
+  const abandonActivePet = usePetStore((state) => state.abandonActivePet);
   const recordInteraction = usePetStore((state) => state.recordInteraction);
+  const markHatched = usePetStore((state) => state.markHatched);
 
   const [nowEpoch, setNowEpoch] = useState(() => Date.now());
 
   const pushDisplayClock = useCallback(
     (mode: 'resume' | 'tick'): void => {
       refreshClock(mode);
-      syncHatchState();
       setNowEpoch(Date.now());
     },
-    [refreshClock, syncHatchState]
+    [refreshClock]
   );
 
   useFocusEffect(
@@ -102,6 +104,8 @@ export function useActivePet(): ActivePetView {
     nowEpoch,
     isClockTampered: snapshot?.isClockTampered ?? false,
     adoptPet,
+    abandonActivePet,
     recordInteraction,
+    markHatched,
   };
 }

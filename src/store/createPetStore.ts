@@ -15,6 +15,10 @@ import {
   resolvePetSnapshot,
 } from '@/domain/timeEngine';
 import { PetInstance, PetInteractionKind, SpeciesId } from '@/domain/types';
+import {
+  cancelScheduledPetNotifications,
+  scheduleNotificationsForAdoptedPet,
+} from '@/services/notificationLifecycle';
 import { canTurnEgg } from '@/utils/eggCare';
 
 export const PET_STORE_PERSIST_KEY = 'hatchpal.pet-store';
@@ -33,8 +37,11 @@ export type PetStoreState = PetPersistedState & {
 
 export type PetStoreActions = {
   adoptPet: (speciesId: SpeciesId | string, nickname: string, nowEpoch?: number) => PetInstance;
+  abandonActivePet: () => void;
   recordInteraction: (kind: PetInteractionKind, nowEpoch?: number) => void;
   refreshClock: (mode: ClockRefreshMode, nowEpoch?: number) => void;
+  /** Commits the hatching ceremony. Stamps the biological hatch epoch once incubation is complete. */
+  markHatched: (nowEpoch?: number) => void;
   syncHatchState: (nowEpoch?: number) => void;
   setActivePet: (id: string | null) => void;
 };
@@ -128,7 +135,20 @@ export function sanitizePersistedState(
     typeof nestedState.activePetId === 'string' ? nestedState.activePetId : null;
   const activePetId = requestedId && pets[requestedId] ? requestedId : null;
 
-  return { pets, activePetId };
+  return enforceSingleIncubation({ pets, activePetId });
+}
+
+/** HatchPal incubates exactly one egg. Orphaned or extra records are dropped. */
+export function enforceSingleIncubation(state: PetPersistedState): PetPersistedState {
+  if (state.activePetId && state.pets[state.activePetId]) {
+    const active = state.pets[state.activePetId];
+    return {
+      pets: { [active.id]: active },
+      activePetId: active.id,
+    };
+  }
+
+  return { pets: {}, activePetId: null };
 }
 
 export function mergePetPersistedState(
@@ -191,13 +211,15 @@ export function createPetStoreSlice(deps: PetStoreDeps = defaultDeps): StateCrea
         nowEpoch: now,
       });
       set({
-        pets: {
-          ...get().pets,
-          [pet.id]: pet,
-        },
+        pets: { [pet.id]: pet },
         activePetId: pet.id,
       });
+      scheduleNotificationsForAdoptedPet(pet);
       return pet;
+    },
+    abandonActivePet: () => {
+      set({ pets: {}, activePetId: null });
+      cancelScheduledPetNotifications();
     },
     recordInteraction: (kind, nowEpoch) => {
       replaceActivePet(set, get, (pet, now) => {
@@ -213,9 +235,32 @@ export function createPetStoreSlice(deps: PetStoreDeps = defaultDeps): StateCrea
             lastInteractedEpoch: now,
           };
         }
+        if (kind === 'mist_nest') {
+          return {
+            ...pet,
+            lastMistedEpoch: now,
+            lastInteractedEpoch: now,
+          };
+        }
+        if (!pet.isHatched) {
+          return pet;
+        }
+        if (kind === 'feed') {
+          return {
+            ...pet,
+            lastFedEpoch: now,
+            lastInteractedEpoch: now,
+          };
+        }
+        if (kind === 'weigh') {
+          return {
+            ...pet,
+            lastWeighedEpoch: now,
+            lastInteractedEpoch: now,
+          };
+        }
         return {
           ...pet,
-          lastMistedEpoch: now,
           lastInteractedEpoch: now,
         };
       }, nowEpoch);
@@ -234,7 +279,8 @@ export function createPetStoreSlice(deps: PetStoreDeps = defaultDeps): StateCrea
         };
       }, nowEpoch);
     },
-    syncHatchState: (nowEpoch) => {
+    markHatched: (nowEpoch) => {
+      let didHatch = false;
       replaceActivePet(set, get, (pet, now) => {
         if (pet.isHatched) {
           return pet;
@@ -244,12 +290,20 @@ export function createPetStoreSlice(deps: PetStoreDeps = defaultDeps): StateCrea
         if (!snapshot.isReadyToHatch) {
           return pet;
         }
+        didHatch = true;
         return {
           ...pet,
           isHatched: true,
           hatchedAtEpoch: resolveHatchedAtEpoch(pet, species),
+          lastInteractedEpoch: now,
         };
       }, nowEpoch);
+      if (didHatch) {
+        cancelScheduledPetNotifications();
+      }
+    },
+    syncHatchState: (nowEpoch) => {
+      get().markHatched(nowEpoch);
     },
     setActivePet: (id) => {
       const state = get();
@@ -257,7 +311,15 @@ export function createPetStoreSlice(deps: PetStoreDeps = defaultDeps): StateCrea
         set({ activePetId: null });
         return;
       }
-      set({ activePetId: state.pets[id] ? id : null });
+      const pet = state.pets[id];
+      if (!pet) {
+        set({ activePetId: null });
+        return;
+      }
+      set({
+        pets: { [pet.id]: pet },
+        activePetId: pet.id,
+      });
     },
   });
 }

@@ -1,0 +1,560 @@
+import Constants from 'expo-constants';
+import * as WebBrowser from 'expo-web-browser';
+import { useEffect, useState, type ReactNode } from 'react';
+import {
+  Linking,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { NestStatusBar } from '@/components/NestStatusBar';
+import { useNestPalette, type NestPaletteTokens } from '@/constants/nest';
+import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { useTranslation } from '@/i18n';
+import type { TranslationKey } from '@/i18n/en';
+import type { LocaleOverride } from '@/i18n/locale';
+import { playSoundEffect } from '@/services/audio';
+import { ImpactFeedbackStyle, triggerImpact } from '@/services/hapticFeedback';
+import {
+  readNotificationPermission,
+  requestNotificationPermissions,
+  type OsNotificationPermission,
+} from '@/services/notifications';
+import { usePetStore } from '@/store/usePetStore';
+import { usePreferencesStore } from '@/store/usePreferencesStore';
+
+const REPOSITORY_URL = 'https://github.com/Shoebill-Software/hatchpal';
+
+const LOCALE_OPTIONS: readonly { id: LocaleOverride; label: TranslationKey }[] = [
+  { id: 'system', label: 'settings.locale.system' },
+  { id: 'en', label: 'settings.locale.en' },
+  { id: 'de', label: 'settings.locale.de' },
+];
+
+export interface SettingsModalProps {
+  visible: boolean;
+  onClose: () => void;
+}
+
+function readAppVersion(): string {
+  const configured = Constants.expoConfig?.version;
+  if (typeof configured === 'string' && configured.length > 0) {
+    return configured;
+  }
+  if (typeof Constants.nativeAppVersion === 'string' && Constants.nativeAppVersion.length > 0) {
+    return Constants.nativeAppVersion;
+  }
+  return '1.0.0';
+}
+
+function permissionKey(permission: OsNotificationPermission): TranslationKey {
+  switch (permission) {
+    case 'granted':
+      return 'settings.permission.granted';
+    case 'denied':
+      return 'settings.permission.denied';
+    case 'undetermined':
+      return 'settings.permission.undetermined';
+    case 'unavailable':
+      return 'settings.permission.unavailable';
+  }
+}
+
+async function openRepository(): Promise<void> {
+  try {
+    await WebBrowser.openBrowserAsync(REPOSITORY_URL);
+  } catch {
+    try {
+      await Linking.openURL(REPOSITORY_URL);
+    } catch {
+      // A missing browser must not trap the settings sheet.
+    }
+  }
+}
+
+export function SettingsModal({ visible, onClose }: SettingsModalProps) {
+  const palette = useNestPalette();
+  const insets = useSafeAreaInsets();
+  const { t, locale } = useTranslation();
+  const [permission, setPermission] = useState<OsNotificationPermission>('undetermined');
+  const [resetStep, setResetStep] = useState<0 | 1 | 2>(0);
+
+  const localeOverride = usePreferencesStore((state) => state.localeOverride);
+  const soundEnabled = usePreferencesStore((state) => state.soundEnabled);
+  const hapticsEnabled = usePreferencesStore((state) => state.hapticsEnabled);
+  const notificationsEnabled = usePreferencesStore((state) => state.notificationsEnabled);
+  const setLocaleOverride = usePreferencesStore((state) => state.setLocaleOverride);
+  const setSoundEnabled = usePreferencesStore((state) => state.setSoundEnabled);
+  const setHapticsEnabled = usePreferencesStore((state) => state.setHapticsEnabled);
+  const setNotificationsEnabled = usePreferencesStore((state) => state.setNotificationsEnabled);
+  const creatureName = usePetStore((state) => {
+    if (!state.activePetId) {
+      return null;
+    }
+    const nickname = state.pets[state.activePetId]?.nickname;
+    return nickname && nickname.trim().length > 0 ? nickname : null;
+  });
+  const abandonActivePet = usePetStore((state) => state.abandonActivePet);
+
+  useEffect(() => {
+    if (!visible) {
+      setResetStep(0);
+      return;
+    }
+    let active = true;
+    void readNotificationPermission().then((next) => {
+      if (active) {
+        setPermission(next);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [visible]);
+
+  const closeSettings = () => {
+    setResetStep(0);
+    onClose();
+  };
+
+  const onNotificationsChange = (enabled: boolean) => {
+    void (async () => {
+      await setNotificationsEnabled(enabled);
+      if (enabled) {
+        await requestNotificationPermissions(locale);
+        void triggerImpact(ImpactFeedbackStyle.Light);
+      }
+      setPermission(await readNotificationPermission());
+    })();
+  };
+
+  const eraseCreature = () => {
+    abandonActivePet();
+    setResetStep(0);
+    onClose();
+  };
+
+  return (
+    <>
+      <Modal
+        visible={visible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={closeSettings}
+        statusBarTranslucent>
+        <View style={[styles.sheet, { backgroundColor: palette.background }]}>
+          <NestStatusBar />
+          <View
+            style={[
+              styles.header,
+              { paddingTop: Math.max(insets.top, Spacing.three), borderBottomColor: palette.border },
+            ]}>
+            <Text style={[styles.title, { color: palette.text }]}>{t('settings.title')}</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('settings.close')}
+              onPress={closeSettings}
+              hitSlop={8}
+              style={({ pressed }) => [styles.closeButton, { opacity: pressed ? 0.7 : 1 }]}>
+              <Text style={[styles.closeLabel, { color: palette.action }]}>{t('settings.close')}</Text>
+            </Pressable>
+          </View>
+
+          <ScrollView
+            contentContainerStyle={[
+              styles.content,
+              { paddingBottom: Math.max(insets.bottom, Spacing.four) + Spacing.three },
+            ]}
+            showsVerticalScrollIndicator={false}>
+            <Section title={t('settings.languageTitle')}>
+              <Text style={[styles.hint, { color: palette.textMuted }]}>{t('settings.languageHint')}</Text>
+              <View
+                accessibilityRole="radiogroup"
+                style={[styles.segment, { backgroundColor: palette.progressTrack }]}>
+                {LOCALE_OPTIONS.map((option) => {
+                  const selected = localeOverride === option.id;
+                  return (
+                    <Pressable
+                      key={option.id}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      onPress={() => {
+                        setLocaleOverride(option.id);
+                        void triggerImpact(ImpactFeedbackStyle.Light);
+                      }}
+                      style={[
+                        styles.segmentItem,
+                        selected ? { backgroundColor: palette.surface } : null,
+                      ]}>
+                      <Text
+                        style={[
+                          styles.segmentLabel,
+                          { color: selected ? palette.text : palette.textMuted },
+                        ]}>
+                        {t(option.label)}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </Section>
+
+            <Section title={t('settings.sensoryTitle')}>
+              <ToggleRow
+                label={t('settings.sound')}
+                hint={t('settings.soundHint')}
+                value={soundEnabled}
+                onValueChange={(enabled) => {
+                  setSoundEnabled(enabled);
+                  if (enabled) {
+                    void playSoundEffect('tap');
+                  }
+                }}
+              />
+              <ToggleRow
+                label={t('settings.haptics')}
+                hint={t('settings.hapticsHint')}
+                value={hapticsEnabled}
+                onValueChange={(enabled) => {
+                  setHapticsEnabled(enabled);
+                  if (enabled) {
+                    void triggerImpact(ImpactFeedbackStyle.Light);
+                  }
+                }}
+              />
+            </Section>
+
+            <Section title={t('settings.notificationsTitle')}>
+              <ToggleRow
+                label={t('settings.notifications')}
+                hint={t('settings.notificationsHint')}
+                value={notificationsEnabled}
+                onValueChange={onNotificationsChange}
+              />
+              <Text style={[styles.permission, { color: palette.textMuted }]}>{t(permissionKey(permission))}</Text>
+            </Section>
+
+            <Section title={t('settings.aboutTitle')}>
+              <Text style={[styles.body, { color: palette.text }]}>
+                {t('settings.version', { version: readAppVersion() })}
+              </Text>
+              <Pressable
+                accessibilityRole="link"
+                onPress={() => {
+                  void openRepository();
+                }}
+                style={({ pressed }) => [styles.linkButton, { opacity: pressed ? 0.7 : 1 }]}>
+                <Text style={[styles.linkLabel, { color: palette.action }]}>{t('settings.github')}</Text>
+              </Pressable>
+              <Text selectable style={[styles.hint, { color: palette.textMuted }]}>
+                {t('settings.attribution')}
+              </Text>
+            </Section>
+
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: palette.warning }]}>{t('settings.dangerTitle')}</Text>
+              <View
+                style={[
+                  styles.card,
+                  { backgroundColor: palette.surface, borderColor: palette.warning },
+                ]}>
+                <Text style={[styles.body, { color: palette.text }]}>{t('settings.reset')}</Text>
+                <Text style={[styles.hint, { color: palette.textMuted }]}>
+                  {creatureName ? t('settings.resetHint') : t('settings.resetEmpty')}
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: creatureName == null }}
+                  disabled={creatureName == null}
+                  onPress={() => setResetStep(1)}
+                  style={({ pressed }) => [
+                    styles.dangerButton,
+                    {
+                      borderColor: palette.warning,
+                      opacity: creatureName == null ? 0.45 : pressed ? 0.82 : 1,
+                    },
+                  ]}>
+                  <Text style={[styles.dangerLabel, { color: palette.warning }]}>{t('settings.reset')}</Text>
+                </Pressable>
+              </View>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={visible && resetStep > 0}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => {
+          if (resetStep === 2) {
+            setResetStep(1);
+            return;
+          }
+          setResetStep(0);
+        }}>
+        <View style={styles.backdrop}>
+          <View
+            accessibilityViewIsModal
+            style={[styles.confirmCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+            <Text style={[styles.confirmTitle, { color: palette.text }]}>
+              {resetStep === 2 ? t('settings.resetStep2Title') : t('settings.resetStep1Title')}
+            </Text>
+            <Text style={[styles.hint, { color: palette.textMuted }]}>
+              {resetStep === 2
+                ? t('settings.resetStep2Body')
+                : t('settings.resetStep1Body', { name: creatureName ?? '' })}
+            </Text>
+            {resetStep === 2 ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={eraseCreature}
+                style={({ pressed }) => [
+                  styles.eraseButton,
+                  { backgroundColor: palette.warning, opacity: pressed ? 0.86 : 1 },
+                ]}>
+                <Text style={[styles.eraseLabel, { color: palette.actionText }]}>{t('settings.resetConfirm')}</Text>
+              </Pressable>
+            ) : (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setResetStep(2)}
+                style={({ pressed }) => [
+                  styles.eraseButton,
+                  { backgroundColor: palette.warning, opacity: pressed ? 0.86 : 1 },
+                ]}>
+                <Text style={[styles.eraseLabel, { color: palette.actionText }]}>{t('settings.resetContinue')}</Text>
+              </Pressable>
+            )}
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                if (resetStep === 2) {
+                  setResetStep(1);
+                  return;
+                }
+                setResetStep(0);
+              }}
+              style={({ pressed }) => [styles.keepButton, { opacity: pressed ? 0.7 : 1 }]}>
+              <Text style={[styles.keepLabel, { color: palette.text }]}>
+                {resetStep === 2 ? t('settings.resetBack') : t('settings.resetCancel')}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+    </>
+  );
+}
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  const palette = useNestPalette();
+  return (
+    <View style={styles.section}>
+      <Text style={[styles.sectionTitle, { color: palette.textMuted }]}>{title}</Text>
+      <View style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+        {children}
+      </View>
+    </View>
+  );
+}
+
+function ToggleRow({
+  label,
+  hint,
+  value,
+  onValueChange,
+}: {
+  label: string;
+  hint: string;
+  value: boolean;
+  onValueChange: (value: boolean) => void;
+}) {
+  const palette = useNestPalette();
+  return (
+    <View style={styles.toggleRow}>
+      <View style={styles.toggleCopy}>
+        <Text style={[styles.body, { color: palette.text }]}>{label}</Text>
+        <Text style={[styles.hint, { color: palette.textMuted }]}>{hint}</Text>
+      </View>
+      <Switch
+        accessibilityLabel={label}
+        accessibilityHint={hint}
+        value={value}
+        onValueChange={onValueChange}
+        trackColor={{ false: palette.border, true: palette.action }}
+        thumbColor={switchThumb(palette, value)}
+        ios_backgroundColor={palette.border}
+      />
+    </View>
+  );
+}
+
+function switchThumb(palette: NestPaletteTokens, value: boolean): string {
+  return value ? palette.actionText : palette.surface;
+}
+
+const styles = StyleSheet.create({
+  sheet: {
+    flex: 1,
+  },
+  header: {
+    minHeight: 56,
+    paddingHorizontal: Spacing.four,
+    paddingBottom: Spacing.three,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.three,
+  },
+  title: {
+    flex: 1,
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: '700',
+  },
+  closeButton: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.one,
+  },
+  closeLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  content: {
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.four,
+    gap: Spacing.four,
+    width: '100%',
+    maxWidth: MaxContentWidth,
+    alignSelf: 'center',
+  },
+  section: {
+    gap: Spacing.two,
+  },
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  card: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: Spacing.three,
+    gap: Spacing.three,
+  },
+  hint: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '500',
+  },
+  body: {
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '700',
+  },
+  segment: {
+    flexDirection: 'row',
+    borderRadius: 12,
+    padding: 4,
+    gap: 4,
+  },
+  segmentItem: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.one,
+    paddingVertical: Spacing.two,
+  },
+  segmentLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    minHeight: 44,
+  },
+  toggleCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  permission: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
+  },
+  linkButton: {
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  linkLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  dangerButton: {
+    minHeight: 48,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.three,
+  },
+  dangerLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(22, 16, 12, 0.52)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: Spacing.four,
+  },
+  confirmCard: {
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: Spacing.four,
+    gap: Spacing.three,
+  },
+  confirmTitle: {
+    fontSize: 22,
+    lineHeight: 28,
+    fontWeight: '700',
+  },
+  eraseButton: {
+    minHeight: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  eraseLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  keepButton: {
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  keepLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+});

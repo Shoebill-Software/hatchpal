@@ -1,35 +1,54 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { NestStatusBar } from '@/components/NestStatusBar';
 import { useNestPalette } from '@/constants/nest';
 import { Spacing } from '@/constants/theme';
-import { silkieChickenConfig } from '@/data/species/chicken';
+import { listSpeciesConfigs } from '@/data/species';
+import type { SpeciesId } from '@/domain/types';
 import { useActivePet } from '@/hooks/useActivePet';
+import { localizeCopy, useTranslation } from '@/i18n';
+
+const SPECIES = listSpeciesConfigs();
 
 export default function AdoptionScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const palette = useNestPalette();
-  const { adoptPet } = useActivePet();
+  const { width } = useWindowDimensions();
+  const { t, locale } = useTranslation();
+  const params = useLocalSearchParams<{ replacing?: string }>();
+  const { pet, adoptPet } = useActivePet();
+  const replacing = params.replacing === '1' || pet != null;
+  const [selectedId, setSelectedId] = useState<SpeciesId>(SPECIES[0]?.id ?? 'silkie_chicken');
   const [nickname, setNickname] = useState('Pip');
   const [error, setError] = useState<string | null>(null);
 
+  const cardWidth = Math.min(Math.max(width - Spacing.four * 2, 260), 420);
+  const selected = SPECIES.find((species) => species.id === selectedId) ?? SPECIES[0];
+
   const submit = () => {
+    if (!selected) {
+      setError(t('adoption.error'));
+      return;
+    }
     try {
-      adoptPet(silkieChickenConfig.id, nickname);
+      adoptPet(selected.id, nickname);
       router.replace('/');
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Adoption ist fehlgeschlagen.');
+    } catch {
+      setError(t('adoption.error'));
     }
   };
 
@@ -37,37 +56,68 @@ export default function AdoptionScreen() {
     <KeyboardAvoidingView
       style={[styles.flex, { backgroundColor: palette.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View
-        style={[
+      <NestStatusBar />
+      <ScrollView
+        contentContainerStyle={[
           styles.content,
           {
             paddingTop: Spacing.four,
             paddingBottom: insets.bottom + Spacing.four,
           },
-        ]}>
-        <Text style={[styles.title, { color: palette.text }]}>Ein Ei adoptieren</Text>
+        ]}
+        keyboardShouldPersistTaps="handled">
+        <Text style={[styles.title, { color: palette.text }]}>
+          {replacing ? t('adoption.replaceTitle') : t('adoption.title')}
+        </Text>
         <Text style={[styles.body, { color: palette.textMuted }]}>
-          Starterart mit vollständigem Brutprofil. Die Inkubation läuft 1:1 in Echtzeit.
+          {replacing ? t('adoption.replaceBody') : t('adoption.body')}
         </Text>
 
-        <View
-          style={[
-            styles.speciesCard,
-            { backgroundColor: palette.surface, borderColor: palette.border },
-          ]}>
-          <Text style={[styles.speciesName, { color: palette.text }]}>
-            {silkieChickenConfig.commonName}
-          </Text>
-          <Text style={[styles.scientific, { color: palette.textMuted }]}>
-            {silkieChickenConfig.scientificName}
-          </Text>
-          <Text style={[styles.meta, { color: palette.textMuted }]}>
-            {silkieChickenConfig.incubationDays} Tage · {silkieChickenConfig.temperatureTargetCelsius.toFixed(1)} °C ·{' '}
-            {silkieChickenConfig.humidityTargetPct} % Luftfeuchte
-          </Text>
-        </View>
+        <Text style={[styles.fieldLabel, { color: palette.textMuted }]}>{t('adoption.selectSpecies')}</Text>
+        <ScrollView
+          horizontal
+          pagingEnabled
+          decelerationRate="fast"
+          snapToInterval={cardWidth + Spacing.three}
+          snapToAlignment="start"
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.carousel}>
+          {SPECIES.map((species) => {
+            const selectedCard = species.id === selected?.id;
+            return (
+              <Pressable
+                key={species.id}
+                accessibilityRole="button"
+                accessibilityState={{ selected: selectedCard }}
+                onPress={() => {
+                  setSelectedId(species.id);
+                  setError(null);
+                }}
+                style={[
+                  styles.speciesCard,
+                  {
+                    width: cardWidth,
+                    backgroundColor: palette.surface,
+                    borderColor: selectedCard ? palette.action : palette.border,
+                  },
+                ]}>
+                <Text style={[styles.speciesName, { color: palette.text }]}>
+                  {localizeCopy(species.commonName, locale)}
+                </Text>
+                <Text style={[styles.scientific, { color: palette.textMuted }]}>{species.scientificName}</Text>
+                <Text style={[styles.meta, { color: palette.textMuted }]}>
+                  {t('adoption.meta', {
+                    days: species.incubationDays,
+                    temp: species.temperatureTargetCelsius.toFixed(1),
+                    humidity: species.humidityTargetPct,
+                  })}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
 
-        <Text style={[styles.fieldLabel, { color: palette.textMuted }]}>Spitzname</Text>
+        <Text style={[styles.fieldLabel, { color: palette.textMuted }]}>{t('adoption.nickname')}</Text>
         <TextInput
           value={nickname}
           onChangeText={(value) => {
@@ -76,9 +126,9 @@ export default function AdoptionScreen() {
           }}
           maxLength={24}
           autoCorrect={false}
-          placeholder="Name des Eis"
+          placeholder={t('adoption.placeholder')}
           placeholderTextColor={palette.textMuted}
-          accessibilityLabel="Spitzname des Eis"
+          accessibilityLabel={t('adoption.nicknameA11y')}
           style={[
             styles.input,
             {
@@ -97,9 +147,11 @@ export default function AdoptionScreen() {
             styles.submit,
             { backgroundColor: palette.action, opacity: pressed ? 0.86 : 1 },
           ]}>
-          <Text style={[styles.submitLabel, { color: palette.actionText }]}>Ins Nest legen</Text>
+          <Text style={[styles.submitLabel, { color: palette.actionText }]}>
+            {replacing ? t('adoption.replaceSubmit') : t('adoption.submit')}
+          </Text>
         </Pressable>
-      </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -109,7 +161,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    flex: 1,
     paddingHorizontal: Spacing.four,
     gap: Spacing.two,
   },
@@ -122,12 +173,16 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     marginBottom: Spacing.two,
   },
+  carousel: {
+    gap: Spacing.three,
+    paddingBottom: Spacing.two,
+  },
   speciesCard: {
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderRadius: 16,
     padding: Spacing.three,
     gap: 4,
-    marginBottom: Spacing.two,
+    minHeight: 132,
   },
   speciesName: {
     fontSize: 20,

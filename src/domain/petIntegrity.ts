@@ -80,6 +80,12 @@ export function sanitizePetInstance(value: unknown, nowEpoch = 0): PetInstance |
   if (raw.hatchedAtEpoch !== undefined) {
     pet.hatchedAtEpoch = toFiniteEpoch(raw.hatchedAtEpoch, laidAtEpoch);
   }
+  if (typeof raw.lastFedEpoch === 'number') {
+    pet.lastFedEpoch = toFiniteEpoch(raw.lastFedEpoch, laidAtEpoch);
+  }
+  if (typeof raw.lastWeighedEpoch === 'number') {
+    pet.lastWeighedEpoch = toFiniteEpoch(raw.lastWeighedEpoch, laidAtEpoch);
+  }
 
   return pet;
 }

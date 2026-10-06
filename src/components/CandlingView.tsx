@@ -1,4 +1,6 @@
 import { useEffect, useMemo } from 'react';
+
+import { useTranslation } from '@/i18n';
 import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import { GestureDetector, type GestureType } from 'react-native-gesture-handler';
 import {
@@ -67,6 +69,7 @@ export function CandlingView({
   gesture,
   onLayout,
 }: CandlingViewProps) {
+  const { t } = useTranslation();
   const features = snapshot.currentMilestone.candling;
   const palette = candlingShellPalette(species.id);
   const drift = useSharedValue(0);
@@ -197,12 +200,8 @@ export function CandlingView({
         accessible
         accessibilityRole="image"
         accessibilityState={{ busy: isLightActive }}
-        accessibilityLabel="Durchleuchtungskammer mit Ei"
-        accessibilityHint={
-          isLightActive
-            ? 'Das Ei wird gerade durchleuchtet'
-            : 'Finger auf das Ei legen, um das Innere zu beleuchten'
-        }>
+        accessibilityLabel={t('candling.chamberLabel')}
+        accessibilityHint={isLightActive ? t('candling.chamberActive') : t('candling.chamberIdle')}>
         <Canvas style={styles.canvas}>
           <Fill color={CHAMBER} />
 

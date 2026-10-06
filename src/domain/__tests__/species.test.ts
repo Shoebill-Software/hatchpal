@@ -1,3 +1,4 @@
+import type { LocalizedCopy } from '@/domain/types';
 import { silkieChickenConfig } from '@/data/species/chicken';
 import { leopardGeckoConfig } from '@/data/species/gecko';
 import { getSpeciesConfig, SPECIES_REGISTRY } from '@/data/species';
@@ -42,6 +43,21 @@ describe('Species data registry', () => {
     for (const config of Object.values(SPECIES_REGISTRY)) {
       expectMilestonesOrdered(config.milestones);
       expect(config.milestones.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('stores common names and milestone copy in English and German', () => {
+    const expectCopy = (copy: LocalizedCopy): void => {
+      expect(copy.en.trim().length).toBeGreaterThan(0);
+      expect(copy.de.trim().length).toBeGreaterThan(0);
+    };
+
+    for (const config of Object.values(SPECIES_REGISTRY)) {
+      expectCopy(config.commonName);
+      for (const milestone of config.milestones) {
+        expectCopy(milestone.title);
+        expectCopy(milestone.scientificSummary);
+      }
     }
   });
 

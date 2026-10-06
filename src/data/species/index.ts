@@ -20,3 +20,7 @@ export function getSpeciesConfig(id: unknown): SpeciesConfig {
   }
   return silkieChickenConfig;
 }
+
+export function listSpeciesConfigs(): SpeciesConfig[] {
+  return [silkieChickenConfig, leopardGeckoConfig, greenSeaTurtleConfig];
+}

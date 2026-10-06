@@ -1,7 +1,5 @@
 import { Redirect, useRouter } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import * as Haptics from 'expo-haptics';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
@@ -15,8 +13,12 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CandlingView } from '@/components/CandlingView';
+import { NestStatusBar } from '@/components/NestStatusBar';
+import { ImpactFeedbackStyle, triggerImpact } from '@/services/hapticFeedback';
 import { Spacing } from '@/constants/theme';
 import { useActivePet } from '@/hooks/useActivePet';
+import { useSoundEffects } from '@/hooks/useSoundEffects';
+import { localizeCopy, useTranslation } from '@/i18n';
 import { heartbeatIntervalMs } from '@/hooks/hapticHeartbeat';
 import { useCandlingTouch, type CandlingLightMode } from '@/hooks/useCandlingTouch';
 import { useHapticHeartbeat } from '@/hooks/useHapticHeartbeat';
@@ -30,23 +32,29 @@ const MUTED = '#B4A89C';
 export default function CandlingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t, locale } = useTranslation();
   const { pet, species, snapshot, hasHydrated, isClockTampered } = useActivePet();
   const [lightMode, setLightMode] = useState<CandlingLightMode>('manual');
 
   const touch = useCandlingTouch({
     mode: lightMode,
     onTouchBegin: () => {
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      void triggerImpact(ImpactFeedbackStyle.Light);
     },
   });
 
   const bpm = snapshot?.currentHeartRate ?? 0;
   const candlingActive = Boolean(snapshot) && touch.isIlluminated && bpm > 0;
+  const { play } = useSoundEffects();
+  const playHeartbeat = useCallback(() => {
+    play('heartbeat');
+  }, [play]);
 
   useHapticHeartbeat({
     bpm,
     active: candlingActive,
     pulseImmediately: lightMode === 'fixed',
+    onPulse: playHeartbeat,
   });
 
   const goToNest = () => {
@@ -61,25 +69,28 @@ export default function CandlingScreen() {
     return <View style={styles.flex} />;
   }
 
-  if (!pet || !species || !snapshot) {
+  if (!pet || !species || !snapshot || pet.isHatched) {
     return <Redirect href="/" />;
   }
 
-  const heartLabel = bpm > 0 ? `${bpm} BPM` : 'kein Puls';
+  const heartLabel = bpm > 0 ? `${bpm} ${t('common.bpm')}` : t('metric.undetected');
+  const milestoneTitle = localizeCopy(snapshot.currentMilestone.title, locale);
+  const summary = localizeCopy(snapshot.currentMilestone.scientificSummary, locale);
+  const lightModeLabel = lightMode === 'fixed' ? t('candling.backlight') : t('candling.fingerLight');
 
   return (
     <View style={[styles.flex, { paddingTop: insets.top }]}>
-      <StatusBar style="light" />
+      <NestStatusBar variant="light" />
 
       <View style={styles.header}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Zurück zum Nest"
+          accessibilityLabel={t('candling.backToNest')}
           onPress={goToNest}
           hitSlop={10}
           style={({ pressed }) => [styles.backButton, { opacity: pressed ? 0.7 : 1 }]}>
           <Text style={styles.backChevron}>‹</Text>
-          <Text style={styles.backLabel}>Nest</Text>
+          <Text style={styles.backLabel}>{t('nav.nest')}</Text>
         </Pressable>
 
         <View style={styles.headerCopy}>
@@ -87,7 +98,7 @@ export default function CandlingScreen() {
             {pet.nickname}
           </Text>
           <Text style={styles.milestone} numberOfLines={2}>
-            {snapshot.currentMilestone.title}
+            {milestoneTitle}
           </Text>
         </View>
 
@@ -96,11 +107,7 @@ export default function CandlingScreen() {
 
       {isClockTampered ? (
         <View accessibilityRole="alert" style={styles.banner}>
-          <Text style={styles.bannerTitle}>Biologische Zeit angehalten</Text>
-          <Text style={styles.bannerBody}>
-            Die Gerätezeit liegt hinter dem letzten verifizierten Zeitstempel. Das Wachstum bleibt
-            eingefroren, bis die reale Zeit aufholt.
-          </Text>
+          <Text style={styles.bannerTitle}>{t('clock.paused')}</Text>
         </View>
       ) : null}
 
@@ -121,55 +128,25 @@ export default function CandlingScreen() {
       />
 
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, Spacing.three) }]}>
-        <View style={styles.modeRow}>
-          <ModeChip
-            label="Fingerlicht"
-            selected={lightMode === 'manual'}
-            onPress={() => setLightMode('manual')}
-          />
-          <ModeChip
-            label="Hintergrundlicht"
-            selected={lightMode === 'fixed'}
-            onPress={() => setLightMode('fixed')}
-          />
-        </View>
-        <Text style={styles.labKicker}>Labor-Notiz</Text>
-        <Text style={styles.labBody}>{snapshot.currentMilestone.scientificSummary}</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('candling.toggleLight')}
+          onPress={() => setLightMode((mode) => (mode === 'manual' ? 'fixed' : 'manual'))}
+          style={({ pressed }) => [styles.toggleButton, { opacity: pressed ? 0.84 : 1 }]}>
+          <Text style={styles.toggleLabel}>{t('candling.toggleLight')}</Text>
+          <Text style={styles.toggleMeta}>{t('candling.lightMode', { mode: lightModeLabel })}</Text>
+        </Pressable>
+        <Text style={styles.labKicker}>{t('candling.labNote')}</Text>
+        <Text style={styles.labBody}>{summary}</Text>
         <Text style={styles.hint}>
           {lightMode === 'fixed'
-            ? 'Fixiertes Licht im Eizentrum. Der Puls folgt der embryonalen Herzfrequenz.'
+            ? t('candling.hintFixed')
             : touch.isIlluminated
-              ? 'Lichtkegel folgt dem Finger. Loslassen dunkelt die Kammer wieder ab.'
-              : 'Finger auf das Ei legen, um Schale und Embryo zu durchleuchten.'}
+              ? t('candling.hintFollowing')
+              : t('candling.hintIdle')}
         </Text>
       </View>
     </View>
-  );
-}
-
-function ModeChip({
-  label,
-  selected,
-  onPress,
-}: {
-  label: string;
-  selected: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.chip,
-        selected ? styles.chipSelected : styles.chipIdle,
-        { opacity: pressed ? 0.82 : 1 },
-      ]}>
-      <Text style={[styles.chipLabel, selected ? styles.chipLabelSelected : styles.chipLabelIdle]}>
-        {label}
-      </Text>
-    </Pressable>
   );
 }
 
@@ -182,6 +159,7 @@ function HeartbeatBadge({
   active: boolean;
   label: string;
 }) {
+  const { t } = useTranslation();
   const pulse = useSharedValue(1);
   const intervalMs = useMemo(() => heartbeatIntervalMs(bpm), [bpm]);
 
@@ -217,7 +195,7 @@ function HeartbeatBadge({
     <View
       accessible
       accessibilityRole="text"
-      accessibilityLabel={`Herzfrequenz ${label}`}
+      accessibilityLabel={t('candling.heartA11y', { label })}
       style={styles.bpmBadge}>
       <Animated.View style={[styles.bpmDot, !active || bpm <= 0 ? styles.bpmDotIdle : null, dotStyle]} />
       <Text style={styles.bpmLabel}>{label}</Text>
@@ -312,13 +290,8 @@ const styles = StyleSheet.create({
   bannerTitle: {
     color: GOLD,
     fontSize: 13,
+    lineHeight: 18,
     fontWeight: '800',
-  },
-  bannerBody: {
-    color: MUTED,
-    fontSize: 12,
-    lineHeight: 17,
-    fontWeight: '500',
   },
   footer: {
     backgroundColor: CHAMBER_PANEL,
@@ -328,35 +301,25 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.three,
     gap: Spacing.two,
   },
-  modeRow: {
-    flexDirection: 'row',
-    gap: Spacing.two,
-  },
-  chip: {
-    flex: 1,
-    minHeight: 42,
+  toggleButton: {
+    minHeight: 48,
     borderRadius: 12,
+    backgroundColor: '#C4783A',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    gap: 2,
   },
-  chipSelected: {
-    backgroundColor: '#C4783A',
-    borderColor: '#C4783A',
-  },
-  chipIdle: {
-    backgroundColor: 'transparent',
-    borderColor: '#3A322B',
-  },
-  chipLabel: {
-    fontSize: 13,
+  toggleLabel: {
+    color: '#1A1410',
+    fontSize: 14,
     fontWeight: '800',
   },
-  chipLabelSelected: {
-    color: '#1A1410',
-  },
-  chipLabelIdle: {
-    color: MUTED,
+  toggleMeta: {
+    color: '#3A2A1C',
+    fontSize: 12,
+    fontWeight: '600',
   },
   labKicker: {
     color: GOLD,

@@ -15,6 +15,14 @@ export const CLOCK_ROLLBACK_TOLERANCE_MS = 60_000;
 export const LIVE_TICK_MAX_FORWARD_MS = 120_000;
 export const HATCHLING_MATURATION_THRESHOLD = 1 / 6;
 
+/**
+ * Logistic steepness for post-hatch mass.
+ * Daily gain is shallow at emergence, highest in the juvenile window, then flattens.
+ */
+export const WEIGHT_GROWTH_STEEPNESS = 8;
+/** Inflection as a fraction of `adultMaturationDays`. Sits inside the juvenile span. */
+export const WEIGHT_GROWTH_MIDPOINT = 0.42;
+
 export function calculateElapsedSeconds(laidAtEpoch: number, currentEpoch: number): number {
   if (!Number.isFinite(laidAtEpoch) || !Number.isFinite(currentEpoch)) {
     return 0;
@@ -46,6 +54,61 @@ export function calculateMaturationProgress(
     return 1.0;
   }
   return Math.min(1.0, Math.max(0.0, maturedSeconds / totalSeconds));
+}
+
+export function calculatePostHatchAgeDays(hatchEpoch: number, currentEpoch: number): number {
+  return calculateElapsedSeconds(hatchEpoch, currentEpoch) / SECONDS_PER_DAY;
+}
+
+export function calculateDaysUntilAdult(
+  postHatchAgeDays: number,
+  adultMaturationDays: number
+): number {
+  if (!Number.isFinite(postHatchAgeDays) || !Number.isFinite(adultMaturationDays)) {
+    return 0;
+  }
+  const remaining = Math.max(0, adultMaturationDays) - Math.max(0, postHatchAgeDays);
+  if (remaining <= 1e-6) {
+    return 0;
+  }
+  return Math.ceil(remaining - 1e-6);
+}
+
+function logisticUnit(progress: number): number {
+  const exponent = -WEIGHT_GROWTH_STEEPNESS * (progress - WEIGHT_GROWTH_MIDPOINT);
+  const clamped = Math.max(-60, Math.min(60, exponent));
+  return 1 / (1 + Math.exp(clamped));
+}
+
+/**
+ * Maps maturation progress in [0, 1] onto a normalized sigmoid in [0, 1].
+ * Endpoints are exact: day 0 contributes no gained mass, adulthood is the plateau.
+ */
+export function calculateGrowthFraction(maturationProgress: number): number {
+  if (!Number.isFinite(maturationProgress) || maturationProgress <= 0) {
+    return 0;
+  }
+  if (maturationProgress >= 1) {
+    return 1;
+  }
+  const start = logisticUnit(0);
+  const end = logisticUnit(1);
+  const span = end - start;
+  if (!(span > 0)) {
+    return maturationProgress;
+  }
+  const raw = (logisticUnit(maturationProgress) - start) / span;
+  return Math.min(1, Math.max(0, raw));
+}
+
+export function calculateCurrentWeightGrams(
+  hatchWeightGrams: number,
+  adultWeightGrams: number,
+  maturationProgress: number
+): number {
+  const hatch = Number.isFinite(hatchWeightGrams) ? Math.max(0, hatchWeightGrams) : 0;
+  const adult = Number.isFinite(adultWeightGrams) ? Math.max(hatch, adultWeightGrams) : hatch;
+  return hatch + (adult - hatch) * calculateGrowthFraction(maturationProgress);
 }
 
 export function resolveHatchEpoch(pet: PetInstance, species: SpeciesConfig): number {
@@ -191,6 +254,19 @@ export function resolvePetSnapshot(
   const maturationProgress = pet.isHatched
     ? calculateMaturationProgress(hatchEpoch, effectiveEpoch, species.adultMaturationDays)
     : 0;
+  const postHatchAgeDays = pet.isHatched
+    ? calculatePostHatchAgeDays(hatchEpoch, effectiveEpoch)
+    : 0;
+  const currentWeightGrams = pet.isHatched
+    ? calculateCurrentWeightGrams(
+        species.hatchWeightGrams,
+        species.adultWeightGrams,
+        maturationProgress
+      )
+    : 0;
+  const daysUntilAdult = pet.isHatched
+    ? calculateDaysUntilAdult(postHatchAgeDays, species.adultMaturationDays)
+    : 0;
 
   const milestoneDay = pet.isHatched
     ? elapsedSeconds / SECONDS_PER_DAY
@@ -213,6 +289,9 @@ export function resolvePetSnapshot(
     progress: incubationProgress,
     incubationProgress,
     maturationProgress,
+    postHatchAgeDays,
+    currentWeightGrams,
+    daysUntilAdult,
     currentMilestone,
     currentHeartRate,
     lifeStage,
