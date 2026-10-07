@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -9,17 +9,20 @@ import {
   Text,
   TextInput,
   useWindowDimensions,
-  View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { EggCarousel } from '@/components/EggCarousel';
+import { GrowthPreviewSheet } from '@/components/GrowthPreviewSheet';
 import { NestStatusBar } from '@/components/NestStatusBar';
+import { TaxonFilterBar } from '@/components/TaxonFilterBar';
 import { useNestPalette } from '@/constants/nest';
 import { Spacing } from '@/constants/theme';
 import { listSpeciesConfigs } from '@/data/species';
+import { speciesMatchingFilter, type RosterFilter } from '@/data/species/roster';
 import type { SpeciesId } from '@/domain/types';
 import { useActivePet } from '@/hooks/useActivePet';
-import { localizeCopy, useTranslation } from '@/i18n';
+import { useTranslation } from '@/i18n';
 
 const SPECIES = listSpeciesConfigs();
 
@@ -28,16 +31,32 @@ export default function AdoptionScreen() {
   const insets = useSafeAreaInsets();
   const palette = useNestPalette();
   const { width } = useWindowDimensions();
-  const { t, locale } = useTranslation();
+  const { t } = useTranslation();
   const params = useLocalSearchParams<{ replacing?: string }>();
   const { pet, adoptPet } = useActivePet();
   const replacing = params.replacing === '1' || pet != null;
   const [selectedId, setSelectedId] = useState<SpeciesId>(SPECIES[0]?.id ?? 'silkie_chicken');
+  const [filter, setFilter] = useState<RosterFilter>('all');
+  const [previewId, setPreviewId] = useState<SpeciesId | null>(null);
   const [nickname, setNickname] = useState('Pip');
   const [error, setError] = useState<string | null>(null);
 
+  const roster = useMemo(() => speciesMatchingFilter(SPECIES, filter), [filter]);
   const cardWidth = Math.min(Math.max(width - Spacing.four * 2, 260), 420);
-  const selected = SPECIES.find((species) => species.id === selectedId) ?? SPECIES[0];
+  const selected = roster.find((species) => species.id === selectedId) ?? roster[0] ?? SPECIES[0];
+  const previewSpecies = SPECIES.find((species) => species.id === previewId) ?? null;
+
+  useEffect(() => {
+    if (roster.length === 0) {
+      return;
+    }
+    if (!roster.some((species) => species.id === selectedId)) {
+      const first = roster[0];
+      if (first) {
+        setSelectedId(first.id);
+      }
+    }
+  }, [roster, selectedId]);
 
   const submit = () => {
     if (!selected) {
@@ -74,48 +93,28 @@ export default function AdoptionScreen() {
         </Text>
 
         <Text style={[styles.fieldLabel, { color: palette.textMuted }]}>{t('adoption.selectSpecies')}</Text>
-        <ScrollView
-          horizontal
-          pagingEnabled
-          decelerationRate="fast"
-          snapToInterval={cardWidth + Spacing.three}
-          snapToAlignment="start"
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.carousel}>
-          {SPECIES.map((species) => {
-            const selectedCard = species.id === selected?.id;
-            return (
-              <Pressable
-                key={species.id}
-                accessibilityRole="button"
-                accessibilityState={{ selected: selectedCard }}
-                onPress={() => {
-                  setSelectedId(species.id);
-                  setError(null);
-                }}
-                style={[
-                  styles.speciesCard,
-                  {
-                    width: cardWidth,
-                    backgroundColor: palette.surface,
-                    borderColor: selectedCard ? palette.action : palette.border,
-                  },
-                ]}>
-                <Text style={[styles.speciesName, { color: palette.text }]}>
-                  {localizeCopy(species.commonName, locale)}
-                </Text>
-                <Text style={[styles.scientific, { color: palette.textMuted }]}>{species.scientificName}</Text>
-                <Text style={[styles.meta, { color: palette.textMuted }]}>
-                  {t('adoption.meta', {
-                    days: species.incubationDays,
-                    temp: species.temperatureTargetCelsius.toFixed(1),
-                    humidity: species.humidityTargetPct,
-                  })}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+        <TaxonFilterBar
+          value={filter}
+          onChange={(next) => {
+            setFilter(next);
+            setError(null);
+          }}
+        />
+        <EggCarousel
+          species={roster}
+          selectedId={selected?.id ?? selectedId}
+          cardWidth={cardWidth}
+          onSelect={(id) => {
+            setSelectedId(id);
+            setError(null);
+          }}
+          onInspect={setPreviewId}
+        />
+        <GrowthPreviewSheet
+          species={previewSpecies}
+          visible={previewSpecies != null}
+          onClose={() => setPreviewId(null)}
+        />
 
         <Text style={[styles.fieldLabel, { color: palette.textMuted }]}>{t('adoption.nickname')}</Text>
         <TextInput
@@ -172,30 +171,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     marginBottom: Spacing.two,
-  },
-  carousel: {
-    gap: Spacing.three,
-    paddingBottom: Spacing.two,
-  },
-  speciesCard: {
-    borderWidth: 1.5,
-    borderRadius: 16,
-    padding: Spacing.three,
-    gap: 4,
-    minHeight: 132,
-  },
-  speciesName: {
-    fontSize: 20,
-    fontWeight: '700',
-  },
-  scientific: {
-    fontSize: 14,
-    fontStyle: 'italic',
-  },
-  meta: {
-    marginTop: 6,
-    fontSize: 13,
-    fontWeight: '600',
   },
   fieldLabel: {
     fontSize: 12,

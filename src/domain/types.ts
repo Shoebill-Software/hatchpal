@@ -1,10 +1,102 @@
-export type SpeciesId = 'silkie_chicken' | 'leopard_gecko' | 'green_sea_turtle';
-
-export const SPECIES_IDS: readonly SpeciesId[] = [
+export const SPECIES_IDS = [
   'silkie_chicken',
+  'peregrine_falcon',
+  'barn_owl',
+  'mandarin_duck',
+  'emperor_penguin',
+  'common_ostrich',
   'leopard_gecko',
+  'veiled_chameleon',
+  'ball_python',
   'green_sea_turtle',
+  'saltwater_crocodile',
+  'platypus',
 ] as const;
+
+export type SpeciesId = (typeof SPECIES_IDS)[number];
+
+/** Class used by the adoption roster filter. */
+export type TaxonomicClass = 'aves' | 'reptilia' | 'monotremata';
+
+/** Finer label shown on a carousel card. */
+export type RosterTag =
+  | 'galliform'
+  | 'raptor'
+  | 'strigiform'
+  | 'waterfowl'
+  | 'sphenisciform'
+  | 'ratite'
+  | 'squamate'
+  | 'testudine'
+  | 'crocodilian'
+  | 'monotreme';
+
+export type EggShape = 'oval' | 'elliptical' | 'pear' | 'sphere' | 'elongated' | 'pitted';
+
+export type SpeckleStyle = 'none' | 'fine' | 'mottled' | 'pitted';
+
+export type AdultMetricKind = 'wingspan' | 'length';
+
+export type ReferenceScale = 'coin' | 'hand' | 'person';
+
+export interface ShellPaint {
+  body: string;
+  stroke: string;
+  highlight: string;
+  speckle: string;
+  crack: string;
+  castShadow: string;
+}
+
+export interface CandlePaint {
+  body: string;
+  stroke: string;
+  highlight: string;
+  speckle: string;
+  interior: string;
+  yolk: string;
+}
+
+export interface EggProfile {
+  description: LocalizedCopy;
+  /** Shell length along the long axis, millimeters. */
+  lengthMm: number;
+  /** Shell width at the widest point, millimeters. */
+  widthMm: number;
+  /** Typical fresh egg mass, grams. */
+  massGrams: number;
+  shape: EggShape;
+  speckle: SpeckleStyle;
+  /** Opaque nest lighting. */
+  nest: ShellPaint;
+  /** Transilluminated candling palette. */
+  candle: CandlePaint;
+}
+
+export interface GrowthStageCopy {
+  title: LocalizedCopy;
+  scientificSummary: LocalizedCopy;
+}
+
+export interface GrowthProfile {
+  /** Radial backlight behind the adoption silhouettes. */
+  glow: string;
+  /** Holographic shadow fill. */
+  shadow: string;
+  /** Solid coat color once the animal has hatched. */
+  body: string;
+  /** Hatchling length, or wingspan for flying birds, in centimeters. */
+  hatchlingMeasureCm: number;
+  adultMetricKind: AdultMetricKind;
+  /** Adult wingspan or total length, centimeters. */
+  adultMeasureCm: number;
+  referenceScale: ReferenceScale;
+  /** Real-world size of the comparison object, centimeters. */
+  referenceCentimeters: number;
+  reference: LocalizedCopy;
+  behavior: LocalizedCopy;
+  fieldNotes: LocalizedCopy;
+}
 
 export type DevelopmentStage =
   | 'cleavage'
@@ -67,6 +159,13 @@ export interface SpeciesConfig {
   temperatureTargetCelsius: number;
   humidityTargetPct: number;
   turningRequiredUntilDay: number;
+  taxon: TaxonomicClass;
+  tag: RosterTag;
+  egg: EggProfile;
+  growth: GrowthProfile;
+  /** Post-hatch plumage or pattern, shown in the journal and growth preview. */
+  juvenile: GrowthStageCopy;
+  adult: GrowthStageCopy;
   milestones: BiologicalMilestone[];
 }
 

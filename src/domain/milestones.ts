@@ -48,12 +48,39 @@ export type SizeReferenceId =
   | 'silkie_golf_ball'
   | 'silkie_grapefruit'
   | 'silkie_teapot'
+  | 'falcon_sparrow'
+  | 'falcon_pigeon'
+  | 'falcon_bottle'
+  | 'owl_mouse'
+  | 'owl_hamster'
+  | 'owl_pigeon'
+  | 'duck_plum'
+  | 'duck_coconut'
+  | 'duck_melon'
+  | 'penguin_grapefruit'
+  | 'penguin_toddler'
+  | 'penguin_child'
+  | 'ostrich_pineapple'
+  | 'ostrich_person'
+  | 'ostrich_heavy'
   | 'gecko_raspberry'
   | 'gecko_mouse'
   | 'gecko_kiwi'
+  | 'chameleon_raisin'
+  | 'chameleon_mouse'
+  | 'chameleon_hamster'
+  | 'python_egg'
+  | 'python_can'
+  | 'python_rabbit'
   | 'turtle_lime'
   | 'turtle_melon'
-  | 'turtle_adults';
+  | 'turtle_adults'
+  | 'croc_lemon'
+  | 'croc_person'
+  | 'croc_horse'
+  | 'platypus_clip'
+  | 'platypus_hamster'
+  | 'platypus_rabbit';
 
 export interface PostHatchMilestone {
   id: PostHatchMilestoneId;
@@ -116,75 +143,66 @@ export interface SizeReference {
   postHatchDay: number;
 }
 
-const GROWTH_COPY: Record<
-  SpeciesId,
-  Record<'juvenile' | 'adult', Pick<PostHatchMilestone, 'title' | 'scientificSummary'>>
-> = {
-  silkie_chicken: {
-    juvenile: {
-      title: localized('Juvenile plumage', 'Jugendgefieder'),
-      scientificSummary: localized(
-        'Natal down is replaced by contour feathers. The crest and feathered shanks start to read as silkie traits, and daily mass gain is steepest in this window.',
-        'Die Nestdaunen werden durch Konturfedern ersetzt. Haube und befiederte Läufe werden als Seidenhuhn-Merkmale lesbar, und die tägliche Massenzunahme ist in diesem Fenster am steilsten.'
-      ),
-    },
-    adult: {
-      title: localized('Adult plumage', 'Adultgefieder'),
-      scientificSummary: localized(
-        'Crest, mulberry comb, and feathered feet are fully expressed. Body mass settles on the adult plateau near 1,300 g and linear growth stops.',
-        'Haube, Maulbeerkamm und befiederte Füße sind vollständig ausgeprägt. Die Körpermasse liegt auf dem adulten Plateau um 1.300 g, das Längenwachstum endet.'
-      ),
-    },
-  },
-  leopard_gecko: {
-    juvenile: {
-      title: localized('Juvenile pattern', 'Jugendzeichnung'),
-      scientificSummary: localized(
-        'Hatchling bands break into separate spots. The tail thickens as a fat store, and nocturnal hunting on the substrate becomes regular.',
-        'Die Bänder des Schlüpflings lösen sich in einzelne Flecken auf. Der Schwanz verdickt sich als Fettspeicher, und die nächtliche Jagd auf dem Substrat wird regelmäßig.'
-      ),
-    },
-    adult: {
-      title: localized('Adult pattern', 'Adultzeichnung'),
-      scientificSummary: localized(
-        'Spotting is stable and body mass has reached the adult plateau near 70 g. Further growth is negligible.',
-        'Die Fleckung ist stabil, und die Körpermasse hat das adulte Plateau um 70 g erreicht. Weiteres Wachstum ist vernachlässigbar.'
-      ),
-    },
-  },
-  green_sea_turtle: {
-    juvenile: {
-      title: localized('Juvenile carapace', 'Juveniler Carapax'),
-      scientificSummary: localized(
-        'Scutes keratinize and the flipper stroke lengthens. On this compressed clock the turtle leaves the surface drift and begins sustained swimming.',
-        'Die Schilde verhornen, und der Flossenschlag wird länger. Auf dieser verdichteten Uhr verlässt die Schildkröte die oberflächennahe Drift und beginnt ausdauernd zu schwimmen.'
-      ),
-    },
-    adult: {
-      title: localized('Adult ocean mass', 'Adulte Meeresmasse'),
-      scientificSummary: localized(
-        'The carapace is fully ossified and mass has reached the compressed adult plateau near 150 kg, enough for sustained oceanic travel.',
-        'Der Carapax ist vollständig verknöchert, und die Masse hat das verdichtete adulte Plateau um 150 kg erreicht, ausreichend für anhaltende ozeanische Wanderung.'
-      ),
-    },
-  },
-};
-
 const SIZE_REFERENCES: Record<SpeciesId, readonly [SizeReference, SizeReference, SizeReference]> = {
   silkie_chicken: [
     { id: 'silkie_golf_ball', weightGrams: 32, postHatchDay: 0 },
     { id: 'silkie_grapefruit', weightGrams: 600, postHatchDay: 56 },
     { id: 'silkie_teapot', weightGrams: 1300, postHatchDay: 126 },
   ],
+  peregrine_falcon: [
+    { id: 'falcon_sparrow', weightGrams: 38, postHatchDay: 0 },
+    { id: 'falcon_pigeon', weightGrams: 350, postHatchDay: 120 },
+    { id: 'falcon_bottle', weightGrams: 910, postHatchDay: 365 },
+  ],
+  barn_owl: [
+    { id: 'owl_mouse', weightGrams: 15, postHatchDay: 0 },
+    { id: 'owl_hamster', weightGrams: 120, postHatchDay: 90 },
+    { id: 'owl_pigeon', weightGrams: 340, postHatchDay: 300 },
+  ],
+  mandarin_duck: [
+    { id: 'duck_plum', weightGrams: 26, postHatchDay: 0 },
+    { id: 'duck_coconut', weightGrams: 400, postHatchDay: 70 },
+    { id: 'duck_melon', weightGrams: 560, postHatchDay: 180 },
+  ],
+  emperor_penguin: [
+    { id: 'penguin_grapefruit', weightGrams: 315, postHatchDay: 0 },
+    { id: 'penguin_toddler', weightGrams: 12_000, postHatchDay: 400 },
+    { id: 'penguin_child', weightGrams: 30_000, postHatchDay: 1460 },
+  ],
+  common_ostrich: [
+    { id: 'ostrich_pineapple', weightGrams: 850, postHatchDay: 0 },
+    { id: 'ostrich_person', weightGrams: 70_000, postHatchDay: 400 },
+    { id: 'ostrich_heavy', weightGrams: 105_000, postHatchDay: 912 },
+  ],
   leopard_gecko: [
     { id: 'gecko_raspberry', weightGrams: 3, postHatchDay: 0 },
     { id: 'gecko_mouse', weightGrams: 20, postHatchDay: 55 },
     { id: 'gecko_kiwi', weightGrams: 70, postHatchDay: 330 },
   ],
+  veiled_chameleon: [
+    { id: 'chameleon_raisin', weightGrams: 0.5, postHatchDay: 0 },
+    { id: 'chameleon_mouse', weightGrams: 20, postHatchDay: 80 },
+    { id: 'chameleon_hamster', weightGrams: 140, postHatchDay: 270 },
+  ],
+  ball_python: [
+    { id: 'python_egg', weightGrams: 58, postHatchDay: 0 },
+    { id: 'python_can', weightGrams: 350, postHatchDay: 365 },
+    { id: 'python_rabbit', weightGrams: 1500, postHatchDay: 1095 },
+  ],
   green_sea_turtle: [
     { id: 'turtle_lime', weightGrams: 25, postHatchDay: 0 },
     { id: 'turtle_melon', weightGrams: 8_000, postHatchDay: 122 },
     { id: 'turtle_adults', weightGrams: 150_000, postHatchDay: 730 },
+  ],
+  saltwater_crocodile: [
+    { id: 'croc_lemon', weightGrams: 70, postHatchDay: 0 },
+    { id: 'croc_person', weightGrams: 70_000, postHatchDay: 1500 },
+    { id: 'croc_horse', weightGrams: 450_000, postHatchDay: 4380 },
+  ],
+  platypus: [
+    { id: 'platypus_clip', weightGrams: 1, postHatchDay: 0 },
+    { id: 'platypus_hamster', weightGrams: 120, postHatchDay: 90 },
+    { id: 'platypus_rabbit', weightGrams: 1600, postHatchDay: 365 },
   ],
 };
 
@@ -317,8 +335,8 @@ export function getPostHatchMilestones(species: SpeciesConfig): PostHatchMilesto
       stage: 'juvenile',
       day: incubationDays + juvenileDay,
       postHatchDay: juvenileDay,
-      title: GROWTH_COPY[species.id].juvenile.title,
-      scientificSummary: GROWTH_COPY[species.id].juvenile.scientificSummary,
+      title: species.juvenile.title,
+      scientificSummary: species.juvenile.scientificSummary,
       audioTrigger: 'hatch_call',
     },
     {
@@ -326,8 +344,8 @@ export function getPostHatchMilestones(species: SpeciesConfig): PostHatchMilesto
       stage: 'adult',
       day: incubationDays + adultDays,
       postHatchDay: adultDays,
-      title: GROWTH_COPY[species.id].adult.title,
-      scientificSummary: GROWTH_COPY[species.id].adult.scientificSummary,
+      title: species.adult.title,
+      scientificSummary: species.adult.scientificSummary,
       audioTrigger: 'hatch_call',
     },
   ];

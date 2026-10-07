@@ -12,6 +12,68 @@ export const silkieChickenConfig: SpeciesConfig = {
   temperatureTargetCelsius: 37.5,
   humidityTargetPct: 55,
   turningRequiredUntilDay: 18,
+  taxon: 'aves',
+  tag: 'galliform',
+  egg: {
+    description: localized(
+      'Warm buff oval with a faint chalky bloom.',
+      'Warmes, beigefarbenes Oval mit zartem Kalkschleier.'
+    ),
+    lengthMm: 52,
+    widthMm: 39,
+    massGrams: 48,
+    shape: 'oval',
+    speckle: 'fine',
+    nest: {
+      body: '#F3E4B8',
+      stroke: '#D7C28A',
+      highlight: '#FFF8E6',
+      speckle: '#C4A66A',
+      crack: '#5C4030',
+      castShadow: '#3A2A1C',
+    },
+    candle: {
+      body: '#EED9A0',
+      stroke: '#D0B474',
+      highlight: '#FFF6D8',
+      speckle: '#C4A066',
+      interior: '#3A220C',
+      yolk: '#D07028',
+    },
+  },
+  growth: {
+    glow: '#E7C56A',
+    shadow: '#4A3420',
+    body: '#F6E4B4',
+    hatchlingMeasureCm: 8,
+    adultMetricKind: 'length',
+    adultMeasureCm: 28,
+    referenceScale: 'hand',
+    referenceCentimeters: 18,
+    reference: localized('an adult hand', 'eine Erwachsenenhand'),
+    behavior: localized(
+      'A domestic bantam with a crest and feathered feet. The chick is precocial, and the adult silhouette is round rather than long-winged.',
+      'Ein Haushuhn mit Haube und befiederten Füßen. Das Küken ist nestflüchtig, und die adulte Silhouette ist rund statt langflügelig.'
+    ),
+    fieldNotes: localized(
+      'Silkie eggs incubate in 21 days at a steady 37.5 °C. The chick hatches covered in fluffy down, and the adult crest, mulberry comb, and feathered shanks are fully expressed by about 18 weeks.',
+      'Seidenhuhneier brüten in 21 Tagen bei gleichmäßigen 37,5 °C. Das Küken schlüpft mit flauschigem Dunenkleid, und Haube, Maulbeerkamm sowie befiederte Läufe sind nach etwa 18 Wochen voll ausgeprägt.'
+    ),
+  },
+  juvenile: {
+    title: localized('Juvenile plumage', 'Jugendgefieder'),
+    scientificSummary: localized(
+      'Natal down is replaced by contour feathers. The crest and feathered shanks start to read as silkie traits, and daily mass gain is steepest in this window.',
+      'Die Nestdaunen werden durch Konturfedern ersetzt. Haube und befiederte Läufe werden als Seidenhuhn-Merkmale lesbar, und die tägliche Massenzunahme ist in diesem Fenster am steilsten.'
+    ),
+  },
+  adult: {
+    title: localized('Adult plumage', 'Adultgefieder'),
+    scientificSummary: localized(
+      'Crest, mulberry comb, and feathered feet are fully expressed. Body mass settles on the adult plateau near 1,300 g and linear growth stops.',
+      'Haube, Maulbeerkamm und befiederte Füße sind vollständig ausgeprägt. Die Körpermasse liegt auf dem adulten Plateau um 1.300 g, das Längenwachstum endet.'
+    ),
+  },
   milestones: [
     {
       day: 0,

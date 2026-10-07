@@ -12,6 +12,68 @@ export const greenSeaTurtleConfig: SpeciesConfig = {
   temperatureTargetCelsius: 29.0,
   humidityTargetPct: 85,
   turningRequiredUntilDay: 0,
+  taxon: 'reptilia',
+  tag: 'testudine',
+  egg: {
+    description: localized(
+      'Spherical, soft-shelled clutch egg, pale and chalky.',
+      'Kugeliges, weichschaliges Gelege-Ei, blass und kreidig.'
+    ),
+    lengthMm: 45,
+    widthMm: 44,
+    massGrams: 40,
+    shape: 'sphere',
+    speckle: 'fine',
+    nest: {
+      body: '#F3DFD0',
+      stroke: '#D7B8A4',
+      highlight: '#FFF6EF',
+      speckle: '#C9A08A',
+      crack: '#5A3828',
+      castShadow: '#4A3A22',
+    },
+    candle: {
+      body: '#F0D6C6',
+      stroke: '#D2B09C',
+      highlight: '#FFF4EC',
+      speckle: '#C49A86',
+      interior: '#3A1C14',
+      yolk: '#C45A32',
+    },
+  },
+  growth: {
+    glow: '#3D8F86',
+    shadow: '#123430',
+    body: '#2F6B4F',
+    hatchlingMeasureCm: 5,
+    adultMetricKind: 'length',
+    adultMeasureCm: 110,
+    referenceScale: 'person',
+    referenceCentimeters: 170,
+    reference: localized('an adult person', 'eine erwachsene Person'),
+    behavior: localized(
+      'A marine turtle. The hatchling crawls to the surf, and the adult carapace is a long oceanic life compressed onto this clock.',
+      'Eine Meeresschildkröte. Der Schlüpfling kriecht zur Brandung, und der adulte Carapax ist ein langes ozeanisches Leben, das auf diese Uhr verdichtet ist.'
+    ),
+    fieldNotes: localized(
+      'Green turtle eggs are nearly spherical and incubate for about 60 days in beach sand. The hatchling is lime-sized. On this compressed clock the adult plateau sits near 150 kg and a carapace length of about 110 cm.',
+      'Eier der Grünen Meeresschildkröte sind fast kugelig und brüten etwa 60 Tage im Strandsand. Der Schlüpfling hat die Größe einer Limette. Auf dieser verdichteten Uhr liegt das adulte Plateau nahe 150 kg und einer Carapaxlänge von etwa 110 cm.'
+    ),
+  },
+  juvenile: {
+    title: localized('Juvenile carapace', 'Juveniler Carapax'),
+    scientificSummary: localized(
+      'Scutes keratinize and the flipper stroke lengthens. On this compressed clock the turtle leaves the surface drift and begins sustained swimming.',
+      'Die Schilde verhornen, und der Flossenschlag wird länger. Auf dieser verdichteten Uhr verlässt die Schildkröte die oberflächennahe Drift und beginnt ausdauernd zu schwimmen.'
+    ),
+  },
+  adult: {
+    title: localized('Adult ocean mass', 'Adulte Meeresmasse'),
+    scientificSummary: localized(
+      'The carapace is fully ossified and mass has reached the compressed adult plateau near 150 kg, enough for sustained oceanic travel.',
+      'Der Carapax ist vollständig verknöchert, und die Masse hat das verdichtete adulte Plateau um 150 kg erreicht, ausreichend für anhaltende ozeanische Wanderung.'
+    ),
+  },
   milestones: [
     {
       day: 0,

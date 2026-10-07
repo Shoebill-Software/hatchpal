@@ -1,3 +1,4 @@
+import { getSpeciesConfig } from '@/data/species';
 import type { SpeciesId } from '@/domain/types';
 
 export const EGG_ASPECT = 196 / 248;
@@ -177,35 +178,14 @@ export function createVesselNetwork(originX: number, originY: number, radius: nu
 }
 
 export function candlingShellPalette(speciesId: SpeciesId): CandlingShellPalette {
-  if (speciesId === 'leopard_gecko') {
-    return {
-      body: '#EFE6D4',
-      stroke: '#C9B89A',
-      highlight: '#FFF8EC',
-      speckle: '#B7A48A',
-      interior: '#3A2414',
-      yolk: '#C47832',
-    };
-  }
-
-  if (speciesId === 'green_sea_turtle') {
-    return {
-      body: '#F0D6C6',
-      stroke: '#D2B09C',
-      highlight: '#FFF4EC',
-      speckle: '#C49A86',
-      interior: '#3A1C14',
-      yolk: '#C45A32',
-    };
-  }
-
+  const candle = getSpeciesConfig(speciesId).egg.candle;
   return {
-    body: '#EED9A0',
-    stroke: '#D0B474',
-    highlight: '#FFF6D8',
-    speckle: '#C4A066',
-    interior: '#3A220C',
-    yolk: '#D07028',
+    body: candle.body,
+    stroke: candle.stroke,
+    highlight: candle.highlight,
+    speckle: candle.speckle,
+    interior: candle.interior,
+    yolk: candle.yolk,
   };
 }
 

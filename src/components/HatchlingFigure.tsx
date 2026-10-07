@@ -1,6 +1,10 @@
+import { View } from 'react-native';
 import Svg, { Circle, Ellipse, G, Path } from 'react-native-svg';
 
+import { getSpeciesConfig } from '@/data/species';
 import type { SpeciesId } from '@/domain/types';
+
+import { GrowthSilhouette } from './GrowthSilhouette';
 
 export interface HatchlingFigureProps {
   speciesId: SpeciesId;
@@ -35,6 +39,32 @@ export function HatchlingFigure({
   resting = true,
 }: HatchlingFigureProps) {
   const { body, head } = morphScales(maturationProgress);
+
+  if (
+    speciesId !== 'silkie_chicken' &&
+    speciesId !== 'leopard_gecko' &&
+    speciesId !== 'green_sea_turtle'
+  ) {
+    return (
+      <View style={{ width, height }}>
+        {resting ? (
+          <Svg width={width} height={height} viewBox="0 0 200 240" style={{ position: 'absolute' }}>
+            <Ellipse cx="100" cy="214" rx="70" ry="14" fill="#CDB89A" opacity={0.45} />
+            <Ellipse cx="100" cy="210" rx="46" ry="8" fill="#E7D7BE" opacity={0.9} />
+          </Svg>
+        ) : null}
+        <View style={{ position: 'absolute', left: 0, right: 0, bottom: 16, alignItems: 'center' }}>
+          <GrowthSilhouette
+            speciesId={speciesId}
+            stage={maturationProgress >= 0.66 ? 'adult' : 'juvenile'}
+            width={width * 0.82}
+            height={height * 0.78}
+            fill={getSpeciesConfig(speciesId).growth.body}
+          />
+        </View>
+      </View>
+    );
+  }
 
   return (
     <Svg width={width} height={height} viewBox="0 0 200 240">

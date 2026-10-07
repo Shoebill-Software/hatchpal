@@ -14,7 +14,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 
 import { useNestPalette } from '@/constants/nest';
 import { Spacing } from '@/constants/theme';
-import type { PetSnapshot, SpeciesConfig, SpeciesId } from '@/domain/types';
+import type { PetSnapshot, SpeciesConfig } from '@/domain/types';
 import { useSoundEffects } from '@/hooks/useSoundEffects';
 import {
   ImpactFeedbackStyle,
@@ -160,7 +160,7 @@ export const EggContainer = forwardRef<EggContainerHandle, EggContainerProps>(
     }));
 
     const vitality = Math.min(1, Math.max(0.42, 0.55 + 0.45 * Math.min(1, Math.max(0, healthMultiplier))));
-    const shell = shellColors(species.id);
+    const shell = species.egg.nest;
     const crackOpacity = snapshot.isPipped
       ? snapshot.currentMilestone.stage === 'external_pip'
         ? 1
@@ -258,39 +258,6 @@ export const EggContainer = forwardRef<EggContainerHandle, EggContainerProps>(
     );
   }
 );
-
-function shellColors(speciesId: SpeciesId) {
-  if (speciesId === 'leopard_gecko') {
-    return {
-      body: '#F7F1E3',
-      stroke: '#D9CBB3',
-      highlight: '#FFFFFF',
-      speckle: '#C4B49A',
-      crack: '#5C4030',
-      castShadow: '#3A2A1C',
-    };
-  }
-
-  if (speciesId === 'green_sea_turtle') {
-    return {
-      body: '#F3DFD0',
-      stroke: '#D7B8A4',
-      highlight: '#FFF6EF',
-      speckle: '#C9A08A',
-      crack: '#5A3828',
-      castShadow: '#4A3A22',
-    };
-  }
-
-  return {
-    body: '#F3E4B8',
-    stroke: '#D7C28A',
-    highlight: '#FFF8E6',
-    speckle: '#C4A66A',
-    crack: '#5C4030',
-    castShadow: '#3A2A1C',
-  };
-}
 
 const styles = StyleSheet.create({
   stage: {

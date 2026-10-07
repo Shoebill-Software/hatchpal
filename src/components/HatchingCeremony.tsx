@@ -12,6 +12,7 @@ import Svg, { Ellipse, Path } from 'react-native-svg';
 
 import { useNestPalette } from '@/constants/nest';
 import { Spacing } from '@/constants/theme';
+import { getSpeciesConfig } from '@/data/species';
 import type { SpeciesId } from '@/domain/types';
 import { useSoundEffects } from '@/hooks/useSoundEffects';
 import {
@@ -238,30 +239,13 @@ function shellColors(speciesId: SpeciesId): {
   crack: string;
   shadow: string;
 } {
-  if (speciesId === 'leopard_gecko') {
-    return {
-      body: '#F7F1E3',
-      stroke: '#D9CBB3',
-      highlight: '#FFFFFF',
-      crack: '#5C4030',
-      shadow: '#3A2A1C',
-    };
-  }
-  if (speciesId === 'green_sea_turtle') {
-    return {
-      body: '#F3DFD0',
-      stroke: '#D7B8A4',
-      highlight: '#FFF6EF',
-      crack: '#5A3828',
-      shadow: '#4A3A22',
-    };
-  }
+  const nest = getSpeciesConfig(speciesId).egg.nest;
   return {
-    body: '#F3E4B8',
-    stroke: '#D7C28A',
-    highlight: '#FFF8E6',
-    crack: '#5C4030',
-    shadow: '#3A2A1C',
+    body: nest.body,
+    stroke: nest.stroke,
+    highlight: nest.highlight,
+    crack: nest.crack,
+    shadow: nest.castShadow,
   };
 }
 
