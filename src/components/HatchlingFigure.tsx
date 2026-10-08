@@ -4,7 +4,7 @@ import Svg, { Circle, Ellipse, G, Path } from 'react-native-svg';
 import { getSpeciesConfig } from '@/data/species';
 import type { SpeciesId } from '@/domain/types';
 
-import { GrowthSilhouette } from './GrowthSilhouette';
+import { fitSilhouette, GrowthSilhouette } from './GrowthSilhouette';
 
 export interface HatchlingFigureProps {
   speciesId: SpeciesId;
@@ -57,8 +57,7 @@ export function HatchlingFigure({
           <GrowthSilhouette
             speciesId={speciesId}
             stage={maturationProgress >= 0.66 ? 'adult' : 'juvenile'}
-            width={width * 0.82}
-            height={height * 0.78}
+            {...fitSilhouette(speciesId, width * 0.92, height * 0.78)}
             fill={getSpeciesConfig(speciesId).growth.body}
           />
         </View>

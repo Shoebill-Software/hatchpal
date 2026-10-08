@@ -1,0 +1,229 @@
+{
+  "summary": "Scientific animal silhouettes used for hatchling and adult previews. Both stages share one plate per species because PhyloPic and Wikimedia had no matching public-domain baby silhouettes. CC0 and Public Domain Mark images have no attribution requirement. The python image is CC BY 4.0 and must stay credited.",
+  "images": [
+    {
+      "speciesId": "silkie_chicken",
+      "file": "silkie_chicken.svg",
+      "stages": [
+        "juvenile",
+        "adult"
+      ],
+      "taxon": "Gallus gallus domesticus",
+      "creator": "Arcadia Science",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "source": "PhyloPic",
+      "sourceUrl": "https://www.phylopic.org/images/f16a316c-6580-4cc0-b6b5-fd2e895ba225",
+      "uuid": "f16a316c-6580-4cc0-b6b5-fd2e895ba225",
+      "note": "Round domestic hen. No public-domain silkie or chick silhouette was available."
+    },
+    {
+      "speciesId": "peregrine_falcon",
+      "file": "peregrine_falcon.svg",
+      "stages": [
+        "juvenile",
+        "adult"
+      ],
+      "taxon": "Falco peregrinus",
+      "creator": "Ferran Sayol",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "source": "PhyloPic",
+      "sourceUrl": "https://www.phylopic.org/images/1d5f26b6-4a9a-48ad-b799-a83eadb078ca",
+      "uuid": "1d5f26b6-4a9a-48ad-b799-a83eadb078ca",
+      "note": "Perched adult. No separate public-domain eyas silhouette was available."
+    },
+    {
+      "speciesId": "barn_owl",
+      "file": "barn_owl.svg",
+      "stages": [
+        "juvenile",
+        "adult"
+      ],
+      "taxon": "Tyto alba",
+      "creator": "Ferran Sayol",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "source": "PhyloPic",
+      "sourceUrl": "https://www.phylopic.org/images/5672d2a9-8f5f-449c-a6dd-ba4ebe3f768b",
+      "uuid": "5672d2a9-8f5f-449c-a6dd-ba4ebe3f768b",
+      "note": "Standing owl. No separate public-domain owlet silhouette was available."
+    },
+    {
+      "speciesId": "mandarin_duck",
+      "file": "mandarin_duck.svg",
+      "stages": [
+        "juvenile",
+        "adult"
+      ],
+      "taxon": "Aix galericulata",
+      "creator": "Andy Wilson",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "source": "PhyloPic",
+      "sourceUrl": "https://www.phylopic.org/images/a1bb78e7-0657-4189-ab31-8c2a3798fbae",
+      "uuid": "a1bb78e7-0657-4189-ab31-8c2a3798fbae",
+      "note": "Swimming adult. No public-domain duckling silhouette was available."
+    },
+    {
+      "speciesId": "american_robin",
+      "file": "american_robin.svg",
+      "stages": [
+        "juvenile",
+        "adult"
+      ],
+      "taxon": "Turdus migratorius",
+      "creator": "Andy Wilson",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "source": "PhyloPic",
+      "sourceUrl": "https://www.phylopic.org/images/7be55586-e993-4eb3-88a0-9ec7a2ba0c7d",
+      "uuid": "7be55586-e993-4eb3-88a0-9ec7a2ba0c7d",
+      "note": "Standing adult. No public-domain nestling silhouette was available."
+    },
+    {
+      "speciesId": "emperor_penguin",
+      "file": "emperor_penguin.svg",
+      "stages": [
+        "juvenile",
+        "adult"
+      ],
+      "taxon": "Aptenodytes forsteri",
+      "creator": null,
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "source": "PhyloPic",
+      "sourceUrl": "https://www.phylopic.org/images/f2e02022-2700-484d-a66d-b2a900030371",
+      "uuid": "f2e02022-2700-484d-a66d-b2a900030371",
+      "note": "Standing adult. No public-domain penguin-chick silhouette was available."
+    },
+    {
+      "speciesId": "common_ostrich",
+      "file": "common_ostrich.svg",
+      "stages": [
+        "juvenile",
+        "adult"
+      ],
+      "taxon": "Struthio camelus",
+      "creator": "Marie Attard",
+      "license": "Public Domain Mark 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/mark/1.0/",
+      "source": "PhyloPic",
+      "sourceUrl": "https://www.phylopic.org/images/31789d9c-30e0-4f40-8c21-6f76cd5d339b",
+      "uuid": "31789d9c-30e0-4f40-8c21-6f76cd5d339b",
+      "note": "Standing adult. No public-domain ostrich-chick silhouette was available."
+    },
+    {
+      "speciesId": "emu",
+      "file": "emu.svg",
+      "stages": [
+        "juvenile",
+        "adult"
+      ],
+      "taxon": "Dromaius novaehollandiae",
+      "creator": "Andy Wilson",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "source": "PhyloPic",
+      "sourceUrl": "https://www.phylopic.org/images/bae88982-352f-43d0-b2ed-8d7661fa1d6f",
+      "uuid": "bae88982-352f-43d0-b2ed-8d7661fa1d6f",
+      "note": "Standing adult. No public-domain emu-chick silhouette was available."
+    },
+    {
+      "speciesId": "leopard_gecko",
+      "file": "leopard_gecko.svg",
+      "stages": [
+        "juvenile",
+        "adult"
+      ],
+      "taxon": "Eublepharis turcmenicus",
+      "creator": "Jose Carlos Arenas-Monroy",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "source": "PhyloPic",
+      "sourceUrl": "https://www.phylopic.org/images/e28cf327-0bec-42bf-af73-c1bbc0368c3e",
+      "uuid": "e28cf327-0bec-42bf-af73-c1bbc0368c3e",
+      "note": "Eyelid gecko in the same genus as the leopard gecko. PhyloPic has no Eublepharis macularius plate."
+    },
+    {
+      "speciesId": "veiled_chameleon",
+      "file": "veiled_chameleon.svg",
+      "stages": [
+        "juvenile",
+        "adult"
+      ],
+      "taxon": "Chamaeleo calyptratus",
+      "creator": "Margot Michaud",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "source": "PhyloPic",
+      "sourceUrl": "https://www.phylopic.org/images/6e8933c0-d49b-49e8-a8fd-5dbb40ab77f3",
+      "uuid": "6e8933c0-d49b-49e8-a8fd-5dbb40ab77f3",
+      "note": "Adult with casque and coiled tail."
+    },
+    {
+      "speciesId": "ball_python",
+      "file": "ball_python.svg",
+      "stages": [
+        "juvenile",
+        "adult"
+      ],
+      "taxon": "Python bivittatus",
+      "creator": "DS Biswas",
+      "license": "CC BY 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "source": "PhyloPic",
+      "sourceUrl": "https://www.phylopic.org/images/0376a292-2e17-4978-b859-6fbf9bea6c67",
+      "uuid": "0376a292-2e17-4978-b859-6fbf9bea6c67",
+      "note": "Burmese python, the only royalty-free python silhouette on PhyloPic. Credit is required. PhyloPic has no Python regius plate."
+    },
+    {
+      "speciesId": "green_sea_turtle",
+      "file": "green_sea_turtle.svg",
+      "stages": [
+        "juvenile",
+        "adult"
+      ],
+      "taxon": "Chelonia mydas",
+      "creator": null,
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "source": "PhyloPic",
+      "sourceUrl": "https://www.phylopic.org/images/6cebfd77-1ad5-449f-8440-c6f9f18f41d8",
+      "uuid": "6cebfd77-1ad5-449f-8440-c6f9f18f41d8",
+      "note": "Dorsal adult. Hatchlings share this outline at a smaller size."
+    },
+    {
+      "speciesId": "saltwater_crocodile",
+      "file": "saltwater_crocodile.svg",
+      "stages": [
+        "juvenile",
+        "adult"
+      ],
+      "taxon": "Crocodylus porosus",
+      "creator": "Margot Michaud",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "source": "PhyloPic",
+      "sourceUrl": "https://www.phylopic.org/images/acb7e630-7491-4caa-9717-b3d847ecb8d7",
+      "uuid": "acb7e630-7491-4caa-9717-b3d847ecb8d7",
+      "note": "Side profile. Hatchlings share this outline at a smaller size."
+    },
+    {
+      "speciesId": "platypus",
+      "file": "platypus.svg",
+      "stages": [
+        "juvenile",
+        "adult"
+      ],
+      "taxon": "Ornithorhynchus anatinus",
+      "creator": "Margot Michaud",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "source": "PhyloPic",
+      "sourceUrl": "https://www.phylopic.org/images/3ca524e8-74c5-45ad-a267-9f599ab7d751",
+      "uuid": "3ca524e8-74c5-45ad-a267-9f599ab7d751",
+      "note": "Swimming adult. No public-domain juvenile plate was available."
+    }
+  ]
+}

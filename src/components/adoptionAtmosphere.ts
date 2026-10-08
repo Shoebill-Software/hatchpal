@@ -1,5 +1,15 @@
 import type { SpeciesId } from '@/domain/types';
 
+/** Night room shared with the dossier. The nest stays warm paper; this chamber does not. */
+export const HATCHERY = {
+  ground: '#0C0A09',
+  ink: '#F6F0E6',
+  muted: '#C4B6A6',
+  quiet: '#9A8E82',
+  amber: '#E7A15A',
+  amberInk: '#1A1410',
+} as const;
+
 /** Full-bleed adoption lighting. Each stop is an environmental wash, not a spotlight. */
 export interface AdoptionAtmosphere {
   high: string;

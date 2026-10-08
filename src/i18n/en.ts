@@ -115,13 +115,19 @@ export const en = {
   'changeEgg.keep': 'Cancel / Keep Current Egg',
   'changeEgg.confirm': 'Confirm & Choose New Egg',
 
-  'adoption.title': 'Adopt an egg',
-  'adoption.replaceTitle': 'Choose a new egg',
-  'adoption.body':
-    'Tap an egg to open its field dossier, then confirm the adoption. Time passes 1:1, fully offline.',
-  'adoption.replaceBody':
-    'Only one egg can be incubated at a time. Tap an egg to review it. Adopting a new species replaces the current egg and resets that cycle.',
+  'adoption.title': 'The hatchery',
+  'adoption.replaceTitle': 'A new egg',
+  'adoption.body': 'One real day for every day. Nothing here needs a connection.',
+  'adoption.replaceBody': 'The nest holds a single egg. Adopting a new one replaces it.',
   'adoption.openDossier': 'Opens the species dossier',
+  'adoption.close': 'Close',
+  'adoption.study': 'Study this egg',
+  'adoption.selectEgg': 'Brings this egg forward',
+  'adoption.nextEgg': 'Next egg',
+  'adoption.previousEgg': 'Previous egg',
+  'adoption.position': '{{current}} / {{total}}',
+  'adoption.positionA11y': 'Egg {{current}} of {{total}}',
+  'adoption.commitment': '{{days}} days · {{care}}',
   'adoption.nickname': 'Nickname',
   'adoption.placeholder': 'Name this egg',
   'adoption.nicknameA11y': 'Egg nickname',
@@ -134,7 +140,7 @@ export const en = {
   'adoption.filter.all': 'All',
   'adoption.filter.birds': 'Birds',
   'adoption.filter.reptiles': 'Reptiles',
-  'adoption.filter.exotics': 'Exotics & Monotremes',
+  'adoption.filter.exotics': 'Exotics',
 
   'taxon.galliform': 'Galliformes',
   'taxon.raptor': 'Raptors',
@@ -287,6 +293,9 @@ export const en = {
   'settings.github': 'Shoebill Software on GitHub',
   'settings.attribution':
     'Incubation timelines follow published developmental biology for every species in the roster, from galliforms and raptors to crocodilians and the platypus.',
+  'settings.silhouettes':
+    'Animal silhouettes are from PhyloPic and are in the public domain, except the python: Python bivittatus by DS Biswas, CC BY 4.0.',
+  'settings.silhouettesLink': 'PhyloPic python silhouette',
   'settings.dangerTitle': 'Data Management',
   'settings.reset': 'Start Over',
   'settings.resetHint': 'Abandons the current creature and clears this incubation from the device.',

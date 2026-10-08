@@ -1,7 +1,6 @@
-import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { useNestPalette } from '@/constants/nest';
-import { Spacing } from '@/constants/theme';
+import { HATCHERY } from '@/components/adoptionAtmosphere';
 import { ROSTER_FILTERS, type RosterFilter } from '@/data/species/roster';
 import { useTranslation } from '@/i18n';
 import type { TranslationKey } from '@/i18n/en';
@@ -20,14 +19,10 @@ export interface TaxonFilterBarProps {
 }
 
 export function TaxonFilterBar({ value, onChange }: TaxonFilterBarProps) {
-  const palette = useNestPalette();
   const { t } = useTranslation();
 
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.row}>
+    <View style={styles.row}>
       {ROSTER_FILTERS.map((filter) => {
         const selected = filter === value;
         return (
@@ -42,38 +37,43 @@ export function TaxonFilterBar({ value, onChange }: TaxonFilterBarProps) {
               void triggerImpact(ImpactFeedbackStyle.Light);
               onChange(filter);
             }}
-            style={[
-              styles.pill,
-              {
-                backgroundColor: selected ? palette.action : palette.surface,
-                borderColor: selected ? palette.action : palette.border,
-              },
-            ]}>
-            <Text style={[styles.label, { color: selected ? palette.actionText : palette.text }]}>
+            style={({ pressed }) => [styles.hit, { opacity: pressed ? 0.6 : 1 }]}>
+            <Text
+              maxFontSizeMultiplier={1.15}
+              style={[styles.label, { color: selected ? HATCHERY.ink : HATCHERY.quiet }]}>
               {t(FILTER_LABEL[filter])}
             </Text>
+            <View style={[styles.mark, { backgroundColor: selected ? HATCHERY.amber : 'transparent' }]} />
           </Pressable>
         );
       })}
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   row: {
-    gap: Spacing.two,
-    paddingVertical: Spacing.one,
-  },
-  pill: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: Spacing.three,
-    minHeight: 36,
-    alignItems: 'center',
+    flexDirection: 'row',
     justifyContent: 'center',
+    alignItems: 'flex-start',
+    gap: 6,
+    paddingHorizontal: 12,
+  },
+  hit: {
+    minHeight: 36,
+    paddingHorizontal: 10,
+    paddingTop: 6,
+    alignItems: 'center',
   },
   label: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+  mark: {
+    marginTop: 6,
+    width: 16,
+    height: 2,
+    borderRadius: 1,
   },
 });

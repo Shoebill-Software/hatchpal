@@ -29,6 +29,8 @@ import { usePetStore } from '@/store/usePetStore';
 import { usePreferencesStore, type AppearancePreference } from '@/store/usePreferencesStore';
 
 const REPOSITORY_URL = 'https://github.com/Shoebill-Software/hatchpal';
+const PYTHON_SILHOUETTE_URL =
+  'https://www.phylopic.org/images/0376a292-2e17-4978-b859-6fbf9bea6c67';
 
 export interface SettingsModalProps {
   visible: boolean;
@@ -59,12 +61,12 @@ function permissionKey(permission: OsNotificationPermission): TranslationKey {
   }
 }
 
-async function openRepository(): Promise<void> {
+async function openExternal(url: string): Promise<void> {
   try {
-    await WebBrowser.openBrowserAsync(REPOSITORY_URL);
+    await WebBrowser.openBrowserAsync(url);
   } catch {
     try {
-      await Linking.openURL(REPOSITORY_URL);
+      await Linking.openURL(url);
     } catch {
       // A missing browser must not trap the settings sheet.
     }
@@ -260,7 +262,7 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
               <Pressable
                 accessibilityRole="link"
                 onPress={() => {
-                  void openRepository();
+                  void openExternal(REPOSITORY_URL);
                 }}
                 style={({ pressed }) => [styles.linkButton, { opacity: pressed ? 0.7 : 1 }]}>
                 <Text style={[styles.linkLabel, { color: palette.action }]}>{t('settings.github')}</Text>
@@ -268,6 +270,17 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
               <Text selectable style={[styles.hint, { color: palette.textMuted }]}>
                 {t('settings.attribution')}
               </Text>
+              <Text selectable style={[styles.hint, { color: palette.textMuted }]}>
+                {t('settings.silhouettes')}
+              </Text>
+              <Pressable
+                accessibilityRole="link"
+                onPress={() => {
+                  void openExternal(PYTHON_SILHOUETTE_URL);
+                }}
+                style={({ pressed }) => [styles.linkButton, { opacity: pressed ? 0.7 : 1 }]}>
+                <Text style={[styles.linkLabel, { color: palette.action }]}>{t('settings.silhouettesLink')}</Text>
+              </Pressable>
             </Section>
 
             <View style={styles.section}>

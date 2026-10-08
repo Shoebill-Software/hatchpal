@@ -72,12 +72,13 @@ function RootNavigator() {
         <Stack.Screen
           name="adopt"
           options={{
-            headerShown: true,
+            headerShown: false,
             title: t('nav.adoption'),
-            presentation: 'modal',
-            animation: 'fade_from_bottom',
-            animationDuration: 480,
-            contentStyle: { backgroundColor: canvas },
+            presentation: 'fullScreenModal',
+            animation: 'fade',
+            animationDuration: 560,
+            gestureEnabled: true,
+            contentStyle: { backgroundColor: '#0C0A09' },
           }}
         />
         <Stack.Screen

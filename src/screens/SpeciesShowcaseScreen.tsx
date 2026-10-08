@@ -24,7 +24,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
 
-import { GrowthSilhouette } from '@/components/GrowthSilhouette';
+import { fitSilhouette, GrowthSilhouette } from '@/components/GrowthSilhouette';
 import { hexToRgba } from '@/constants/nest';
 import { Spacing } from '@/constants/theme';
 import { SPECIES_REGISTRY } from '@/data/species';
@@ -313,9 +313,17 @@ function FormStage({
   const adultH = Math.min(176, Math.round(stageInner * 0.46));
   const babyScale = fieldScale(species.growth.hatchlingMeasureCm, species.growth.adultMeasureCm);
   const babyH = Math.max(72, Math.round(adultH * babyScale));
-  const aspect = 200 / 240;
-  const adultW = Math.round(adultH * aspect);
-  const babyW = Math.round(babyH * aspect);
+  const adultFit = fitSilhouette(species.id, stageInner, adultH);
+  const babyFit = fitSilhouette(species.id, stageInner, babyH);
+  const pairGap = 36;
+  const pairScale =
+    adultFit.width + babyFit.width + pairGap > stageInner
+      ? stageInner / (adultFit.width + babyFit.width + pairGap)
+      : 1;
+  const adultW = Math.round(adultFit.width * pairScale);
+  const adultDrawH = Math.round(adultFit.height * pairScale);
+  const babyW = Math.round(babyFit.width * pairScale);
+  const babyDrawH = Math.round(babyFit.height * pairScale);
   const travel = Math.min(108, Math.round(stageInner * 0.24));
   const solo = Math.min(1.8, adultH / babyH);
 
@@ -399,7 +407,7 @@ function FormStage({
             speciesId={species.id}
             stage="juvenile"
             width={babyW}
-            height={babyH}
+            height={babyDrawH}
             fill={INK}
             opacity={0.34}
             rim={species.growth.glow}
@@ -423,7 +431,7 @@ function FormStage({
             speciesId={species.id}
             stage="adult"
             width={adultW}
-            height={adultH}
+            height={adultDrawH}
             fill={INK}
             opacity={0.34}
             rim={species.growth.glow}

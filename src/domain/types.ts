@@ -20,7 +20,7 @@ export type SpeciesId = (typeof SPECIES_IDS)[number];
 /** Class used by the adoption roster filter. */
 export type TaxonomicClass = 'aves' | 'reptilia' | 'monotremata';
 
-/** Finer label shown on a carousel card. */
+/** Finer label shown on the hatchery plate. */
 export type RosterTag =
   | 'galliform'
   | 'raptor'
