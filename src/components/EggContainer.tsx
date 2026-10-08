@@ -13,9 +13,10 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
-import Svg, { Defs, Ellipse, LinearGradient, Path, RadialGradient, Stop } from 'react-native-svg';
+import Svg, { Defs, Ellipse, LinearGradient, Path, Stop } from 'react-native-svg';
 import { scheduleOnRN } from 'react-native-worklets';
 
+import type { HumidityStatus, NestTemper, TemperatureStatus } from '@/domain/climateEngine';
 import type { PetSnapshot, SpeciesConfig } from '@/domain/types';
 import { useSoundEffects } from '@/hooks/useSoundEffects';
 import {
@@ -26,10 +27,12 @@ import {
 } from '@/services/hapticFeedback';
 import { resolveShellTapEffect } from '@/services/soundCues';
 
-export const EGG_FRAME = { width: 184, height: 232 } as const;
+export const EGG_FRAME = { width: 220, height: 278 } as const;
 
 const EGG_VIEWBOX = { width: 196, height: 248 };
 const EGG_POLE_Y = 204;
+export const EGG_OUTLINE =
+  'M98 28 C58 28 40 92 40 128 C40 178 64 204 98 204 C132 204 156 178 156 128 C156 92 138 28 98 28 Z';
 const HOLD_MS = 450;
 
 const MIST_DROPS = [
@@ -49,6 +52,9 @@ export interface EggContainerProps {
   species: SpeciesConfig;
   vitalityScore: number;
   inSweetSpot: boolean;
+  temper: NestTemper;
+  temperatureStatus: TemperatureStatus;
+  humidityStatus: HumidityStatus;
   heartRate: number;
   warmPulse: number;
   mistPulse: number;
@@ -65,6 +71,9 @@ export function EggContainer({
   species,
   vitalityScore,
   inSweetSpot,
+  temper,
+  temperatureStatus,
+  humidityStatus,
   heartRate,
   warmPulse,
   mistPulse,
@@ -81,6 +90,8 @@ export function EggContainer({
   const eggHeight = EGG_FRAME.height * layout;
   const scale = useSharedValue(1);
   const wiggle = useSharedValue(0);
+  const shiver = useSharedValue(0);
+  const lean = useSharedValue(0);
   const hold = useSharedValue(1);
   const lamp = useSharedValue(0);
   const vitality = clampUnit(vitalityScore);
@@ -169,6 +180,33 @@ export function EggContainer({
     );
   }, [lamp, reduceMotion, warmPulse]);
 
+  const shivering =
+    temperatureStatus === 'too_cold' && (temper === 'chilly' || temper === 'fussy' || temper === 'on_strike');
+
+  useEffect(() => {
+    const struck = temper === 'on_strike';
+    lean.value = reduceMotion ? (struck ? -7 : 0) : withTiming(struck ? -7 : 0, { duration: struck ? 420 : 280 });
+    if (!shivering || reduceMotion) {
+      cancelAnimation(shiver);
+      shiver.value = withTiming(0, { duration: reduceMotion ? 1 : 180 });
+      return;
+    }
+    shiver.value = withRepeat(
+      withSequence(
+        withTiming(-2.4, { duration: 70 }),
+        withTiming(2.4, { duration: 70 }),
+        withTiming(-1.6, { duration: 60 }),
+        withTiming(0, { duration: 80 }),
+        withDelay(1500, withTiming(0, { duration: 1 }))
+      ),
+      -1,
+      false
+    );
+    return () => {
+      cancelAnimation(shiver);
+    };
+  }, [lean, reduceMotion, shiver, shivering, temper]);
+
   const tapRef = useRef(handleTap);
   const candleRef = useRef(activateCandle);
   const armRef = useRef(armHold);
@@ -221,13 +259,12 @@ export function EggContainer({
   );
 
   const eggStyle = useAnimatedStyle(() => ({
-    transform: [{ rotateZ: `${wiggle.value}deg` }, { scale: scale.value * hold.value }],
+    transform: [{ rotateZ: `${wiggle.value + shiver.value + lean.value}deg` }, { scale: scale.value * hold.value }],
   }));
   const lampStyle = useAnimatedStyle(() => ({
     opacity: lamp.value,
   }));
 
-  const sheen = 0.78 + 0.22 * vitality;
   const shell = species.egg.nest;
   const crackOpacity = snapshot.isPipped
     ? snapshot.currentMilestone.stage === 'external_pip'
@@ -237,35 +274,18 @@ export function EggContainer({
   const hatchCrack = snapshot.isReadyToHatch || snapshot.currentMilestone.stage === 'external_pip';
   const poleTop = (EGG_POLE_Y / EGG_VIEWBOX.height) * eggHeight;
   const showHeart = inSweetSpot && heartRate > 0;
-  const glow = eggWidth * 1.22;
+  const sulking = temper !== 'content';
+  const chalky = sulking && humidityStatus === 'dry';
+  const coolWash = sulking && temperatureStatus === 'too_cold';
+  const warmWash = sulking && temperatureStatus === 'too_warm';
 
   return (
     <View style={styles.stage}>
       <View style={[styles.hero, { width: eggWidth, height: eggHeight }]}>
-        {inSweetSpot ? (
-          <View pointerEvents="none" style={[styles.vitalityGlow, { width: glow, height: glow, opacity: 0.22 + 0.4 * vitality }]}>
-            <Svg width={glow} height={glow}>
-              <Defs>
-                <RadialGradient
-                  id="nest-vitality"
-                  cx={glow / 2}
-                  cy={glow * 0.56}
-                  r={glow * 0.42}
-                  gradientUnits="userSpaceOnUse">
-                  <Stop offset="0%" stopColor="#F6C56A" stopOpacity={0.7} />
-                  <Stop offset="48%" stopColor="#E7A15A" stopOpacity={0.18} />
-                  <Stop offset="100%" stopColor="#E7A15A" stopOpacity={0} />
-                </RadialGradient>
-              </Defs>
-              <Ellipse cx={glow / 2} cy={glow * 0.56} rx={glow * 0.36} ry={glow * 0.38} fill="url(#nest-vitality)" />
-            </Svg>
-          </View>
-        ) : null}
-
         <View pointerEvents="none" style={[styles.contactShadow, { top: poleTop - 4 * layout }]}>
-          <Svg width={124 * layout} height={24 * layout}>
-            <Ellipse cx={62 * layout} cy={12 * layout} rx={44 * layout} ry={7 * layout} fill={shell.castShadow} opacity={0.14} />
-            <Ellipse cx={62 * layout} cy={11 * layout} rx={24 * layout} ry={3.5 * layout} fill={shell.castShadow} opacity={0.2} />
+          <Svg width={148 * layout} height={28 * layout}>
+            <Ellipse cx={74 * layout} cy={14 * layout} rx={52 * layout} ry={9 * layout} fill={shell.castShadow} opacity={0.16} />
+            <Ellipse cx={74 * layout} cy={13 * layout} rx={30 * layout} ry={4.5 * layout} fill={shell.castShadow} opacity={0.22} />
           </Svg>
         </View>
 
@@ -299,14 +319,12 @@ export function EggContainer({
               }
               handleTap();
             }}
-            style={[styles.eggHit, eggStyle, { width: eggWidth, height: eggHeight, opacity: sheen }]}>
+            style={[styles.eggHit, eggStyle, { width: eggWidth, height: eggHeight }]}>
             <Svg width={eggWidth} height={eggHeight} viewBox={`0 0 ${EGG_VIEWBOX.width} ${EGG_VIEWBOX.height}`}>
-              <Path
-                d="M98 28 C58 28 40 92 40 128 C40 178 64 204 98 204 C132 204 156 178 156 128 C156 92 138 28 98 28 Z"
-                fill={shell.body}
-                stroke={shell.stroke}
-                strokeWidth="1.4"
-              />
+              <Path d={EGG_OUTLINE} fill={shell.body} stroke={shell.stroke} strokeWidth="1.4" />
+              {chalky ? <Path d={EGG_OUTLINE} fill="#E4DCCF" opacity={temper === 'on_strike' ? 0.34 : 0.2} /> : null}
+              {coolWash ? <Path d={EGG_OUTLINE} fill="#8FB4C8" opacity={0.16} /> : null}
+              {warmWash ? <Path d={EGG_OUTLINE} fill="#F0B56A" opacity={0.14} /> : null}
               {inSweetSpot ? (
                 <Path
                   d="M98 28 C58 28 40 92 40 128 C40 178 64 204 98 204 C132 204 156 178 156 128 C156 92 138 28 98 28 Z"
@@ -487,7 +505,7 @@ function resolveScale(value: number): number {
   if (!Number.isFinite(value)) {
     return 1;
   }
-  return Math.min(1, Math.max(0.46, value));
+  return Math.min(1, Math.max(0.82, value));
 }
 
 function useReduceMotion(): boolean {
@@ -522,12 +540,6 @@ const styles = StyleSheet.create({
   hero: {
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  vitalityGlow: {
-    position: 'absolute',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 0,
   },
   contactShadow: {
     position: 'absolute',

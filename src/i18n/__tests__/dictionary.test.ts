@@ -42,9 +42,19 @@ describe('English dictionary', () => {
     expect(translate('journal.scientificObservation')).toBe('Scientific Observation');
     expect(translate('journal.candlingReadout')).toBe('Candling Readout');
     expect(translate('journal.replaySound')).toBe('Replay Sound');
-    expect(translate('journal.sizeComparison')).toBe('Size comparison');
     expect(translate('journal.weightLog')).toBe('Weight log');
+    expect(translate('journal.beforeHatchWeight')).toBe('Mass is logged from emergence.');
+    expect(translate('climate.driftWarmth', { temp: '37.5' })).toBe('Settles near 37.5°.');
+    expect(translate('climate.strike', { temp: '37.5', humidity: '55' })).toBe(
+      'On strike until the nest is near 37.5° and 55%.'
+    );
+    expect(translate('settings.appearance.light')).toBe('Light');
+    expect(translate('settings.appearance.dark')).toBe('Dark');
     expect(translate('metric.ageDay', { day: 3 })).toBe('Day 3');
+    expect(translate('tutorial.step', { current: 2, total: 5 })).toBe('Step 2 of 5');
+    expect(translate('tutorial.heart.body')).toContain('Day 3');
+    expect(translate('tutorial.heart.body')).toContain('None');
+    expect(translate('tutorial.begin')).toBe('Begin Incubation');
   });
 
   it('formats a fresh mist and an older mist without leaving template tokens', () => {

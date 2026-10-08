@@ -22,7 +22,7 @@ export const NestPalette = {
     secondaryAction: '#3F5C4A',
   },
   dark: {
-    background: '#161310',
+    background: '#0E0E10',
     surface: '#241E19',
     border: '#3C332B',
     text: '#F4EDE3',

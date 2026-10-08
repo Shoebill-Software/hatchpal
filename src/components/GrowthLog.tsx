@@ -4,7 +4,7 @@ import Svg, { Circle, Path } from 'react-native-svg';
 
 import { hexToRgba, useNestPalette } from '@/constants/nest';
 import { Spacing } from '@/constants/theme';
-import type { SizeReference, SizeReferenceId, WeightMark, WeightSample } from '@/domain/milestones';
+import type { WeightMark, WeightSample } from '@/domain/milestones';
 import type { SpeciesConfig } from '@/domain/types';
 import {
   formatBiologicalDay,
@@ -12,7 +12,6 @@ import {
   formatLocaleDate,
   useTranslation,
 } from '@/i18n';
-import type { TranslationKey } from '@/i18n/en';
 import type { TranslateFn } from '@/i18n/translate';
 
 export interface GrowthLogProps {
@@ -21,54 +20,7 @@ export interface GrowthLogProps {
   currentWeightGrams: number;
   samples: readonly WeightSample[];
   marks: readonly WeightMark[];
-  references: readonly SizeReference[];
-  activeReferenceId: SizeReferenceId | null;
 }
-
-const SIZE_COPY: Record<SizeReferenceId, { label: TranslationKey; note: TranslationKey }> = {
-  silkie_golf_ball: { label: 'journal.size.silkieGolf', note: 'journal.size.silkieGolfNote' },
-  silkie_grapefruit: { label: 'journal.size.silkieGrapefruit', note: 'journal.size.silkieGrapefruitNote' },
-  silkie_teapot: { label: 'journal.size.silkieTeapot', note: 'journal.size.silkieTeapotNote' },
-  gecko_raspberry: { label: 'journal.size.geckoRaspberry', note: 'journal.size.geckoRaspberryNote' },
-  gecko_mouse: { label: 'journal.size.geckoMouse', note: 'journal.size.geckoMouseNote' },
-  gecko_kiwi: { label: 'journal.size.geckoKiwi', note: 'journal.size.geckoKiwiNote' },
-  turtle_lime: { label: 'journal.size.turtleLime', note: 'journal.size.turtleLimeNote' },
-  turtle_melon: { label: 'journal.size.turtleMelon', note: 'journal.size.turtleMelonNote' },
-  turtle_adults: { label: 'journal.size.turtleAdults', note: 'journal.size.turtleAdultsNote' },
-  falcon_sparrow: { label: 'journal.size.falconSparrow', note: 'journal.size.falconSparrowNote' },
-  falcon_pigeon: { label: 'journal.size.falconPigeon', note: 'journal.size.falconPigeonNote' },
-  falcon_bottle: { label: 'journal.size.falconBottle', note: 'journal.size.falconBottleNote' },
-  owl_mouse: { label: 'journal.size.owlMouse', note: 'journal.size.owlMouseNote' },
-  owl_hamster: { label: 'journal.size.owlHamster', note: 'journal.size.owlHamsterNote' },
-  owl_pigeon: { label: 'journal.size.owlPigeon', note: 'journal.size.owlPigeonNote' },
-  duck_plum: { label: 'journal.size.duckPlum', note: 'journal.size.duckPlumNote' },
-  duck_coconut: { label: 'journal.size.duckCoconut', note: 'journal.size.duckCoconutNote' },
-  duck_melon: { label: 'journal.size.duckMelon', note: 'journal.size.duckMelonNote' },
-  penguin_grapefruit: { label: 'journal.size.penguinGrapefruit', note: 'journal.size.penguinGrapefruitNote' },
-  penguin_toddler: { label: 'journal.size.penguinToddler', note: 'journal.size.penguinToddlerNote' },
-  penguin_child: { label: 'journal.size.penguinChild', note: 'journal.size.penguinChildNote' },
-  ostrich_pineapple: { label: 'journal.size.ostrichPineapple', note: 'journal.size.ostrichPineappleNote' },
-  ostrich_person: { label: 'journal.size.ostrichPerson', note: 'journal.size.ostrichPersonNote' },
-  ostrich_heavy: { label: 'journal.size.ostrichHeavy', note: 'journal.size.ostrichHeavyNote' },
-  chameleon_raisin: { label: 'journal.size.chameleonRaisin', note: 'journal.size.chameleonRaisinNote' },
-  chameleon_mouse: { label: 'journal.size.chameleonMouse', note: 'journal.size.chameleonMouseNote' },
-  chameleon_hamster: { label: 'journal.size.chameleonHamster', note: 'journal.size.chameleonHamsterNote' },
-  python_egg: { label: 'journal.size.pythonEgg', note: 'journal.size.pythonEggNote' },
-  python_can: { label: 'journal.size.pythonCan', note: 'journal.size.pythonCanNote' },
-  python_rabbit: { label: 'journal.size.pythonRabbit', note: 'journal.size.pythonRabbitNote' },
-  croc_lemon: { label: 'journal.size.crocLemon', note: 'journal.size.crocLemonNote' },
-  croc_person: { label: 'journal.size.crocPerson', note: 'journal.size.crocPersonNote' },
-  croc_horse: { label: 'journal.size.crocHorse', note: 'journal.size.crocHorseNote' },
-  platypus_clip: { label: 'journal.size.platypusClip', note: 'journal.size.platypusClipNote' },
-  platypus_hamster: { label: 'journal.size.platypusHamster', note: 'journal.size.platypusHamsterNote' },
-  platypus_rabbit: { label: 'journal.size.platypusRabbit', note: 'journal.size.platypusRabbitNote' },
-  emu_melon: { label: 'journal.size.emuMelon', note: 'journal.size.emuMelonNote' },
-  emu_child: { label: 'journal.size.emuChild', note: 'journal.size.emuChildNote' },
-  emu_adult: { label: 'journal.size.emuAdult', note: 'journal.size.emuAdultNote' },
-  robin_coin: { label: 'journal.size.robinCoin', note: 'journal.size.robinCoinNote' },
-  robin_mouse: { label: 'journal.size.robinMouse', note: 'journal.size.robinMouseNote' },
-  robin_palm: { label: 'journal.size.robinPalm', note: 'journal.size.robinPalmNote' },
-};
 
 export function GrowthLog({
   species,
@@ -76,8 +28,6 @@ export function GrowthLog({
   currentWeightGrams,
   samples,
   marks,
-  references,
-  activeReferenceId,
 }: GrowthLogProps) {
   const palette = useNestPalette();
   const { t } = useTranslation();
@@ -123,50 +73,6 @@ export function GrowthLog({
       ) : (
         <Text style={[styles.note, { color: palette.textMuted }]}>{t('journal.beforeHatchWeight')}</Text>
       )}
-
-      <Text style={[styles.subheading, { color: palette.text }]}>{t('journal.sizeComparison')}</Text>
-      <View style={styles.references}>
-        {references.map((reference) => {
-          const copy = SIZE_COPY[reference.id];
-          const active = isHatched && reference.id === activeReferenceId;
-          const diameter = comparisonDiameter(reference.weightGrams, references);
-          return (
-            <View
-              key={reference.id}
-              accessibilityLabel={`${t(copy.label)}. ${t('journal.aboutWeight', {
-                weight: massLabel(reference.weightGrams, t),
-              })}${active ? `. ${t('journal.closestReference')}` : ''}`}
-              style={[
-                styles.reference,
-                {
-                  backgroundColor: palette.surface,
-                  borderColor: active ? palette.action : palette.border,
-                  borderWidth: active ? 2 : 1,
-                },
-              ]}>
-              <View
-                style={[
-                  styles.orb,
-                  {
-                    width: diameter,
-                    height: diameter,
-                    borderRadius: diameter / 2,
-                    backgroundColor: hexToRgba(active ? palette.action : palette.neutral, active ? 0.85 : 0.28),
-                  },
-                ]}
-              />
-              <Text style={[styles.referenceLabel, { color: palette.text }]}>{t(copy.label)}</Text>
-              <Text style={[styles.referenceNote, { color: palette.textMuted }]}>{t(copy.note)}</Text>
-              <Text style={[styles.referenceMass, { color: palette.text }]}>
-                {t('journal.aboutWeight', { weight: massLabel(reference.weightGrams, t) })}
-              </Text>
-              {active ? (
-                <Text style={[styles.closest, { color: palette.action }]}>{t('journal.closestReference')}</Text>
-              ) : null}
-            </View>
-          );
-        })}
-      </View>
     </View>
   );
 }
@@ -285,15 +191,6 @@ function curvePath(points: ReadonlyArray<{ x: number; y: number }>): string {
   return path;
 }
 
-function comparisonDiameter(grams: number, references: readonly SizeReference[]): number {
-  const masses = references.map((reference) => Math.max(reference.weightGrams, 1));
-  const min = Math.min(...masses);
-  const max = Math.max(...masses);
-  const span = Math.log(max) - Math.log(min);
-  const position = span <= 0 ? 1 : (Math.log(Math.max(grams, min)) - Math.log(min)) / span;
-  return 36 + Math.min(1, Math.max(0, position)) * 42;
-}
-
 function massLabel(grams: number, t: TranslateFn): string {
   const weight = formatBiologicalWeight(grams);
   const unit = t(weight.unit === 'kg' ? 'weight.kilograms' : 'weight.grams');
@@ -316,11 +213,6 @@ const styles = StyleSheet.create({
   heading: {
     fontSize: 18,
     fontWeight: '700',
-  },
-  subheading: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginTop: Spacing.two,
   },
   metrics: {
     flexDirection: 'row',
@@ -385,43 +277,5 @@ const styles = StyleSheet.create({
   note: {
     fontSize: 14,
     lineHeight: 20,
-  },
-  references: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.two,
-  },
-  reference: {
-    flexGrow: 1,
-    flexBasis: 140,
-    borderRadius: 16,
-    padding: Spacing.three,
-    alignItems: 'center',
-    gap: 4,
-    minHeight: 168,
-  },
-  orb: {
-    marginBottom: 4,
-  },
-  referenceLabel: {
-    fontSize: 15,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  referenceNote: {
-    fontSize: 12,
-    lineHeight: 16,
-    textAlign: 'center',
-  },
-  referenceMass: {
-    fontSize: 13,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  closest: {
-    fontSize: 11,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginTop: 2,
   },
 });

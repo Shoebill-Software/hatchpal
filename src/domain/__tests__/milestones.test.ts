@@ -5,13 +5,11 @@ import {
   MS_PER_DAY,
   POST_HATCH_JUVENILE_FRACTION,
   buildJournalTimeline,
-  closestSizeReference,
   generateWeightHistory,
   getAchievedPostHatchMilestones,
   getMilestoneTimestamp,
   getNextUpcomingMilestone,
   getPostHatchMilestones,
-  getSizeReferences,
   getUnlockedMilestones,
   getWeightMarks,
 } from '@/domain/milestones';
@@ -183,16 +181,5 @@ describe('Journal growth calculations', () => {
     expect(adultMarks[2]?.grams).toBe(1300);
     expect(adultMarks[1]?.grams).toBeGreaterThan(32);
     expect(adultMarks[1]?.grams).toBeLessThan(1300);
-  });
-
-  it('matches the living animal to the nearest field reference', () => {
-    expect(getSizeReferences(silkieChickenConfig).map((reference) => reference.weightGrams)).toEqual([32, 600, 1300]);
-    expect(closestSizeReference(silkieChickenConfig, 32).id).toBe('silkie_golf_ball');
-    expect(closestSizeReference(silkieChickenConfig, 590).id).toBe('silkie_grapefruit');
-    expect(closestSizeReference(silkieChickenConfig, 1100).id).toBe('silkie_teapot');
-    expect(getSizeReferences(leopardGeckoConfig)).toHaveLength(3);
-    expect(getSizeReferences(greenSeaTurtleConfig)).toHaveLength(3);
-    expect(closestSizeReference(greenSeaTurtleConfig, 25).id).toBe('turtle_lime');
-    expect(closestSizeReference(greenSeaTurtleConfig, 150_000).id).toBe('turtle_adults');
   });
 });

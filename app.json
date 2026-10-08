@@ -7,7 +7,12 @@
     "icon": "./assets/images/icon.png",
     "scheme": "hatchpal",
     "userInterfaceStyle": "automatic",
-    "backgroundColor": "#2C241C",
+    "backgroundColor": "#0E0E10",
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0E0E10"
+    },
     "androidStatusBar": {
       "barStyle": "light-content",
       "backgroundColor": "#00000000",
@@ -32,7 +37,7 @@
         "android.permission.VIBRATE"
       ],
       "adaptiveIcon": {
-        "backgroundColor": "#C4783A",
+        "backgroundColor": "#0E0E10",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
@@ -48,11 +53,13 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#2C241C",
+          "backgroundColor": "#0E0E10",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76,
+          "resizeMode": "contain",
+          "imageWidth": 280,
           "dark": {
-            "backgroundColor": "#161310"
+            "backgroundColor": "#0E0E10",
+            "image": "./assets/images/splash-icon.png"
           }
         }
       ],

@@ -136,7 +136,7 @@ function ShowcaseBody({ species, replacing }: { species: SpeciesConfig; replacin
       void triggerNotification(NotificationFeedbackType.Success);
       setNaming(false);
       if (router.canDismiss()) {
-        router.dismissAll();
+        router.dismissTo('/');
       } else {
         router.replace('/');
       }

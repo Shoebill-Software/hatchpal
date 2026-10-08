@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Platform, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
+import { useRouter, useIsFocused } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import Animated, {
   cancelAnimation,
@@ -10,21 +10,30 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Defs, Ellipse, Path, RadialGradient, Stop } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ChangeEggDialog } from '@/components/ChangeEggDialog';
-import { ClimateControls } from '@/components/ClimateControls';
+import { ClimateControls, describeClimate } from '@/components/ClimateControls';
 import { EGG_FRAME, EggContainer } from '@/components/EggContainer';
+import { EmptyNestView } from '@/components/EmptyNestView';
 import { HatchingCeremony } from '@/components/HatchingCeremony';
 import { HatchlingContainer } from '@/components/HatchlingContainer';
+import { NestPresence } from '@/components/NestPresence';
 import { NestStatusBar } from '@/components/NestStatusBar';
 import { SettingsModal } from '@/components/SettingsModal';
+import { SpotlightOverlay } from '@/components/tutorial/SpotlightOverlay';
+import { TutorialAnchor, TutorialAnchorProvider, useTutorialAnchor } from '@/components/tutorial/TutorialAnchor';
+import { useNestTutorialTrigger } from '@/components/tutorial/useNestTutorialTrigger';
+import type { TutorialTargetId } from '@/constants/tutorial';
 import { useNestPalette } from '@/constants/nest';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { readClimate, caredHeartRate } from '@/domain/climateEngine';
 import { resolveHatchEpoch } from '@/domain/timeEngine';
-import { useActivePet } from '@/hooks/useActivePet';
+import type { PetInstance, PetSnapshot, SpeciesConfig } from '@/domain/types';
+import { useActivePet, type ActivePetView } from '@/hooks/useActivePet';
+import { useReduceMotion } from '@/hooks/useReduceMotion';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useNestPipAudio, useSoundEffects } from '@/hooks/useSoundEffects';
 import {
   formatBiologicalWeight,
@@ -38,19 +47,16 @@ import {
 import { ImpactFeedbackStyle, triggerImpact } from '@/services/hapticFeedback';
 
 const HEART = '#C45B5B';
-const FIGURE = { width: 168, height: 188 };
+const FIGURE = { width: 220, height: 246 };
+/** Clears the floating iOS tab bar, including the labels under the care buttons. */
+const TAB_CLEARANCE = Platform.select({ ios: 136, android: 108, default: 108 }) ?? 108;
 
 export default function NestScreen() {
   const router = useRouter();
   const palette = useNestPalette();
   const { t } = useTranslation();
-  const { play } = useSoundEffects();
-  const mistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [warmPulse, setWarmPulse] = useState(0);
-  const [mistPulse, setMistPulse] = useState(0);
   const [changeEggVisible, setChangeEggVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
-  const [heroBox, setHeroBox] = useState({ width: 0, height: 0 });
   const {
     pet,
     species,
@@ -64,6 +70,103 @@ export default function NestScreen() {
   } = useActivePet();
   useNestPipAudio(Boolean(snapshot?.isPipped), snapshot?.currentMilestone.stage ?? null);
 
+  const showCreature = Boolean(hasHydrated && pet && species && snapshot);
+  const incubating = Boolean(showCreature && pet && !pet.isHatched);
+  const ceremony = Boolean(snapshot?.isReadyToHatch && pet && !pet.isHatched);
+  const nestFocused = useIsFocused();
+  useNestTutorialTrigger({
+    incubating,
+    blocked: !nestFocused || settingsVisible || changeEggVisible || ceremony,
+    shouldSuspend: !incubating || ceremony,
+  });
+
+  const confirmChangeEgg = () => {
+    setChangeEggVisible(false);
+    abandonActivePet();
+    router.push({ pathname: '/adopt', params: { replacing: '1' } });
+  };
+
+  return (
+    <TutorialAnchorProvider>
+      <View style={[styles.flex, { backgroundColor: palette.background }]}>
+      <NestStatusBar />
+      {hasHydrated ? (
+        <SafeAreaView style={styles.flex} edges={['top', 'left', 'right']}>
+          <View style={[styles.flex, styles.frame, { paddingBottom: TAB_CLEARANCE }]}>
+            <NestTopBar
+              title={pet?.nickname ?? t('common.hatchpal')}
+              onOpenSettings={() => setSettingsVisible(true)}
+              accessory={
+                showCreature && pet
+                  ? {
+                      label: pet.isHatched ? t('nest.changeCompanion') : t('nest.changeEgg'),
+                      onPress: () => setChangeEggVisible(true),
+                    }
+                  : undefined
+              }
+            />
+            <NestPresence
+              token={showCreature && pet ? pet.id : 'empty'}
+              empty={<EmptyNestView />}
+              occupied={
+                pet && species && snapshot ? (
+                  <OccupiedNest
+                    pet={pet}
+                    species={species}
+                    snapshot={snapshot}
+                    isClockTampered={isClockTampered}
+                    nowEpoch={nowEpoch}
+                    recordInteraction={recordInteraction}
+                    markHatched={markHatched}
+                  />
+                ) : (
+                  <View style={styles.flex} />
+                )
+              }
+            />
+          </View>
+        </SafeAreaView>
+      ) : (
+        <View style={styles.flex} />
+      )}
+      <SpotlightOverlay />
+      <ChangeEggDialog
+        visible={changeEggVisible}
+        onKeepCurrent={() => setChangeEggVisible(false)}
+        onConfirm={confirmChangeEgg}
+      />
+      <SettingsModal visible={settingsVisible} onClose={() => setSettingsVisible(false)} />
+      </View>
+    </TutorialAnchorProvider>
+  );
+}
+
+function OccupiedNest({
+  pet,
+  species,
+  snapshot,
+  isClockTampered,
+  nowEpoch,
+  recordInteraction,
+  markHatched,
+}: {
+  pet: PetInstance;
+  species: SpeciesConfig;
+  snapshot: PetSnapshot;
+  isClockTampered: boolean;
+  nowEpoch: number;
+  recordInteraction: ActivePetView['recordInteraction'];
+  markHatched: ActivePetView['markHatched'];
+}) {
+  const router = useRouter();
+  const palette = useNestPalette();
+  const { t } = useTranslation();
+  const { play } = useSoundEffects();
+  const mistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [warmPulse, setWarmPulse] = useState(0);
+  const [mistPulse, setMistPulse] = useState(0);
+  const [stageBox, setStageBox] = useState({ width: 0, height: 0 });
+
   useEffect(() => {
     return () => {
       if (mistTimer.current != null) {
@@ -72,45 +175,10 @@ export default function NestScreen() {
     };
   }, []);
 
-  const onHeroLayout = useCallback((event: LayoutChangeEvent) => {
+  const onStageLayout = useCallback((event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
-    setHeroBox((current) => (current.width === width && current.height === height ? current : { width, height }));
+    setStageBox((current) => (current.width === width && current.height === height ? current : { width, height }));
   }, []);
-
-  if (!hasHydrated) {
-    return (
-      <View style={[styles.flex, { backgroundColor: palette.background }]}>
-        <NestStatusBar />
-      </View>
-    );
-  }
-
-  if (!pet || !species || !snapshot) {
-    return (
-      <View style={[styles.flex, { backgroundColor: palette.background }]}>
-        <NestStatusBar />
-        <SafeAreaView style={styles.flex} edges={['top', 'left', 'right']}>
-          <View style={[styles.flex, styles.frame, { paddingBottom: BottomTabInset }]}>
-            <NestTopBar title={t('common.hatchpal')} onOpenSettings={() => setSettingsVisible(true)} />
-            <View style={[styles.flex, styles.center, { paddingHorizontal: Spacing.four }]}>
-              <Text style={[styles.emptyTitle, { color: palette.text }]}>{t('nest.emptyTitle')}</Text>
-              <Text style={[styles.emptyBody, { color: palette.textMuted }]}>{t('nest.emptyBody')}</Text>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => router.push('/adopt')}
-                style={({ pressed }) => [
-                  styles.primaryButton,
-                  { backgroundColor: palette.action, opacity: pressed ? 0.86 : 1 },
-                ]}>
-                <Text style={[styles.primaryButtonLabel, { color: palette.actionText }]}>{t('nest.adoptEgg')}</Text>
-              </Pressable>
-            </View>
-          </View>
-        </SafeAreaView>
-        <SettingsModal visible={settingsVisible} onClose={() => setSettingsVisible(false)} />
-      </View>
-    );
-  }
 
   const hatched = pet.isHatched;
   const incubationDay = Math.min(snapshot.ageDays, species.incubationDays);
@@ -144,9 +212,8 @@ export default function NestScreen() {
     getElapsedSpan(pet.lastWeighedEpoch ?? nowEpoch, nowEpoch),
     t
   );
-  const changeLabel = hatched ? t('nest.changeCompanion') : t('nest.changeEgg');
-  const eggScale = fitToBox(heroBox, EGG_FRAME);
-  const figureScale = fitToBox(heroBox, FIGURE);
+  const eggScale = fitToStage(stageBox, EGG_FRAME);
+  const figureScale = fitToStage(stageBox, FIGURE);
   const holdHint = t('nest.holdToCandle');
 
   const warmNest = () => {
@@ -168,12 +235,6 @@ export default function NestScreen() {
       void triggerImpact(ImpactFeedbackStyle.Light);
       mistTimer.current = null;
     }, 110);
-  };
-
-  const confirmChangeEgg = () => {
-    setChangeEggVisible(false);
-    abandonActivePet();
-    router.push({ pathname: '/adopt', params: { replacing: '1' } });
   };
 
   const leftTop: Reading = hatched
@@ -205,59 +266,80 @@ export default function NestScreen() {
       };
 
   return (
-    <View style={[styles.flex, { backgroundColor: palette.background }]}>
-      <NestStatusBar />
-      <SafeAreaView style={styles.flex} edges={['top', 'left', 'right']}>
-        <View style={[styles.flex, styles.frame, { paddingBottom: BottomTabInset }]}>
-          <NestTopBar
-            title={pet.nickname}
-            onOpenSettings={() => setSettingsVisible(true)}
-            accessory={{ label: changeLabel, onPress: () => setChangeEggVisible(true) }}
-          />
+    <View style={styles.flex}>
+      {isClockTampered ? (
+        <Text accessibilityRole="alert" numberOfLines={2} style={[styles.clock, { color: palette.bannerText }]}>
+          {t('clock.paused')}
+        </Text>
+      ) : null}
 
-          {isClockTampered ? (
-            <Text accessibilityRole="alert" numberOfLines={2} style={[styles.clock, { color: palette.bannerText }]}>
-              {t('clock.paused')}
-            </Text>
-          ) : null}
-
-          <View style={styles.heroRow}>
-            <TelemetryColumn align="end" top={leftTop} bottom={leftBottom} />
-            <View style={styles.hero} onLayout={onHeroLayout}>
-              {hatched ? (
-                <HatchlingContainer
-                  speciesId={species.id}
-                  maturationProgress={snapshot.maturationProgress}
-                  accessibilityLabel={t('hatchling.a11y', { name: pet.nickname, stage: stageLabel })}
-                  hint={t('care.chirpHint')}
-                  scaleLabel=""
-                  showCaption={false}
-                  width={Math.round(FIGURE.width * figureScale)}
-                  height={Math.round(FIGURE.height * figureScale)}
-                  onPet={() => {
-                    recordInteraction('pet');
-                  }}
-                />
-              ) : (
-                <EggContainer
-                  snapshot={snapshot}
-                  species={species}
-                  vitalityScore={climate.vitalityScore}
-                  inSweetSpot={climate.inSweetSpot}
-                  heartRate={heartRate}
-                  warmPulse={warmPulse}
-                  mistPulse={mistPulse}
-                  fitScale={eggScale}
-                  accessibilityLabel={t('egg.a11y', { name: species.commonName, status: holdHint })}
-                  accessibilityHint={t('nest.eggGestureHint')}
-                  candleLabel={t('nest.candleEgg')}
-                  onCandle={() => router.push('/candling')}
-                />
-              )}
+      <View style={styles.stage} onLayout={onStageLayout}>
+            <View style={styles.specimen}>
+              <View
+                style={[
+                  styles.eggWell,
+                  { height: Math.round((hatched ? FIGURE.height * figureScale : EGG_FRAME.height * eggScale) + 8) },
+                ]}>
+                <View pointerEvents="none" style={styles.haloLayer}>
+                  <NestHalo
+                    color={species.growth.glow}
+                    sweet={hatched || climate.inSweetSpot}
+                    scale={hatched ? figureScale : eggScale}
+                  />
+                </View>
+                {hatched ? (
+                  <HatchlingContainer
+                    speciesId={species.id}
+                    maturationProgress={snapshot.maturationProgress}
+                    accessibilityLabel={t('hatchling.a11y', { name: pet.nickname, stage: stageLabel })}
+                    hint={t('care.chirpHint')}
+                    scaleLabel=""
+                    showCaption={false}
+                    width={Math.round(FIGURE.width * figureScale)}
+                    height={Math.round(FIGURE.height * figureScale)}
+                    onPet={() => {
+                      recordInteraction('pet');
+                    }}
+                  />
+                ) : (
+                  <TutorialAnchor targetId="egg">
+                    <EggContainer
+                      snapshot={snapshot}
+                      species={species}
+                      vitalityScore={climate.vitalityScore}
+                      inSweetSpot={climate.inSweetSpot}
+                      temper={climate.temper}
+                      temperatureStatus={climate.temperatureStatus}
+                      humidityStatus={climate.humidityStatus}
+                      heartRate={heartRate}
+                      warmPulse={warmPulse}
+                      mistPulse={mistPulse}
+                      fitScale={eggScale}
+                      accessibilityLabel={eggLabel(
+                        t('egg.a11y', { name: species.commonName, status: holdHint }),
+                        describeClimate(climate, species, t)
+                      )}
+                      accessibilityHint={t('nest.eggGestureHint')}
+                      candleLabel={t('nest.candleEgg')}
+                      onCandle={() => router.push('/candling')}
+                    />
+                  </TutorialAnchor>
+                )}
+                <View pointerEvents="box-none" style={styles.sideLabels}>
+                  <TelemetryColumn align="end" top={leftTop} bottom={leftBottom} />
+                  <TelemetryColumn
+                    align="start"
+                    top={rightTop}
+                    bottom={rightBottom}
+                    topTarget={hatched ? undefined : 'telemetry_heart'}
+                  />
+                </View>
+              </View>
+              <Text maxFontSizeMultiplier={1.2} style={[styles.hint, { color: palette.textMuted }]}>
+                {hatched ? t('care.chirpHint') : holdHint}
+              </Text>
             </View>
-            <TelemetryColumn align="start" top={rightTop} bottom={rightBottom} />
           </View>
-
           <View style={styles.dock}>
             {hatched ? (
               <CareDock
@@ -277,12 +359,7 @@ export default function NestScreen() {
             ) : (
               <ClimateControls species={species} climate={climate} onWarm={warmNest} onMist={mistSubstrate} />
             )}
-            <Text maxFontSizeMultiplier={1.2} style={[styles.hint, { color: palette.textMuted }]}>
-              {hatched ? t('care.chirpHint') : holdHint}
-            </Text>
-          </View>
-        </View>
-      </SafeAreaView>
+      </View>
 
       <HatchingCeremony
         visible={snapshot.isReadyToHatch && !pet.isHatched}
@@ -292,13 +369,6 @@ export default function NestScreen() {
           markHatched();
         }}
       />
-
-      <ChangeEggDialog
-        visible={changeEggVisible}
-        onKeepCurrent={() => setChangeEggVisible(false)}
-        onConfirm={confirmChangeEgg}
-      />
-      <SettingsModal visible={settingsVisible} onClose={() => setSettingsVisible(false)} />
     </View>
   );
 }
@@ -365,25 +435,39 @@ function TelemetryColumn({
   align,
   top,
   bottom,
+  topTarget,
 }: {
   align: 'start' | 'end';
   top: Reading;
   bottom: Reading;
+  topTarget?: TutorialTargetId;
 }) {
   return (
     <View style={[styles.flank, align === 'end' ? styles.flankEnd : styles.flankStart]}>
-      <ReadingBlock align={align} reading={top} />
+      <ReadingBlock align={align} reading={top} targetId={topTarget} />
       <ReadingBlock align={align} reading={bottom} />
     </View>
   );
 }
 
-function ReadingBlock({ align, reading }: { align: 'start' | 'end'; reading: Reading }) {
+function ReadingBlock({
+  align,
+  reading,
+  targetId,
+}: {
+  align: 'start' | 'end';
+  reading: Reading;
+  targetId?: TutorialTargetId;
+}) {
   const palette = useNestPalette();
   const ended = align === 'end';
+  const anchor = useTutorialAnchor(targetId ?? null);
 
   return (
     <View
+      ref={anchor.ref}
+      collapsable={false}
+      onLayout={anchor.onLayout}
       accessible
       accessibilityLabel={reading.accessibilityLabel ?? `${reading.label}, ${reading.value}`}
       style={styles.reading}>
@@ -511,38 +595,41 @@ function WeighGlyph({ color }: { color: string }) {
   );
 }
 
-function fitToBox(
+function NestHalo({ color, sweet, scale }: { color: string; sweet: boolean; scale: number }) {
+  const scheme = useColorScheme();
+  const dark = scheme === 'dark';
+  const size = Math.round(332 * Math.min(Math.max(scale, 0.82), 1));
+  const presence = (sweet ? 1 : 0.86) * (dark ? 1 : 0.58);
+  const peak = 0.76 * presence;
+  const id = `nest-halo-${color.replace('#', '')}-${dark ? 'd' : 'l'}-${sweet ? '1' : '0'}`;
+
+  return (
+    <Svg width={size} height={size}>
+      <Defs>
+        <RadialGradient id={id} cx={size / 2} cy={size * 0.54} r={size * 0.48} gradientUnits="userSpaceOnUse">
+          <Stop offset="0%" stopColor={color} stopOpacity={peak} />
+          <Stop offset="40%" stopColor={color} stopOpacity={peak * 0.36} />
+          <Stop offset="68%" stopColor={color} stopOpacity={peak * 0.1} />
+          <Stop offset="100%" stopColor={color} stopOpacity={0} />
+        </RadialGradient>
+      </Defs>
+      <Ellipse cx={size / 2} cy={size * 0.54} rx={size * 0.46} ry={size * 0.42} fill={`url(#${id})`} />
+    </Svg>
+  );
+}
+
+function eggLabel(base: string, aside: string | null): string {
+  return aside ? `${base}. ${aside}` : base;
+}
+
+function fitToStage(
   box: { width: number; height: number },
   frame: { width: number; height: number }
 ): number {
-  if (box.width <= 0 || box.height <= 0) {
-    return 0.84;
+  if (box.width < 1 || box.height < 1) {
+    return 1;
   }
-  return Math.max(0.46, Math.min(1, (box.width - 4) / frame.width, (box.height - 4) / frame.height));
-}
-
-function useReduceMotion(): boolean {
-  const [reduceMotion, setReduceMotion] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-    AccessibilityInfo.isReduceMotionEnabled()
-      .then((enabled) => {
-        if (active) {
-          setReduceMotion(enabled);
-        }
-      })
-      .catch(() => undefined);
-    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', (enabled) => {
-      setReduceMotion(enabled);
-    });
-    return () => {
-      active = false;
-      subscription.remove();
-    };
-  }, []);
-
-  return reduceMotion;
+  return Math.max(0.82, Math.min(1, (box.width - 16) / frame.width, (box.height - 56) / frame.height));
 }
 
 const styles = StyleSheet.create({
@@ -554,11 +641,6 @@ const styles = StyleSheet.create({
     maxWidth: MaxContentWidth,
     alignSelf: 'center',
     overflow: 'hidden',
-  },
-  center: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: Spacing.three,
   },
   topBar: {
     flexDirection: 'row',
@@ -604,16 +686,44 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
     marginBottom: 2,
   },
-  heroRow: {
+  stage: {
     flex: 1,
     minHeight: 0,
-    flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Spacing.two,
+    justifyContent: 'center',
+  },
+  specimen: {
+    width: '100%',
+    alignItems: 'center',
+    gap: 18,
+  },
+  eggWell: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  haloLayer: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sideLabels: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.three,
   },
   flank: {
-    width: 96,
-    flexShrink: 1,
+    width: 100,
     justifyContent: 'center',
     gap: 22,
   },
@@ -622,13 +732,6 @@ const styles = StyleSheet.create({
   },
   flankStart: {
     alignItems: 'flex-start',
-  },
-  hero: {
-    flex: 1,
-    minWidth: 0,
-    minHeight: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   reading: {
     maxWidth: '100%',
@@ -665,9 +768,8 @@ const styles = StyleSheet.create({
   },
   dock: {
     alignItems: 'center',
-    gap: 8,
-    paddingTop: Spacing.one,
-    paddingBottom: Spacing.two,
+    paddingTop: 2,
+    paddingBottom: 10,
   },
   hint: {
     fontSize: 12,
@@ -698,29 +800,5 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '500',
     textAlign: 'center',
-  },
-  primaryButton: {
-    minHeight: 48,
-    minWidth: 220,
-    paddingHorizontal: Spacing.four,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryButtonLabel: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  emptyTitle: {
-    fontSize: 28,
-    fontWeight: '500',
-    textAlign: 'center',
-    letterSpacing: 0.2,
-  },
-  emptyBody: {
-    fontSize: 15,
-    lineHeight: 22,
-    textAlign: 'center',
-    maxWidth: 360,
   },
 });

@@ -26,7 +26,7 @@ import {
   type OsNotificationPermission,
 } from '@/services/notifications';
 import { usePetStore } from '@/store/usePetStore';
-import { usePreferencesStore } from '@/store/usePreferencesStore';
+import { usePreferencesStore, type AppearancePreference } from '@/store/usePreferencesStore';
 
 const REPOSITORY_URL = 'https://github.com/Shoebill-Software/hatchpal';
 
@@ -78,9 +78,11 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
   const [permission, setPermission] = useState<OsNotificationPermission>('undetermined');
   const [resetStep, setResetStep] = useState<0 | 1 | 2>(0);
 
+  const appearance = usePreferencesStore((state) => state.appearance);
   const soundEnabled = usePreferencesStore((state) => state.soundEnabled);
   const hapticsEnabled = usePreferencesStore((state) => state.hapticsEnabled);
   const notificationsEnabled = usePreferencesStore((state) => state.notificationsEnabled);
+  const setAppearance = usePreferencesStore((state) => state.setAppearance);
   const setSoundEnabled = usePreferencesStore((state) => state.setSoundEnabled);
   const setHapticsEnabled = usePreferencesStore((state) => state.setHapticsEnabled);
   const setNotificationsEnabled = usePreferencesStore((state) => state.setNotificationsEnabled);
@@ -92,6 +94,15 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
     return nickname && nickname.trim().length > 0 ? nickname : null;
   });
   const abandonActivePet = usePetStore((state) => state.abandonActivePet);
+  const incubating = usePetStore((state) => {
+    if (!state.activePetId) {
+      return false;
+    }
+    const pet = state.pets[state.activePetId];
+    return pet != null && !pet.isHatched;
+  });
+  const resetTutorial = usePreferencesStore((state) => state.resetTutorial);
+  const suspendNestTutorial = usePreferencesStore((state) => state.suspendNestTutorial);
 
   useEffect(() => {
     if (!visible) {
@@ -131,6 +142,18 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
     onClose();
   };
 
+  const replayTutorial = () => {
+    if (!incubating) {
+      return;
+    }
+    resetTutorial();
+    if (usePreferencesStore.getState().isTutorialActive) {
+      suspendNestTutorial();
+    }
+    void triggerImpact(ImpactFeedbackStyle.Light);
+    closeSettings();
+  };
+
   return (
     <>
       <Modal
@@ -163,6 +186,17 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
               { paddingBottom: Math.max(insets.bottom, Spacing.four) + Spacing.three },
             ]}
             showsVerticalScrollIndicator={false}>
+            <Section title={t('settings.appearanceTitle')}>
+              <Text style={[styles.hint, { color: palette.textMuted }]}>{t('settings.appearanceHint')}</Text>
+              <AppearancePicker
+                value={appearance}
+                onChange={(next) => {
+                  setAppearance(next);
+                  void triggerImpact(ImpactFeedbackStyle.Light);
+                }}
+              />
+            </Section>
+
             <Section title={t('settings.sensoryTitle')}>
               <ToggleRow
                 label={t('settings.sound')}
@@ -196,6 +230,27 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
                 onValueChange={onNotificationsChange}
               />
               <Text style={[styles.permission, { color: palette.textMuted }]}>{t(permissionKey(permission))}</Text>
+            </Section>
+
+            <Section title={t('settings.guideTitle')}>
+              <Text style={[styles.hint, { color: palette.textMuted }]}>
+                {incubating ? t('settings.replayTutorialHint') : t('settings.replayTutorialNeedsEgg')}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('settings.replayTutorial')}
+                accessibilityState={{ disabled: !incubating }}
+                disabled={!incubating}
+                onPress={replayTutorial}
+                style={({ pressed }) => [
+                  styles.replayButton,
+                  {
+                    borderColor: palette.action,
+                    opacity: !incubating ? 0.45 : pressed ? 0.82 : 1,
+                  },
+                ]}>
+                <Text style={[styles.replayLabel, { color: palette.action }]}>{t('settings.replayTutorial')}</Text>
+              </Pressable>
             </Section>
 
             <Section title={t('settings.aboutTitle')}>
@@ -312,6 +367,49 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
   );
 }
 
+function AppearancePicker({
+  value,
+  onChange,
+}: {
+  value: AppearancePreference;
+  onChange: (appearance: AppearancePreference) => void;
+}) {
+  const palette = useNestPalette();
+  const { t } = useTranslation();
+  const options: { id: AppearancePreference; label: string }[] = [
+    { id: 'system', label: t('settings.appearance.system') },
+    { id: 'light', label: t('settings.appearance.light') },
+    { id: 'dark', label: t('settings.appearance.dark') },
+  ];
+
+  return (
+    <View accessibilityRole="radiogroup" style={[styles.segment, { borderColor: palette.border, backgroundColor: palette.background }]}>
+      {options.map((option) => {
+        const selected = value === option.id;
+        return (
+          <Pressable
+            key={option.id}
+            accessibilityRole="radio"
+            accessibilityState={{ selected }}
+            accessibilityLabel={option.label}
+            onPress={() => onChange(option.id)}
+            style={({ pressed }) => [
+              styles.segmentItem,
+              {
+                backgroundColor: selected ? palette.action : 'transparent',
+                opacity: pressed ? 0.82 : 1,
+              },
+            ]}>
+            <Text style={[styles.segmentLabel, { color: selected ? palette.actionText : palette.text }]}>
+              {option.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 function Section({ title, children }: { title: string; children: ReactNode }) {
   const palette = useNestPalette();
   return (
@@ -411,6 +509,25 @@ const styles = StyleSheet.create({
     padding: Spacing.three,
     gap: Spacing.three,
   },
+  segment: {
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 3,
+    gap: 3,
+  },
+  segmentItem: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.two,
+  },
+  segmentLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
   hint: {
     fontSize: 14,
     lineHeight: 20,
@@ -441,6 +558,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   linkLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  replayButton: {
+    minHeight: 48,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.three,
+  },
+  replayLabel: {
     fontSize: 16,
     fontWeight: '700',
   },

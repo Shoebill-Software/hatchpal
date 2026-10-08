@@ -29,6 +29,16 @@ export type TemperatureStatus = 'optimal' | 'too_cold' | 'too_warm';
 export type HumidityStatus = 'optimal' | 'dry' | 'humid';
 export type VitalityMood = 'thriving' | 'steady' | 'sluggish' | 'chilled';
 
+/**
+ * Time spent outside the sweet spot before the egg starts acting out.
+ * A sulk is cosmetic: the hatch clock keeps running and vitality stays above its floor.
+ */
+export const SULK_AFTER_MS = 8 * 60 * 60 * 1000;
+/** Both readings have to be off this long before the egg goes on strike. */
+export const STRIKE_AFTER_MS = 24 * 60 * 60 * 1000;
+
+export type NestTemper = 'content' | 'chilly' | 'parched' | 'fussy' | 'on_strike';
+
 export interface NestClimateFields {
   currentTemperatureCelsius: number;
   currentHumidityPct: number;
@@ -45,6 +55,11 @@ export interface ClimateReading {
   temperatureStatus: TemperatureStatus;
   humidityStatus: HumidityStatus;
   mood: VitalityMood;
+  /** Milliseconds the warmth reading has been outside the species band. */
+  warmthOffMs: number;
+  /** Milliseconds the humidity reading has been outside the species band. */
+  moistureOffMs: number;
+  temper: NestTemper;
 }
 
 interface InsideWindow {
@@ -112,6 +127,26 @@ export function humidityStatus(pct: number, targetPct: number): HumidityStatus {
   return 'optimal';
 }
 
+export function nestTemper(warmthOffMs: number, moistureOffMs: number): NestTemper {
+  const warmth = Math.max(0, warmthOffMs);
+  const moisture = Math.max(0, moistureOffMs);
+  const warmthSulk = warmth >= SULK_AFTER_MS;
+  const moistureSulk = moisture >= SULK_AFTER_MS;
+  if (warmthSulk && moistureSulk && warmth >= STRIKE_AFTER_MS && moisture >= STRIKE_AFTER_MS) {
+    return 'on_strike';
+  }
+  if (warmthSulk && moistureSulk) {
+    return 'fussy';
+  }
+  if (warmthSulk) {
+    return 'chilly';
+  }
+  if (moistureSulk) {
+    return 'parched';
+  }
+  return 'content';
+}
+
 export function vitalityMood(
   vitalityScore: number,
   inSweetSpot: boolean,
@@ -155,6 +190,10 @@ export function readClimate(pet: PetInstance, species: SpeciesConfig, nowEpoch: 
   const humidity = humidityStatus(humidityPct, species.humidityTargetPct);
   const inSweetSpot = temperature === 'optimal' && humidity === 'optimal';
   const vitalityScore = projectVitality(pet, species, now);
+  const bands = climateBands(pet, species);
+  const anchor = Math.max(finiteEpoch(pet.lastWarmedEpoch, 0), finiteEpoch(pet.lastMistedEpoch, 0));
+  const warmthOffMs = msOutside(bands.temperature, now, finiteEpoch(pet.lastWarmedEpoch, anchor));
+  const moistureOffMs = msOutside(bands.humidity, now, finiteEpoch(pet.lastMistedEpoch, anchor));
 
   return {
     temperatureCelsius,
@@ -164,6 +203,9 @@ export function readClimate(pet: PetInstance, species: SpeciesConfig, nowEpoch: 
     temperatureStatus: temperature,
     humidityStatus: humidity,
     mood: vitalityMood(vitalityScore, inSweetSpot, temperature),
+    warmthOffMs,
+    moistureOffMs,
+    temper: nestTemper(warmthOffMs, moistureOffMs),
   };
 }
 
@@ -198,36 +240,63 @@ export function mistSubstrate(pet: PetInstance, species: SpeciesConfig, nowEpoch
 function projectVitality(pet: PetInstance, species: SpeciesConfig, nowEpoch: number): number {
   const anchor = Math.max(finiteEpoch(pet.lastWarmedEpoch, 0), finiteEpoch(pet.lastMistedEpoch, 0));
   const now = finiteEpoch(nowEpoch, anchor);
-  const temperatureWindow = coolingWindow(
-    finiteEpoch(pet.lastWarmedEpoch, anchor),
-    finiteNumber(pet.currentTemperatureCelsius, species.temperatureTargetCelsius),
-    AMBIENT_ROOM_CELSIUS,
-    species.temperatureTargetCelsius - TEMPERATURE_TOLERANCE_CELSIUS,
-    species.temperatureTargetCelsius + TEMPERATURE_TOLERANCE_CELSIUS,
-    (bound) =>
-      elapsedUntilHalfLife(
-        finiteNumber(pet.currentTemperatureCelsius, species.temperatureTargetCelsius),
-        AMBIENT_ROOM_CELSIUS,
-        bound,
-        TEMPERATURE_HALF_LIFE_MS
-      )
+  const bands = climateBands(pet, species);
+  return integrateVitality(
+    clampVitality(pet.vitalityScore),
+    anchor,
+    now,
+    intersectWindows(bands.temperature, bands.humidity)
   );
-  const humidityWindow = coolingWindow(
-    finiteEpoch(pet.lastMistedEpoch, anchor),
-    finiteNumber(pet.currentHumidityPct, species.humidityTargetPct),
-    DRY_HUMIDITY_PCT,
-    species.humidityTargetPct - HUMIDITY_TOLERANCE_PCT,
-    species.humidityTargetPct + HUMIDITY_TOLERANCE_PCT,
-    (bound) =>
-      elapsedUntilExponential(
-        finiteNumber(pet.currentHumidityPct, species.humidityTargetPct),
-        DRY_HUMIDITY_PCT,
-        bound,
-        HUMIDITY_TIME_CONSTANT_MS
-      )
-  );
+}
 
-  return integrateVitality(clampVitality(pet.vitalityScore), anchor, now, intersectWindows(temperatureWindow, humidityWindow));
+function climateBands(
+  pet: PetInstance,
+  species: SpeciesConfig
+): { temperature: InsideWindow; humidity: InsideWindow } {
+  const anchor = Math.max(finiteEpoch(pet.lastWarmedEpoch, 0), finiteEpoch(pet.lastMistedEpoch, 0));
+  return {
+    temperature: coolingWindow(
+      finiteEpoch(pet.lastWarmedEpoch, anchor),
+      finiteNumber(pet.currentTemperatureCelsius, species.temperatureTargetCelsius),
+      AMBIENT_ROOM_CELSIUS,
+      species.temperatureTargetCelsius - TEMPERATURE_TOLERANCE_CELSIUS,
+      species.temperatureTargetCelsius + TEMPERATURE_TOLERANCE_CELSIUS,
+      (bound) =>
+        elapsedUntilHalfLife(
+          finiteNumber(pet.currentTemperatureCelsius, species.temperatureTargetCelsius),
+          AMBIENT_ROOM_CELSIUS,
+          bound,
+          TEMPERATURE_HALF_LIFE_MS
+        )
+    ),
+    humidity: coolingWindow(
+      finiteEpoch(pet.lastMistedEpoch, anchor),
+      finiteNumber(pet.currentHumidityPct, species.humidityTargetPct),
+      DRY_HUMIDITY_PCT,
+      species.humidityTargetPct - HUMIDITY_TOLERANCE_PCT,
+      species.humidityTargetPct + HUMIDITY_TOLERANCE_PCT,
+      (bound) =>
+        elapsedUntilExponential(
+          finiteNumber(pet.currentHumidityPct, species.humidityTargetPct),
+          DRY_HUMIDITY_PCT,
+          bound,
+          HUMIDITY_TIME_CONSTANT_MS
+        )
+    ),
+  };
+}
+
+function msOutside(window: InsideWindow, now: number, origin: number): number {
+  if (now <= origin) {
+    return 0;
+  }
+  if (now < window.start) {
+    return now - origin;
+  }
+  if (now <= window.end || !Number.isFinite(window.end)) {
+    return 0;
+  }
+  return now - window.end;
 }
 
 function integrateVitality(score: number, anchor: number, now: number, inside: InsideWindow): number {

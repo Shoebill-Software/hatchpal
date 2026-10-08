@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none">
+  <defs>
+    <radialGradient id="spark" cx="512" cy="458" r="90" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#F6D7A2" stop-opacity="0.95"/>
+      <stop offset="28%" stop-color="#E7B15A" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#E7B15A" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <path d="M512 214 C392 214 318 372 318 492 C318 648 398 742 512 742 C626 742 706 648 706 492 C706 372 632 214 512 214 Z" stroke="#E6D7C4" stroke-width="14" stroke-linejoin="round"/>
+  <circle cx="512" cy="470" r="86" fill="url(#spark)"/>
+  <circle cx="512" cy="470" r="11" fill="#F3C98A"/>
+  <text x="512" y="860" text-anchor="middle" fill="#E6D7C4" font-family="Helvetica, Arial, sans-serif" font-size="54" font-weight="500" letter-spacing="18">HATCHPAL</text>
+</svg>

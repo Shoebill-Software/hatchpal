@@ -15,7 +15,10 @@ import {
   decayTemperature,
   freshNestClimate,
   mistSubstrate,
+  nestTemper,
   readClimate,
+  SULK_AFTER_MS,
+  STRIKE_AFTER_MS,
   warmNest,
 } from '../climateEngine';
 
@@ -145,5 +148,50 @@ describe('Nest climate engine', () => {
     expect(caredHeartRate(220, VITALITY_FLOOR)).toBeLessThan(220);
     expect(caredHeartRate(220, FRESH_VITALITY)).toBeGreaterThan(caredHeartRate(220, VITALITY_FLOOR));
     expect(freshNestClimate(baseEpoch, 37.5, 55).vitalityScore).toBe(FRESH_VITALITY);
+  });
+
+  it('lets an egg sulk, fuss, or strike without ever stopping the clock', () => {
+    expect(nestTemper(0, 0)).toBe('content');
+    expect(nestTemper(SULK_AFTER_MS - 1, 0)).toBe('content');
+    expect(nestTemper(SULK_AFTER_MS, 0)).toBe('chilly');
+    expect(nestTemper(0, SULK_AFTER_MS)).toBe('parched');
+    expect(nestTemper(SULK_AFTER_MS, SULK_AFTER_MS)).toBe('fussy');
+    expect(nestTemper(STRIKE_AFTER_MS, SULK_AFTER_MS)).toBe('fussy');
+    expect(nestTemper(STRIKE_AFTER_MS, STRIKE_AFTER_MS)).toBe('on_strike');
+
+    const fresh = readClimate(nest(), species, baseEpoch);
+    expect(fresh.temper).toBe('content');
+    expect(fresh.warmthOffMs).toBe(0);
+    expect(fresh.moistureOffMs).toBe(0);
+
+    const drifting = readClimate(nest(), species, baseEpoch + 6 * HOUR_MS);
+    expect(drifting.inSweetSpot).toBe(false);
+    expect(drifting.temper).toBe('content');
+    expect(drifting.warmthOffMs).toBeGreaterThan(0);
+    expect(drifting.warmthOffMs).toBeLessThan(SULK_AFTER_MS);
+
+    const chilly = readClimate(nest(), species, baseEpoch + 12 * HOUR_MS);
+    expect(chilly.temperatureStatus).toBe('too_cold');
+    expect(chilly.temper).toBe('chilly');
+    expect(chilly.moistureOffMs).toBeLessThan(SULK_AFTER_MS);
+
+    const fussy = readClimate(nest(), species, baseEpoch + 22 * HOUR_MS);
+    expect(fussy.temper).toBe('fussy');
+
+    const striking = readClimate(nest(), species, baseEpoch + 36 * HOUR_MS);
+    expect(striking.temper).toBe('on_strike');
+    expect(striking.vitalityScore).toBeGreaterThanOrEqual(VITALITY_FLOOR);
+
+    const warmed = readClimate(warmNest(nest(), species, baseEpoch + 36 * HOUR_MS), species, baseEpoch + 36 * HOUR_MS);
+    expect(warmed.temperatureStatus).toBe('optimal');
+    expect(warmed.temper).toBe('parched');
+
+    const restored = readClimate(
+      mistSubstrate(warmNest(nest(), species, baseEpoch + 36 * HOUR_MS), species, baseEpoch + 36 * HOUR_MS),
+      species,
+      baseEpoch + 36 * HOUR_MS
+    );
+    expect(restored.temper).toBe('content');
+    expect(restored.inSweetSpot).toBe(true);
   });
 });

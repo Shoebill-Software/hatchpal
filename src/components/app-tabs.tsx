@@ -1,19 +1,21 @@
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
-import { useColorScheme } from 'react-native';
 
-import { Colors } from '@/constants/theme';
+import { useNestPalette } from '@/constants/nest';
 import { useTranslation } from '@/i18n';
 
 export default function AppTabs() {
-  const scheme = useColorScheme();
+  const palette = useNestPalette();
   const { t } = useTranslation();
-  const colors = Colors[scheme === 'unspecified' ? 'light' : scheme];
 
   return (
     <NativeTabs
-      backgroundColor={colors.background}
-      indicatorColor={colors.backgroundElement}
-      labelStyle={{ selected: { color: colors.text } }}>
+      backgroundColor={palette.background}
+      indicatorColor={palette.surface}
+      iconColor={{ default: palette.textMuted, selected: palette.action }}
+      labelStyle={{
+        default: { color: palette.textMuted },
+        selected: { color: palette.text },
+      }}>
       <NativeTabs.Trigger name="index">
         <NativeTabs.Trigger.Label>{t('nav.nest')}</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon

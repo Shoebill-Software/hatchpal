@@ -11,9 +11,7 @@ import { useNestPalette } from '@/constants/nest';
 import { BottomTabInset, Fonts, MaxContentWidth, Spacing } from '@/constants/theme';
 import {
   buildJournalTimeline,
-  closestSizeReference,
   generateWeightHistory,
-  getSizeReferences,
   getWeightMarks,
   type JournalMilestone,
 } from '@/domain/milestones';
@@ -82,10 +80,6 @@ export default function JournalScreen() {
   }
 
   const dayCount = snapshot.ageDays;
-  const references = getSizeReferences(species);
-  const activeReference = snapshot.isHatched
-    ? closestSizeReference(species, snapshot.currentWeightGrams)
-    : null;
 
   return (
     <View style={[styles.flex, { backgroundColor: palette.background }]}>
@@ -124,8 +118,6 @@ export default function JournalScreen() {
           currentWeightGrams={snapshot.currentWeightGrams}
           samples={growth.samples}
           marks={growth.marks}
-          references={references}
-          activeReferenceId={activeReference?.id ?? null}
         />
       </ScrollView>
 
