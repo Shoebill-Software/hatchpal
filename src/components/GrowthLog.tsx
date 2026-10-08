@@ -10,11 +10,9 @@ import {
   formatBiologicalDay,
   formatBiologicalWeight,
   formatLocaleDate,
-  localizeCopy,
   useTranslation,
 } from '@/i18n';
 import type { TranslationKey } from '@/i18n/en';
-import type { LocaleCode } from '@/i18n/locale';
 import type { TranslateFn } from '@/i18n/translate';
 
 export interface GrowthLogProps {
@@ -64,6 +62,12 @@ const SIZE_COPY: Record<SizeReferenceId, { label: TranslationKey; note: Translat
   platypus_clip: { label: 'journal.size.platypusClip', note: 'journal.size.platypusClipNote' },
   platypus_hamster: { label: 'journal.size.platypusHamster', note: 'journal.size.platypusHamsterNote' },
   platypus_rabbit: { label: 'journal.size.platypusRabbit', note: 'journal.size.platypusRabbitNote' },
+  emu_melon: { label: 'journal.size.emuMelon', note: 'journal.size.emuMelonNote' },
+  emu_child: { label: 'journal.size.emuChild', note: 'journal.size.emuChildNote' },
+  emu_adult: { label: 'journal.size.emuAdult', note: 'journal.size.emuAdultNote' },
+  robin_coin: { label: 'journal.size.robinCoin', note: 'journal.size.robinCoinNote' },
+  robin_mouse: { label: 'journal.size.robinMouse', note: 'journal.size.robinMouseNote' },
+  robin_palm: { label: 'journal.size.robinPalm', note: 'journal.size.robinPalmNote' },
 };
 
 export function GrowthLog({
@@ -76,8 +80,8 @@ export function GrowthLog({
   activeReferenceId,
 }: GrowthLogProps) {
   const palette = useNestPalette();
-  const { t, locale } = useTranslation();
-  const recorded = isHatched ? massLabel(currentWeightGrams, locale, t) : t('journal.notEmerged');
+  const { t } = useTranslation();
+  const recorded = isHatched ? massLabel(currentWeightGrams, t) : t('journal.notEmerged');
 
   return (
     <View style={styles.section}>
@@ -85,12 +89,12 @@ export function GrowthLog({
       <View style={styles.metrics}>
         <Metric
           label={t('journal.hatchWeight')}
-          value={massLabel(species.hatchWeightGrams, locale, t)}
+          value={massLabel(species.hatchWeightGrams, t)}
         />
         <Metric label={t('journal.recordedNow')} value={recorded} />
         <Metric
           label={t('journal.adultPlateau')}
-          value={massLabel(species.adultWeightGrams, locale, t)}
+          value={massLabel(species.adultWeightGrams, t)}
         />
       </View>
 
@@ -103,14 +107,14 @@ export function GrowthLog({
               <View key={`${mark.id}-${mark.epoch}`} style={styles.markRow}>
                 <View style={styles.markCopy}>
                   <Text style={[styles.markTitle, { color: palette.text }]}>
-                    {localizeCopy(mark.title, locale)}
+                    {mark.title}
                   </Text>
                   <Text style={[styles.markMeta, { color: palette.textMuted }]}>
-                    {markDetail(mark, locale, t)}
+                    {markDetail(mark, t)}
                   </Text>
                 </View>
                 <Text style={[styles.markMass, { color: palette.text }]}>
-                  {massLabel(mark.grams, locale, t)}
+                  {massLabel(mark.grams, t)}
                 </Text>
               </View>
             ))}
@@ -130,7 +134,7 @@ export function GrowthLog({
             <View
               key={reference.id}
               accessibilityLabel={`${t(copy.label)}. ${t('journal.aboutWeight', {
-                weight: massLabel(reference.weightGrams, locale, t),
+                weight: massLabel(reference.weightGrams, t),
               })}${active ? `. ${t('journal.closestReference')}` : ''}`}
               style={[
                 styles.reference,
@@ -154,7 +158,7 @@ export function GrowthLog({
               <Text style={[styles.referenceLabel, { color: palette.text }]}>{t(copy.label)}</Text>
               <Text style={[styles.referenceNote, { color: palette.textMuted }]}>{t(copy.note)}</Text>
               <Text style={[styles.referenceMass, { color: palette.text }]}>
-                {t('journal.aboutWeight', { weight: massLabel(reference.weightGrams, locale, t) })}
+                {t('journal.aboutWeight', { weight: massLabel(reference.weightGrams, t) })}
               </Text>
               {active ? (
                 <Text style={[styles.closest, { color: palette.action }]}>{t('journal.closestReference')}</Text>
@@ -179,7 +183,7 @@ function Metric({ label, value }: { label: string; value: string }) {
 
 function WeightCurve({ samples }: { samples: readonly WeightSample[] }) {
   const palette = useNestPalette();
-  const { t, locale } = useTranslation();
+  const { t } = useTranslation();
   const [width, setWidth] = useState(0);
   const height = 148;
   const first = samples[0];
@@ -188,7 +192,7 @@ function WeightCurve({ samples }: { samples: readonly WeightSample[] }) {
     return null;
   }
 
-  const label = `${t('journal.weightLog')}. ${massLabel(first.grams, locale, t)} – ${massLabel(last.grams, locale, t)}`;
+  const label = `${t('journal.weightLog')}. ${massLabel(first.grams, t)} – ${massLabel(last.grams, t)}`;
 
   return (
     <View
@@ -290,18 +294,18 @@ function comparisonDiameter(grams: number, references: readonly SizeReference[])
   return 36 + Math.min(1, Math.max(0, position)) * 42;
 }
 
-function massLabel(grams: number, locale: LocaleCode, t: TranslateFn): string {
-  const weight = formatBiologicalWeight(grams, locale);
+function massLabel(grams: number, t: TranslateFn): string {
+  const weight = formatBiologicalWeight(grams);
   const unit = t(weight.unit === 'kg' ? 'weight.kilograms' : 'weight.grams');
   return `${weight.value} ${unit}`;
 }
 
-function markDetail(mark: WeightMark, locale: LocaleCode, t: TranslateFn): string {
-  const date = formatLocaleDate(mark.epoch, locale);
+function markDetail(mark: WeightMark, t: TranslateFn): string {
+  const date = formatLocaleDate(mark.epoch);
   if (mark.id === 'emergence' || mark.id === 'current') {
     return date;
   }
-  return `${t('journal.postHatchDay', { day: formatBiologicalDay(mark.postHatchDay, locale) })} · ${date}`;
+  return `${t('journal.postHatchDay', { day: formatBiologicalDay(mark.postHatchDay) })} · ${date}`;
 }
 
 const styles = StyleSheet.create({

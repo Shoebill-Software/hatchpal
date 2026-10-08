@@ -16,6 +16,7 @@
     "ios": {
       "icon": "./assets/expo.icon",
       "bundleIdentifier": "com.shoebillsoftware.hatchpal",
+      "appleTeamId": "Y6BQW63Q2S",
       "config": {
         "usesNonExemptEncryption": false
       },
@@ -43,6 +44,7 @@
     },
     "plugins": [
       "expo-router",
+      "./plugins/withRemovePushEntitlement",
       [
         "expo-splash-screen",
         {
@@ -54,7 +56,6 @@
           }
         }
       ],
-      "expo-localization",
       [
         "expo-notifications",
         {

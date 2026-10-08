@@ -6,7 +6,7 @@ import Svg, { Circle, Ellipse, Path } from 'react-native-svg';
 import { useNestPalette } from '@/constants/nest';
 import { Spacing } from '@/constants/theme';
 import type { SpeciesConfig } from '@/domain/types';
-import { formatBiologicalWeight, localizeCopy, useTranslation } from '@/i18n';
+import { formatBiologicalWeight, useTranslation } from '@/i18n';
 
 import { GrowthSilhouette } from './GrowthSilhouette';
 import { SpeciesEggArt } from './SpeciesEggArt';
@@ -22,7 +22,7 @@ const COLUMN_MAX = 168;
 export function GrowthPreviewSheet({ species, visible, onClose }: GrowthPreviewSheetProps) {
   const palette = useNestPalette();
   const insets = useSafeAreaInsets();
-  const { t, locale } = useTranslation();
+  const { t } = useTranslation();
 
   if (!species) {
     return null;
@@ -37,7 +37,7 @@ export function GrowthPreviewSheet({ species, visible, onClose }: GrowthPreviewS
     species.growth.adultMetricKind === 'wingspan'
       ? t('growth.projectedWingspan')
       : t('growth.projectedLength');
-  const adultMass = formatBiologicalWeight(species.adultWeightGrams, locale);
+  const adultMass = formatBiologicalWeight(species.adultWeightGrams);
   const massUnit = adultMass.unit === 'kg' ? t('weight.kilograms') : t('weight.grams');
 
   return (
@@ -57,7 +57,7 @@ export function GrowthPreviewSheet({ species, visible, onClose }: GrowthPreviewS
             <View style={styles.headerCopy}>
               <Text style={[styles.title, { color: palette.text }]}>{t('growth.title')}</Text>
               <Text style={[styles.subtitle, { color: palette.text }]}>
-                {localizeCopy(species.commonName, locale)}
+                {species.commonName}
               </Text>
               <Text style={[styles.scientific, { color: palette.textMuted }]}>{species.scientificName}</Text>
             </View>
@@ -73,18 +73,18 @@ export function GrowthPreviewSheet({ species, visible, onClose }: GrowthPreviewS
           <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
             <Text style={[styles.section, { color: palette.textMuted }]}>{t('growth.timeline')}</Text>
             <Text style={[styles.scaleCaption, { color: palette.textMuted }]}>
-              {t('growth.scale', { reference: localizeCopy(species.growth.reference, locale) })}
+              {t('growth.scale', { reference: species.growth.reference })}
             </Text>
             <View style={styles.columns}>
               <ScaleColumn
                 label={t('growth.egg')}
-                caption={t('growth.centimeters', { value: formatCm(eggCm, locale) })}
+                caption={t('growth.centimeters', { value: formatCm(eggCm) })}
                 height={columnHeight(eggCm, maxCm)}>
                 <SpeciesEggArt species={species} width={54} height={columnHeight(eggCm, maxCm)} />
               </ScaleColumn>
               <ScaleColumn
                 label={t('growth.juvenileSilhouette')}
-                caption={t('growth.centimeters', { value: formatCm(hatchCm, locale) })}
+                caption={t('growth.centimeters', { value: formatCm(hatchCm) })}
                 height={columnHeight(hatchCm, maxCm)}>
                 <GrowthSilhouette
                   speciesId={species.id}
@@ -96,7 +96,7 @@ export function GrowthPreviewSheet({ species, visible, onClose }: GrowthPreviewS
               </ScaleColumn>
               <ScaleColumn
                 label={t('growth.adultForm')}
-                caption={t('growth.centimeters', { value: formatCm(adultCm, locale) })}
+                caption={t('growth.centimeters', { value: formatCm(adultCm) })}
                 height={columnHeight(adultCm, maxCm)}>
                 <GrowthSilhouette
                   speciesId={species.id}
@@ -108,7 +108,7 @@ export function GrowthPreviewSheet({ species, visible, onClose }: GrowthPreviewS
               </ScaleColumn>
               <ScaleColumn
                 label={t('growth.reference')}
-                caption={t('growth.centimeters', { value: formatCm(referenceCm, locale) })}
+                caption={t('growth.centimeters', { value: formatCm(referenceCm) })}
                 height={columnHeight(referenceCm, maxCm)}>
                 <ReferenceMark kind={species.growth.referenceScale} height={columnHeight(referenceCm, maxCm)} color={palette.text} />
               </ScaleColumn>
@@ -119,18 +119,18 @@ export function GrowthPreviewSheet({ species, visible, onClose }: GrowthPreviewS
               <Metric label={t('growth.adult')} value={t('growth.toAdult', { days: species.adultMaturationDays })} />
               <Metric
                 label={metricLabel}
-                value={t('growth.centimeters', { value: formatCm(adultCm, locale) })}
+                value={t('growth.centimeters', { value: formatCm(adultCm) })}
               />
               <Metric label={t('growth.estimatedAdultWeight')} value={`${adultMass.value} ${massUnit}`} />
             </View>
 
             <Text style={[styles.section, { color: palette.textMuted }]}>{t('growth.behavior')}</Text>
             <Text style={[styles.prose, { color: palette.text }]}>
-              {localizeCopy(species.growth.behavior, locale)}
+              {species.growth.behavior}
             </Text>
             <Text style={[styles.section, { color: palette.textMuted }]}>{t('growth.fieldNotes')}</Text>
             <Text style={[styles.prose, { color: palette.text }]}>
-              {localizeCopy(species.growth.fieldNotes, locale)}
+              {species.growth.fieldNotes}
             </Text>
           </ScrollView>
         </View>
@@ -216,9 +216,9 @@ function columnHeight(cm: number, maxCm: number): number {
   return Math.max(18, Math.min(COLUMN_MAX, (cm / maxCm) * COLUMN_MAX));
 }
 
-function formatCm(cm: number, locale: 'en' | 'de'): string {
+function formatCm(cm: number): string {
   const digits = cm >= 100 ? 0 : 1;
-  return new Intl.NumberFormat(locale === 'de' ? 'de-DE' : 'en-US', {
+  return new Intl.NumberFormat('en-US', {
     maximumFractionDigits: digits,
     minimumFractionDigits: digits,
   }).format(cm);

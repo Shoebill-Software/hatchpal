@@ -3,8 +3,10 @@ export const SPECIES_IDS = [
   'peregrine_falcon',
   'barn_owl',
   'mandarin_duck',
+  'american_robin',
   'emperor_penguin',
   'common_ostrich',
+  'emu',
   'leopard_gecko',
   'veiled_chameleon',
   'ball_python',
@@ -24,6 +26,7 @@ export type RosterTag =
   | 'raptor'
   | 'strigiform'
   | 'waterfowl'
+  | 'passerine'
   | 'sphenisciform'
   | 'ratite'
   | 'squamate'
@@ -38,6 +41,26 @@ export type SpeckleStyle = 'none' | 'fine' | 'mottled' | 'pitted';
 export type AdultMetricKind = 'wingspan' | 'length';
 
 export type ReferenceScale = 'coin' | 'hand' | 'person';
+
+export const DIFFICULTY_TAGS = ['gentle', 'intermediate', 'patience_master'] as const;
+
+export type DifficultyTag = (typeof DIFFICULTY_TAGS)[number];
+
+export type PortraitStage = 'baby' | 'adult';
+
+export interface SpeciesShowcase {
+  /** Two or three field-guide facts shown before adoption. */
+  funFacts: readonly [string, string] | readonly [string, string, string];
+  /** Natural biome or region. */
+  habitat: string;
+  /** Short personality line for the dossier. */
+  temperament: string;
+  difficultyTag: DifficultyTag;
+  /** Portrait catalog key for the hatchling plate, such as `silkie_chicken.baby`. */
+  babyIllustration: string;
+  /** Portrait catalog key for the adult plate, such as `silkie_chicken.adult`. */
+  adultIllustration: string;
+}
 
 export interface ShellPaint {
   body: string;
@@ -58,7 +81,7 @@ export interface CandlePaint {
 }
 
 export interface EggProfile {
-  description: LocalizedCopy;
+  description: string;
   /** Shell length along the long axis, millimeters. */
   lengthMm: number;
   /** Shell width at the widest point, millimeters. */
@@ -74,8 +97,8 @@ export interface EggProfile {
 }
 
 export interface GrowthStageCopy {
-  title: LocalizedCopy;
-  scientificSummary: LocalizedCopy;
+  title: string;
+  scientificSummary: string;
 }
 
 export interface GrowthProfile {
@@ -93,9 +116,9 @@ export interface GrowthProfile {
   referenceScale: ReferenceScale;
   /** Real-world size of the comparison object, centimeters. */
   referenceCentimeters: number;
-  reference: LocalizedCopy;
-  behavior: LocalizedCopy;
-  fieldNotes: LocalizedCopy;
+  reference: string;
+  behavior: string;
+  fieldNotes: string;
 }
 
 export type DevelopmentStage =
@@ -126,28 +149,18 @@ export interface CandlingFeatures {
   movementDetectable: boolean;
 }
 
-/** Display copy stored for every supported locale. English is the fallback. */
-export interface LocalizedCopy {
-  en: string;
-  de: string;
-}
-
-export function localized(en: string, de: string): LocalizedCopy {
-  return { en, de };
-}
-
 export interface BiologicalMilestone {
   day: number;
   stage: DevelopmentStage;
-  title: LocalizedCopy;
-  scientificSummary: LocalizedCopy;
+  title: string;
+  scientificSummary: string;
   candling: CandlingFeatures;
   audioTrigger: AudioMilestoneTrigger;
 }
 
 export interface SpeciesConfig {
   id: SpeciesId;
-  commonName: LocalizedCopy;
+  commonName: string;
   scientificName: string;
   incubationDays: number;
   adultMaturationDays: number;
@@ -158,7 +171,6 @@ export interface SpeciesConfig {
   baseHeartRateBpm: number;
   temperatureTargetCelsius: number;
   humidityTargetPct: number;
-  turningRequiredUntilDay: number;
   taxon: TaxonomicClass;
   tag: RosterTag;
   egg: EggProfile;
@@ -166,6 +178,7 @@ export interface SpeciesConfig {
   /** Post-hatch plumage or pattern, shown in the journal and growth preview. */
   juvenile: GrowthStageCopy;
   adult: GrowthStageCopy;
+  showcase: SpeciesShowcase;
   milestones: BiologicalMilestone[];
 }
 
@@ -177,8 +190,14 @@ export interface PetInstance {
   lastVerifiedEpoch: number;
   lastInteractedEpoch: number;
   healthMultiplier: number; // 0.0 to 1.0 (modulates visual vibrancy, never kills)
-  lastTurnedEpoch: number;
+  /** Nest temperature at `lastWarmedEpoch`, before deterministic cooling. */
+  currentTemperatureCelsius: number;
+  /** Substrate humidity at `lastMistedEpoch`, before deterministic drying. */
+  currentHumidityPct: number;
+  lastWarmedEpoch: number;
   lastMistedEpoch: number;
+  /** Incubation vigor in [0.3, 1]. Neglect never lowers this through the floor. */
+  vitalityScore: number;
   /** Set by a post-hatch feeding. Absent until the first logged meal. */
   lastFedEpoch?: number;
   /** Set by a post-hatch weighing. Absent until the first weigh-in. */
@@ -232,4 +251,4 @@ export interface PetSnapshot {
   clockAnomaly: ClockAnomaly;
 }
 
-export type PetInteractionKind = 'turn_egg' | 'mist_nest' | 'feed' | 'weigh' | 'pet';
+export type PetInteractionKind = 'warm_nest' | 'mist_nest' | 'feed' | 'weigh' | 'pet';

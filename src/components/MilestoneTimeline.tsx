@@ -12,9 +12,8 @@ import Animated, {
 import { hexToRgba, useNestPalette, type NestPaletteTokens } from '@/constants/nest';
 import { Fonts, Spacing } from '@/constants/theme';
 import type { JournalMilestone, JournalMilestoneStatus } from '@/domain/milestones';
-import { formatBiologicalDay, formatLocaleDate, localizeCopy, useTranslation } from '@/i18n';
+import { formatBiologicalDay, formatLocaleDate, useTranslation } from '@/i18n';
 import { ImpactFeedbackStyle, triggerImpact } from '@/services/hapticFeedback';
-import type { LocaleCode } from '@/i18n/locale';
 import type { TranslationKey } from '@/i18n/en';
 import type { TranslateFn } from '@/i18n/translate';
 
@@ -25,7 +24,7 @@ export interface MilestoneTimelineProps {
 
 export function MilestoneTimeline({ milestones, onSelect }: MilestoneTimelineProps) {
   const palette = useNestPalette();
-  const { t, locale } = useTranslation();
+  const { t } = useTranslation();
   const [hintId, setHintId] = useState<string | null>(null);
   const reduceMotion = useReduceMotion();
 
@@ -37,12 +36,12 @@ export function MilestoneTimeline({ milestones, onSelect }: MilestoneTimelinePro
         const topColor = entry.status === 'upcoming' ? palette.border : palette.optimal;
         const bottomColor = !next || next.status === 'upcoming' ? palette.border : palette.optimal;
         const statusLabel = t(statusKey(entry.status));
-        const dayText = dayLabel(entry, locale, t);
-        const date = formatLocaleDate(entry.unlockEpoch, locale);
+        const dayText = dayLabel(entry, t);
+        const date = formatLocaleDate(entry.unlockEpoch);
         const dateText =
           entry.status === 'upcoming' ? t('journal.expectedOn', { date }) : t('journal.unlockedOn', { date });
-        const title = localizeCopy(entry.title, locale);
-        const tooltip = tooltipFor(entry, locale, t);
+        const title = entry.title;
+        const tooltip = tooltipFor(entry, t);
         const openable = entry.status !== 'upcoming';
 
         return (
@@ -214,20 +213,20 @@ function statusKey(status: JournalMilestoneStatus): TranslationKey {
   return 'journal.upcoming';
 }
 
-function dayLabel(entry: JournalMilestone, locale: LocaleCode, t: TranslateFn): string {
+function dayLabel(entry: JournalMilestone, t: TranslateFn): string {
   if (entry.postHatchDay == null) {
-    return t('journal.day', { day: formatBiologicalDay(entry.day, locale) });
+    return t('journal.day', { day: formatBiologicalDay(entry.day) });
   }
-  return t('journal.postHatchDay', { day: formatBiologicalDay(entry.postHatchDay, locale) });
+  return t('journal.postHatchDay', { day: formatBiologicalDay(entry.postHatchDay) });
 }
 
-function tooltipFor(entry: JournalMilestone, locale: LocaleCode, t: TranslateFn): string {
-  const date = formatLocaleDate(entry.unlockEpoch, locale);
+function tooltipFor(entry: JournalMilestone, t: TranslateFn): string {
+  const date = formatLocaleDate(entry.unlockEpoch);
   if (entry.postHatchDay == null) {
-    return t('journal.lockedTooltip', { day: formatBiologicalDay(entry.day, locale), date });
+    return t('journal.lockedTooltip', { day: formatBiologicalDay(entry.day), date });
   }
   return t('journal.lockedTooltipPost', {
-    day: formatBiologicalDay(entry.postHatchDay, locale),
+    day: formatBiologicalDay(entry.postHatchDay),
     date,
   });
 }

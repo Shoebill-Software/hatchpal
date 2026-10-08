@@ -16,9 +16,10 @@ import { CandlingView } from '@/components/CandlingView';
 import { NestStatusBar } from '@/components/NestStatusBar';
 import { ImpactFeedbackStyle, triggerImpact } from '@/services/hapticFeedback';
 import { Spacing } from '@/constants/theme';
+import { caredHeartRate, readClimate } from '@/domain/climateEngine';
 import { useActivePet } from '@/hooks/useActivePet';
 import { useSoundEffects } from '@/hooks/useSoundEffects';
-import { localizeCopy, useTranslation } from '@/i18n';
+import { useTranslation } from '@/i18n';
 import { heartbeatIntervalMs } from '@/hooks/hapticHeartbeat';
 import { useCandlingTouch, type CandlingLightMode } from '@/hooks/useCandlingTouch';
 import { useHapticHeartbeat } from '@/hooks/useHapticHeartbeat';
@@ -32,8 +33,8 @@ const MUTED = '#B4A89C';
 export default function CandlingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { t, locale } = useTranslation();
-  const { pet, species, snapshot, hasHydrated, isClockTampered } = useActivePet();
+  const { t } = useTranslation();
+  const { pet, species, snapshot, hasHydrated, isClockTampered, nowEpoch } = useActivePet();
   const [lightMode, setLightMode] = useState<CandlingLightMode>('manual');
 
   const touch = useCandlingTouch({
@@ -43,7 +44,8 @@ export default function CandlingScreen() {
     },
   });
 
-  const bpm = snapshot?.currentHeartRate ?? 0;
+  const climate = pet && species ? readClimate(pet, species, nowEpoch) : null;
+  const bpm = caredHeartRate(snapshot?.currentHeartRate ?? 0, climate?.vitalityScore ?? 1);
   const candlingActive = Boolean(snapshot) && touch.isIlluminated && bpm > 0;
   const { play } = useSoundEffects();
   const playHeartbeat = useCallback(() => {
@@ -74,8 +76,8 @@ export default function CandlingScreen() {
   }
 
   const heartLabel = bpm > 0 ? `${bpm} ${t('common.bpm')}` : t('metric.undetected');
-  const milestoneTitle = localizeCopy(snapshot.currentMilestone.title, locale);
-  const summary = localizeCopy(snapshot.currentMilestone.scientificSummary, locale);
+  const milestoneTitle = snapshot.currentMilestone.title;
+  const summary = snapshot.currentMilestone.scientificSummary;
   const lightModeLabel = lightMode === 'fixed' ? t('candling.backlight') : t('candling.fingerLight');
 
   return (

@@ -1,7 +1,6 @@
-import { localized, type LocalizedCopy } from '@/domain/types';
+import { speciesEn } from './catalogCopy';
 
-import { speciesDe, speciesEn } from './catalogCopy';
-
-export function speciesCopy(key: keyof typeof speciesEn & keyof typeof speciesDe): LocalizedCopy {
-  return localized(speciesEn[key], speciesDe[key]);
+/** English display string for an expanded-roster species field. */
+export function speciesCopy(key: keyof typeof speciesEn): string {
+  return speciesEn[key];
 }

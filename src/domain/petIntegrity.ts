@@ -1,3 +1,6 @@
+import { climateSetpoint } from '@/data/species/climateSetpoints';
+
+import { clampVitality, freshNestClimate } from './climateEngine';
 import { SPECIES_IDS, PetInstance, SpeciesId } from './types';
 
 const FALLBACK_SPECIES_ID: SpeciesId = 'silkie_chicken';
@@ -17,6 +20,13 @@ export function clampUnitInterval(value: unknown, fallback = 1): number {
   return Math.min(1, Math.max(0, value));
 }
 
+function finiteReading(value: unknown, fallback: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return fallback;
+  }
+  return value;
+}
+
 export function toFiniteEpoch(value: unknown, fallback: number): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return fallback;
@@ -32,17 +42,18 @@ export function createPetInstance(input: {
 }): PetInstance {
   const nowEpoch = toFiniteEpoch(input.nowEpoch, 0);
   const nickname = typeof input.nickname === 'string' ? input.nickname.trim() : '';
+  const speciesId = resolveSpeciesId(input.speciesId);
+  const setpoints = climateSetpoint(speciesId);
 
   return {
     id: input.id,
-    speciesId: resolveSpeciesId(input.speciesId),
+    speciesId,
     nickname: nickname.length > 0 ? nickname : 'Hatchling',
     laidAtEpoch: nowEpoch,
     lastVerifiedEpoch: nowEpoch,
     lastInteractedEpoch: nowEpoch,
     healthMultiplier: 1,
-    lastTurnedEpoch: nowEpoch,
-    lastMistedEpoch: nowEpoch,
+    ...freshNestClimate(nowEpoch, setpoints.temperatureTargetCelsius, setpoints.humidityTargetPct),
     isHatched: false,
   };
 }
@@ -60,10 +71,12 @@ export function sanitizePetInstance(value: unknown, nowEpoch = 0): PetInstance |
   const laidAtEpoch = toFiniteEpoch(raw.laidAtEpoch, toFiniteEpoch(nowEpoch, 0));
   const lastVerifiedEpoch = toFiniteEpoch(raw.lastVerifiedEpoch, laidAtEpoch);
   const lastInteractedEpoch = toFiniteEpoch(raw.lastInteractedEpoch, laidAtEpoch);
+  const speciesId = resolveSpeciesId(raw.speciesId);
+  const setpoints = climateSetpoint(speciesId);
 
   const pet: PetInstance = {
     id: raw.id,
-    speciesId: resolveSpeciesId(raw.speciesId),
+    speciesId,
     nickname:
       typeof raw.nickname === 'string' && raw.nickname.trim().length > 0
         ? raw.nickname.trim()
@@ -72,8 +85,14 @@ export function sanitizePetInstance(value: unknown, nowEpoch = 0): PetInstance |
     lastVerifiedEpoch,
     lastInteractedEpoch,
     healthMultiplier: clampUnitInterval(raw.healthMultiplier, 1),
-    lastTurnedEpoch: toFiniteEpoch(raw.lastTurnedEpoch, laidAtEpoch),
+    currentTemperatureCelsius: finiteReading(
+      raw.currentTemperatureCelsius,
+      setpoints.temperatureTargetCelsius
+    ),
+    currentHumidityPct: finiteReading(raw.currentHumidityPct, setpoints.humidityTargetPct),
+    lastWarmedEpoch: toFiniteEpoch(raw.lastWarmedEpoch, laidAtEpoch),
     lastMistedEpoch: toFiniteEpoch(raw.lastMistedEpoch, laidAtEpoch),
+    vitalityScore: clampVitality(raw.vitalityScore),
     isHatched: raw.isHatched === true,
   };
 

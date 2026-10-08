@@ -17,12 +17,14 @@ import Animated, {
   useSharedValue,
   type SharedValue,
 } from 'react-native-reanimated';
-import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
+import Svg, { Defs, Ellipse, LinearGradient, RadialGradient, Rect, Stop } from 'react-native-svg';
 
+import { ADOPTION_ATMOSPHERE } from '@/components/adoptionAtmosphere';
 import { useNestPalette } from '@/constants/nest';
 import { Spacing } from '@/constants/theme';
 import type { RosterTag, SpeciesConfig, SpeciesId } from '@/domain/types';
-import { localizeCopy, useTranslation } from '@/i18n';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useTranslation } from '@/i18n';
 import type { TranslationKey } from '@/i18n/en';
 import { ImpactFeedbackStyle, triggerImpact } from '@/services/hapticFeedback';
 
@@ -34,6 +36,7 @@ const TAG_LABEL: Record<RosterTag, TranslationKey> = {
   raptor: 'taxon.raptor',
   strigiform: 'taxon.strigiform',
   waterfowl: 'taxon.waterfowl',
+  passerine: 'taxon.passerine',
   sphenisciform: 'taxon.sphenisciform',
   ratite: 'taxon.ratite',
   squamate: 'taxon.squamate',
@@ -81,6 +84,14 @@ export function EggCarousel({ species, selectedId, cardWidth, onSelect, onInspec
     }
   };
 
+  const openSpecies = (id: SpeciesId, index: number) => {
+    const x = index * interval;
+    scrollX.value = x;
+    listRef.current?.scrollTo({ x, y: 0, animated: false });
+    onSelect(id);
+    onInspect(id);
+  };
+
   const onScroll = useAnimatedScrollHandler({
     onScroll: (event) => {
       scrollX.value = event.contentOffset.x;
@@ -116,8 +127,7 @@ export function EggCarousel({ species, selectedId, cardWidth, onSelect, onInspec
           reduceMotion={reduceMotion}
           borderColor={item.id === selectedId ? palette.action : palette.border}
           surfaceColor={palette.surface}
-          onSelect={onSelect}
-          onInspect={onInspect}
+          onOpen={openSpecies}
         />
       ))}
     </Animated.ScrollView>
@@ -134,8 +144,7 @@ interface CarouselCardProps {
   reduceMotion: boolean;
   borderColor: string;
   surfaceColor: string;
-  onSelect: (id: SpeciesId) => void;
-  onInspect: (id: SpeciesId) => void;
+  onOpen: (id: SpeciesId, index: number) => void;
 }
 
 function CarouselCard({
@@ -148,16 +157,23 @@ function CarouselCard({
   reduceMotion,
   borderColor,
   surfaceColor,
-  onSelect,
-  onInspect,
+  onOpen,
 }: CarouselCardProps) {
   const palette = useNestPalette();
-  const { t, locale } = useTranslation();
-  const cardStyle = usePlaneStyle(scrollX, index, interval, reduceMotion, 16);
-  const juvenileShift = useParallaxStyle(scrollX, index, interval, reduceMotion, 28);
-  const adultShift = useParallaxStyle(scrollX, index, interval, reduceMotion, 46);
-  const eggWidth = Math.min(132, cardWidth * 0.4);
-  const eggHeight = eggWidth * 1.28;
+  const scheme = useColorScheme();
+  const { t } = useTranslation();
+  const atmosphere = ADOPTION_ATMOSPHERE[species.id];
+  const cardStyle = usePlaneStyle(scrollX, index, interval, reduceMotion);
+  const juvenileShift = useDepthStyle(scrollX, index, interval, reduceMotion, 22, 7);
+  const adultShift = useDepthStyle(scrollX, index, interval, reduceMotion, 9, 3);
+  const eggWidth = Math.round(Math.min(108, cardWidth * 0.33));
+  const eggHeight = Math.round(eggWidth * 1.28);
+  const adultWidth = Math.round(eggWidth * 2.15);
+  const adultHeight = Math.round(eggHeight * 1.45);
+  const babyWidth = Math.round(eggWidth * 1.15);
+  const babyHeight = Math.round(eggHeight * 1.05);
+  const silhouetteFill = scheme === 'dark' ? '#F4EDE3' : species.growth.shadow;
+  const silhouetteRim = atmosphere.rim;
 
   return (
     <View
@@ -172,38 +188,60 @@ function CarouselCard({
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ selected }}
-        accessibilityLabel={localizeCopy(species.commonName, locale)}
-        onPress={() => onSelect(species.id)}
+        accessibilityLabel={`${species.commonName}, ${species.scientificName}`}
+        accessibilityHint={t('adoption.openDossier')}
+        onPress={() => {
+          void triggerImpact(ImpactFeedbackStyle.Light);
+          onOpen(species.id, index);
+        }}
         style={styles.cardBody}>
         <Animated.View style={[styles.stage, cardStyle]}>
-          <Svg width="100%" height="100%" viewBox="0 0 100 100" style={styles.glow} pointerEvents="none">
+          <Svg
+            width="100%"
+            height="100%"
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+            style={styles.glow}
+            pointerEvents="none">
             <Defs>
-              <RadialGradient id={`glow-${species.id}`} cx="50" cy="58" r="48" gradientUnits="userSpaceOnUse">
-                <Stop offset="0%" stopColor={species.growth.glow} stopOpacity={0.72} />
-                <Stop offset="55%" stopColor={species.growth.glow} stopOpacity={0.22} />
-                <Stop offset="100%" stopColor={species.growth.glow} stopOpacity={0} />
+              <LinearGradient id={`sky-${species.id}`} x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0%" stopColor={atmosphere.high} stopOpacity={0.16} />
+                <Stop offset="42%" stopColor={atmosphere.mid} stopOpacity={0.28} />
+                <Stop offset="78%" stopColor={atmosphere.mid} stopOpacity={0.14} />
+                <Stop offset="100%" stopColor={atmosphere.low} stopOpacity={0.42} />
+              </LinearGradient>
+              <RadialGradient id={`ambient-${species.id}`} cx="50" cy="46" r="78" gradientUnits="userSpaceOnUse">
+                <Stop offset="0%" stopColor={atmosphere.mid} stopOpacity={0.2} />
+                <Stop offset="46%" stopColor={atmosphere.mid} stopOpacity={0.08} />
+                <Stop offset="78%" stopColor={atmosphere.low} stopOpacity={0.08} />
+                <Stop offset="100%" stopColor={atmosphere.low} stopOpacity={0} />
               </RadialGradient>
             </Defs>
-            <Ellipse cx="50" cy="58" rx="48" ry="42" fill={`url(#glow-${species.id})`} />
+            <Rect x="0" y="0" width="100" height="100" fill={`url(#sky-${species.id})`} />
+            <Rect x="0" y="0" width="100" height="100" fill={`url(#ambient-${species.id})`} />
+            <Ellipse cx="50" cy="94" rx="42" ry="5.2" fill="#1A120C" opacity={0.22} />
+            <Ellipse cx="50" cy="93.2" rx="22" ry="2.4" fill="#1A120C" opacity={0.38} />
           </Svg>
 
           <Animated.View pointerEvents="none" style={[styles.adultPlane, adultShift]}>
-            <GrowthSilhouette
+            <DepthSilhouette
               speciesId={species.id}
               stage="adult"
-              width={eggWidth * 1.35}
-              height={eggHeight * 1.22}
-              fill={species.growth.shadow}
+              width={adultWidth}
+              height={adultHeight}
+              fill={silhouetteFill}
+              rim={silhouetteRim}
             />
           </Animated.View>
 
           <Animated.View pointerEvents="none" style={[styles.juvenilePlane, juvenileShift]}>
-            <GrowthSilhouette
+            <DepthSilhouette
               speciesId={species.id}
               stage="juvenile"
-              width={eggWidth * 0.78}
-              height={eggHeight * 0.72}
-              fill={species.growth.shadow}
+              width={babyWidth}
+              height={babyHeight}
+              fill={silhouetteFill}
+              rim={silhouetteRim}
             />
           </Animated.View>
 
@@ -213,10 +251,10 @@ function CarouselCard({
         </Animated.View>
 
         <Text style={[styles.tag, { color: palette.action }]}>{t(TAG_LABEL[species.tag])}</Text>
-        <Text style={[styles.name, { color: palette.text }]}>{localizeCopy(species.commonName, locale)}</Text>
+        <Text style={[styles.name, { color: palette.text }]}>{species.commonName}</Text>
         <Text style={[styles.scientific, { color: palette.textMuted }]}>{species.scientificName}</Text>
         <Text style={[styles.shell, { color: palette.textMuted }]}>
-          {localizeCopy(species.egg.description, locale)}
+          {species.egg.description}
         </Text>
         <Text style={[styles.meta, { color: palette.textMuted }]}>
           {t('adoption.meta', {
@@ -226,18 +264,37 @@ function CarouselCard({
           })}
         </Text>
       </Pressable>
+    </View>
+  );
+}
 
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={t('adoption.inspectGrowth')}
-        onPress={() => {
-          void triggerImpact(ImpactFeedbackStyle.Light);
-          onSelect(species.id);
-          onInspect(species.id);
-        }}
-        style={[styles.inspect, { borderColor: palette.border }]}>
-        <Text style={[styles.inspectLabel, { color: palette.text }]}>{t('adoption.inspectGrowth')}</Text>
-      </Pressable>
+function DepthSilhouette({
+  speciesId,
+  stage,
+  width,
+  height,
+  fill,
+  rim,
+}: {
+  speciesId: SpeciesId;
+  stage: 'juvenile' | 'adult';
+  width: number;
+  height: number;
+  fill: string;
+  rim: string;
+}) {
+  return (
+    <View style={styles.silhouetteStack} pointerEvents="none">
+      <GrowthSilhouette
+        speciesId={speciesId}
+        stage={stage}
+        width={width}
+        height={height}
+        fill={fill}
+        opacity={0.3}
+        rim={rim}
+        filterSuffix="plate"
+      />
     </View>
   );
 }
@@ -246,38 +303,47 @@ function usePlaneStyle(
   scrollX: SharedValue<number>,
   index: number,
   interval: number,
-  reduceMotion: boolean,
-  parallax: number
+  reduceMotion: boolean
 ) {
   return useAnimatedStyle(() => {
     if (reduceMotion) {
-      return { transform: [{ translateX: 0 }, { scale: 1 }] };
+      return { opacity: 1, transform: [{ scale: 1 }] };
     }
     const delta = scrollX.value - index * interval;
     const focus = interpolate(Math.abs(delta), [0, interval], [1, 0], Extrapolation.CLAMP);
-    const scale = 0.9 + 0.1 * focus;
-    const shift = interpolate(delta, [-interval, 0, interval], [parallax, 0, -parallax], Extrapolation.CLAMP);
     return {
-      opacity: 0.55 + 0.45 * focus,
-      transform: [{ translateX: shift }, { scale }],
+      opacity: 0.62 + 0.38 * focus,
+      transform: [{ scale: 0.92 + 0.08 * focus }],
     };
   });
 }
 
-function useParallaxStyle(
+function useDepthStyle(
   scrollX: SharedValue<number>,
   index: number,
   interval: number,
   reduceMotion: boolean,
-  parallax: number
+  travel: number,
+  tilt: number
 ) {
   return useAnimatedStyle(() => {
     if (reduceMotion) {
-      return { transform: [{ translateX: 0 }] };
+      return {
+        transform: [{ perspective: 900 }, { rotateY: '0deg' }, { translateX: 0 }, { scale: 1 }],
+      };
     }
     const delta = scrollX.value - index * interval;
-    const shift = interpolate(delta, [-interval, 0, interval], [parallax, 0, -parallax], Extrapolation.CLAMP);
-    return { transform: [{ translateX: shift }] };
+    const shift = interpolate(delta, [-interval, 0, interval], [travel, 0, -travel], Extrapolation.CLAMP);
+    const yaw = interpolate(delta, [-interval, 0, interval], [tilt, 0, -tilt], Extrapolation.CLAMP);
+    const depth = interpolate(Math.abs(delta), [0, interval], [1, 0.94], Extrapolation.CLAMP);
+    return {
+      transform: [
+        { perspective: 900 },
+        { rotateY: `${yaw}deg` },
+        { translateX: shift },
+        { scale: depth },
+      ],
+    };
   });
 }
 
@@ -320,10 +386,12 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   stage: {
-    height: 236,
+    height: 252,
     alignItems: 'center',
     justifyContent: 'flex-end',
     marginBottom: Spacing.two,
+    overflow: 'hidden',
+    borderRadius: 18,
   },
   glow: {
     ...StyleSheet.absoluteFill,
@@ -331,21 +399,23 @@ const styles = StyleSheet.create({
   },
   adultPlane: {
     position: 'absolute',
-    right: 0,
+    right: -2,
     bottom: 8,
     zIndex: 1,
-    opacity: 0.2,
   },
   juvenilePlane: {
     position: 'absolute',
-    left: 0,
-    bottom: 28,
+    left: -2,
+    bottom: 22,
     zIndex: 2,
-    opacity: 0.35,
+  },
+  silhouetteStack: {
+    alignItems: 'center',
+    justifyContent: 'flex-end',
   },
   eggPlane: {
-    zIndex: 3,
-    marginBottom: 6,
+    zIndex: 4,
+    marginBottom: 14,
   },
   tag: {
     fontSize: 11,
@@ -369,16 +439,5 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 13,
     fontWeight: '600',
-  },
-  inspect: {
-    minHeight: 40,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  inspectLabel: {
-    fontSize: 14,
-    fontWeight: '700',
   },
 });

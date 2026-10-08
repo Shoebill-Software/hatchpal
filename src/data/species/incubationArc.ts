@@ -3,15 +3,14 @@ import type {
   BiologicalMilestone,
   CandlingFeatures,
   DevelopmentStage,
-  LocalizedCopy,
 } from '@/domain/types';
 
 export type ShellKind = 'calcareous' | 'leathery' | 'monotreme';
 
 export interface ArcStage {
   day: number;
-  title: LocalizedCopy;
-  summary: LocalizedCopy;
+  title: string;
+  summary: string;
 }
 
 export interface IncubationArcInput {

@@ -55,25 +55,21 @@ describe('Pet store', () => {
     expect(store.getState().pets['pet-1']?.lastVerifiedEpoch).toBe(resumed);
   });
 
-  it('records nest interactions against the active pet only', () => {
+  it('records nest climate care against the active pet only', () => {
     const store = createStore();
     store.getState().adoptPet('silkie_chicken', 'Pip', baseEpoch);
-    store.getState().recordInteraction('turn_egg', baseEpoch + 1000);
+    store.getState().recordInteraction('warm_nest', baseEpoch + 1000);
     store.getState().recordInteraction('mist_nest', baseEpoch + 2000);
     const pet = store.getState().pets['pet-1'];
-    expect(pet?.lastTurnedEpoch).toBe(baseEpoch + 1000);
+    expect(pet?.lastWarmedEpoch).toBe(baseEpoch + 1000);
+    expect(pet?.currentTemperatureCelsius).toBe(silkieChickenConfig.temperatureTargetCelsius);
     expect(pet?.lastMistedEpoch).toBe(baseEpoch + 2000);
+    expect(pet?.currentHumidityPct).toBe(silkieChickenConfig.humidityTargetPct);
     expect(pet?.lastInteractedEpoch).toBe(baseEpoch + 2000);
 
-    store.getState().recordInteraction('turn_egg', baseEpoch + 18 * dayMs);
-    expect(store.getState().pets['pet-1']?.lastTurnedEpoch).toBe(baseEpoch + 1000);
-
-    store.getState().recordInteraction('turn_egg', baseEpoch + 19 * dayMs);
-    expect(store.getState().pets['pet-1']?.lastTurnedEpoch).toBe(baseEpoch + 1000);
-
     store.getState().setActivePet(null);
-    store.getState().recordInteraction('turn_egg', baseEpoch + 5000);
-    expect(store.getState().pets['pet-1']?.lastTurnedEpoch).toBe(baseEpoch + 1000);
+    store.getState().recordInteraction('warm_nest', baseEpoch + 5000);
+    expect(store.getState().pets['pet-1']?.lastWarmedEpoch).toBe(baseEpoch + 1000);
   });
 
   it('marks hatch at the deterministic incubation boundary once progress is complete', () => {
@@ -101,8 +97,11 @@ describe('Pet store', () => {
               lastVerifiedEpoch: baseEpoch,
               lastInteractedEpoch: baseEpoch,
               healthMultiplier: 1,
-              lastTurnedEpoch: baseEpoch,
+              currentTemperatureCelsius: 37.5,
+              currentHumidityPct: 55,
+              lastWarmedEpoch: baseEpoch,
               lastMistedEpoch: baseEpoch,
+              vitalityScore: 1,
               isHatched: false,
             },
           },
@@ -144,9 +143,9 @@ describe('Pet store', () => {
     });
 
     const first = store.getState().adoptPet('silkie_chicken', 'Pip', baseEpoch);
-    store.getState().recordInteraction('turn_egg', baseEpoch + 1000);
+    store.getState().recordInteraction('warm_nest', baseEpoch + 1000);
     expect(store.getState().activePetId).toBe(first.id);
-    expect(store.getState().pets[first.id]?.lastTurnedEpoch).toBe(baseEpoch + 1000);
+    expect(store.getState().pets[first.id]?.lastWarmedEpoch).toBe(baseEpoch + 1000);
 
     store.getState().abandonActivePet();
     expect(store.getState().activePetId).toBeNull();
@@ -189,8 +188,11 @@ describe('Pet store', () => {
       lastVerifiedEpoch: baseEpoch,
       lastInteractedEpoch: baseEpoch,
       healthMultiplier: 1,
-      lastTurnedEpoch: baseEpoch,
+      currentTemperatureCelsius: 37.5,
+      currentHumidityPct: 55,
+      lastWarmedEpoch: baseEpoch,
       lastMistedEpoch: baseEpoch,
+      vitalityScore: 1,
       isHatched: false,
     };
     const storage = createMemoryStateStorage({

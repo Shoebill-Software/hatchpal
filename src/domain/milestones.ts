@@ -3,20 +3,15 @@ import {
   BiologicalMilestone,
   CandlingFeatures,
   DevelopmentStage,
-  LocalizedCopy,
   SpeciesConfig,
   SpeciesId,
-  localized,
 } from './types';
 
 const FALLBACK_MILESTONE: BiologicalMilestone = {
   day: 0,
   stage: 'cleavage',
-  title: localized('Unknown developmental stage', 'Unbekanntes Entwicklungsstadium'),
-  scientificSummary: localized(
-    'Milestone data is unavailable. Displaying the earliest safe incubation stage.',
-    'Meilensteindaten fehlen. Angezeigt wird das früheste sichere Brutstadium.'
-  ),
+  title: 'Unknown developmental stage',
+  scientificSummary: 'Milestone data is unavailable. Displaying the earliest safe incubation stage.',
   candling: {
     bloodVesselsVisible: false,
     eyeSpotVisible: false,
@@ -80,7 +75,13 @@ export type SizeReferenceId =
   | 'croc_horse'
   | 'platypus_clip'
   | 'platypus_hamster'
-  | 'platypus_rabbit';
+  | 'platypus_rabbit'
+  | 'emu_melon'
+  | 'emu_child'
+  | 'emu_adult'
+  | 'robin_coin'
+  | 'robin_mouse'
+  | 'robin_palm';
 
 export interface PostHatchMilestone {
   id: PostHatchMilestoneId;
@@ -89,8 +90,8 @@ export interface PostHatchMilestone {
   day: number;
   /** Days since emergence. */
   postHatchDay: number;
-  title: LocalizedCopy;
-  scientificSummary: LocalizedCopy;
+  title: string;
+  scientificSummary: string;
   audioTrigger: AudioMilestoneTrigger;
 }
 
@@ -100,8 +101,8 @@ export interface JournalMilestone {
   /** Set for post-hatch growth stages. Incubation entries, including emergence, leave this null. */
   postHatchDay: number | null;
   stage: DevelopmentStage;
-  title: LocalizedCopy;
-  scientificSummary: LocalizedCopy;
+  title: string;
+  scientificSummary: string;
   candling: CandlingFeatures | null;
   audioTrigger: AudioMilestoneTrigger;
   /** Candling notes apply only while the animal is still inside the shell. */
@@ -132,7 +133,7 @@ export interface WeightSample {
 
 export interface WeightMark extends WeightSample {
   id: PostHatchMilestoneId | 'current';
-  title: LocalizedCopy;
+  title: string;
 }
 
 export interface SizeReference {
@@ -203,6 +204,16 @@ const SIZE_REFERENCES: Record<SpeciesId, readonly [SizeReference, SizeReference,
     { id: 'platypus_clip', weightGrams: 1, postHatchDay: 0 },
     { id: 'platypus_hamster', weightGrams: 120, postHatchDay: 90 },
     { id: 'platypus_rabbit', weightGrams: 1600, postHatchDay: 365 },
+  ],
+  emu: [
+    { id: 'emu_melon', weightGrams: 500, postHatchDay: 0 },
+    { id: 'emu_child', weightGrams: 12_000, postHatchDay: 180 },
+    { id: 'emu_adult', weightGrams: 36_000, postHatchDay: 540 },
+  ],
+  american_robin: [
+    { id: 'robin_coin', weightGrams: 5.5, postHatchDay: 0 },
+    { id: 'robin_mouse', weightGrams: 25, postHatchDay: 14 },
+    { id: 'robin_palm', weightGrams: 77, postHatchDay: 90 },
   ],
 };
 
@@ -321,13 +332,10 @@ export function getPostHatchMilestones(species: SpeciesConfig): PostHatchMilesto
       stage: 'hatchling',
       day: emergenceDay,
       postHatchDay: 0,
-      title: emergence?.title ?? localized('Emergence', 'Schlupf'),
+      title: emergence?.title ?? 'Emergence',
       scientificSummary:
         emergence?.scientificSummary ??
-        localized(
-          'The neonate leaves the shell and the post-hatch growth clock starts.',
-          'Das Jungtier verlässt die Schale, und die Wachstumsuhr nach dem Schlupf beginnt.'
-        ),
+        'The neonate leaves the shell and the post-hatch growth clock starts.',
       audioTrigger: emergence?.audioTrigger ?? 'hatch_call',
     },
     {
@@ -494,7 +502,7 @@ export function getWeightMarks(
       epoch: currentEpoch,
       postHatchDay: (currentEpoch - hatchEpoch) / MS_PER_DAY,
       grams: weightGramsAt(species, hatchEpoch, currentEpoch),
-      title: localized('Today', 'Heute'),
+      title: 'Today',
     });
   }
 

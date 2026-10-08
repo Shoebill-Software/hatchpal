@@ -26,8 +26,11 @@ describe('Time & Simulation Engine', () => {
     lastVerifiedEpoch: baseEpoch,
     lastInteractedEpoch: baseEpoch,
     healthMultiplier: 1.0,
-    lastTurnedEpoch: baseEpoch,
+    currentTemperatureCelsius: 37.5,
+    currentHumidityPct: 55,
+    lastWarmedEpoch: baseEpoch,
     lastMistedEpoch: baseEpoch,
+    vitalityScore: 1,
     isHatched: false,
   };
 

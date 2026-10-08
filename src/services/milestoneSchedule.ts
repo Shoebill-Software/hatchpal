@@ -1,6 +1,5 @@
 import { getSortedMilestones } from '@/domain/milestones';
 import type { BiologicalMilestone, DevelopmentStage, PetInstance, SpeciesConfig, SpeciesId } from '@/domain/types';
-import type { LocaleCode } from '@/i18n/locale';
 
 import { milestoneAlertCopy } from './notificationCopy';
 
@@ -37,15 +36,13 @@ export function milestoneNotificationId(petId: string, day: number): string {
 export function selectUpcomingMilestoneAlerts(
   pet: PetInstance,
   species: SpeciesConfig,
-  locale: LocaleCode,
   nowEpoch: number
 ): MilestoneAlert[] {
   if (!Number.isFinite(pet.laidAtEpoch) || !Number.isFinite(nowEpoch)) {
     return [];
   }
 
-  const safeLocale: LocaleCode = locale === 'de' ? 'de' : 'en';
-  const nickname = pet.nickname.trim().length > 0 ? pet.nickname.trim() : species.commonName[safeLocale];
+  const nickname = pet.nickname.trim().length > 0 ? pet.nickname.trim() : species.commonName;
   const alerts: MilestoneAlert[] = [];
 
   for (const milestone of getSortedMilestones(species.milestones)) {
@@ -58,7 +55,7 @@ export function selectUpcomingMilestoneAlerts(
       continue;
     }
 
-    const copy = milestoneAlertCopy(milestone, species, safeLocale);
+    const copy = milestoneAlertCopy(milestone, species);
     if (!copy) {
       continue;
     }

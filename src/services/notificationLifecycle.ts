@@ -1,6 +1,5 @@
 import { getSpeciesConfig } from '@/data/species';
 import type { PetInstance } from '@/domain/types';
-import { resolveActiveLocale, type LocaleCode, type LocaleOverride } from '@/i18n/locale';
 
 let tail: Promise<void> = Promise.resolve();
 
@@ -17,15 +16,6 @@ function enqueue(task: () => Promise<void>): Promise<void> {
   return run;
 }
 
-async function readLocaleOverride(): Promise<LocaleOverride> {
-  try {
-    const { usePreferencesStore } = await import('@/store/usePreferencesStore');
-    return usePreferencesStore.getState().localeOverride;
-  } catch {
-    return 'system';
-  }
-}
-
 async function alertsAllowed(): Promise<boolean> {
   try {
     const { usePreferencesStore } = await import('@/store/usePreferencesStore');
@@ -33,19 +23,6 @@ async function alertsAllowed(): Promise<boolean> {
   } catch {
     return true;
   }
-}
-
-async function resolveAlertLocale(): Promise<LocaleCode> {
-  const override = await readLocaleOverride();
-  let deviceLanguage: string | null = null;
-  try {
-    const Localization = await import('expo-localization');
-    const primary = Localization.getLocales()[0];
-    deviceLanguage = primary?.languageCode ?? primary?.languageTag ?? null;
-  } catch {
-    deviceLanguage = null;
-  }
-  return resolveActiveLocale(override, deviceLanguage);
 }
 
 /** Schedules the biological timeline for a newly adopted egg. Replaces any previous alerts first. */
@@ -72,7 +49,6 @@ export function syncNotificationsForStoredPet(pet: PetInstance | null): Promise<
       await notifications.cancelAllPetNotifications();
       return;
     }
-    const locale = await resolveAlertLocale();
-    await notifications.scheduleMilestoneNotifications(pet, getSpeciesConfig(pet.speciesId), locale);
+    await notifications.scheduleMilestoneNotifications(pet, getSpeciesConfig(pet.speciesId));
   });
 }

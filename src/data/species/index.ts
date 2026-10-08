@@ -4,9 +4,11 @@ import { ballPythonConfig } from './ballPython';
 import { barnOwlConfig } from './barnOwl';
 import { silkieChickenConfig } from './chicken';
 import { commonOstrichConfig } from './commonOstrich';
+import { emuConfig } from './emu';
 import { emperorPenguinConfig } from './emperorPenguin';
 import { leopardGeckoConfig } from './gecko';
 import { mandarinDuckConfig } from './mandarinDuck';
+import { americanRobinConfig } from './robin';
 import { peregrineFalconConfig } from './peregrineFalcon';
 import { platypusConfig } from './platypus';
 import { saltwaterCrocodileConfig } from './saltwaterCrocodile';
@@ -20,8 +22,10 @@ export const SPECIES_REGISTRY: Record<SpeciesId, SpeciesConfig> = {
   peregrine_falcon: peregrineFalconConfig,
   barn_owl: barnOwlConfig,
   mandarin_duck: mandarinDuckConfig,
+  american_robin: americanRobinConfig,
   emperor_penguin: emperorPenguinConfig,
   common_ostrich: commonOstrichConfig,
+  emu: emuConfig,
   leopard_gecko: leopardGeckoConfig,
   veiled_chameleon: veiledChameleonConfig,
   ball_python: ballPythonConfig,

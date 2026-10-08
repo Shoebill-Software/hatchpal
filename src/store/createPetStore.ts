@@ -19,10 +19,10 @@ import {
   cancelScheduledPetNotifications,
   scheduleNotificationsForAdoptedPet,
 } from '@/services/notificationLifecycle';
-import { canTurnEgg } from '@/utils/eggCare';
+import { mistSubstrate, warmNest } from '@/domain/climateEngine';
 
 export const PET_STORE_PERSIST_KEY = 'hatchpal.pet-store';
-export const PET_STORE_PERSIST_VERSION = 1;
+export const PET_STORE_PERSIST_VERSION = 2;
 
 export type ClockRefreshMode = 'resume' | 'tick';
 
@@ -223,24 +223,12 @@ export function createPetStoreSlice(deps: PetStoreDeps = defaultDeps): StateCrea
     },
     recordInteraction: (kind, nowEpoch) => {
       replaceActivePet(set, get, (pet, now) => {
-        if (kind === 'turn_egg') {
-          const species = getSpeciesConfig(pet.speciesId);
-          const snapshot = resolvePetSnapshot(pet, species, now);
-          if (!canTurnEgg(snapshot, species)) {
+        if (kind === 'warm_nest' || kind === 'mist_nest') {
+          if (pet.isHatched) {
             return pet;
           }
-          return {
-            ...pet,
-            lastTurnedEpoch: now,
-            lastInteractedEpoch: now,
-          };
-        }
-        if (kind === 'mist_nest') {
-          return {
-            ...pet,
-            lastMistedEpoch: now,
-            lastInteractedEpoch: now,
-          };
+          const species = getSpeciesConfig(pet.speciesId);
+          return kind === 'warm_nest' ? warmNest(pet, species, now) : mistSubstrate(pet, species, now);
         }
         if (!pet.isHatched) {
           return pet;

@@ -16,6 +16,10 @@ describe('Pet integrity', () => {
     expect(pet.laidAtEpoch).toBe(now);
     expect(pet.lastVerifiedEpoch).toBe(now);
     expect(pet.isHatched).toBe(false);
+    expect(pet.currentTemperatureCelsius).toBe(37.5);
+    expect(pet.currentHumidityPct).toBe(55);
+    expect(pet.vitalityScore).toBeGreaterThanOrEqual(0.3);
+    expect(pet.vitalityScore).toBeLessThanOrEqual(1);
     expect(resolveSpeciesId('leopard_gecko')).toBe('leopard_gecko');
   });
 
@@ -39,6 +43,10 @@ describe('Pet integrity', () => {
     expect(recovered?.nickname).toBe('Hatchling');
     expect(recovered?.healthMultiplier).toBe(1);
     expect(recovered?.isHatched).toBe(false);
+    expect(recovered?.currentTemperatureCelsius).toBe(37.5);
+    expect(recovered?.currentHumidityPct).toBe(55);
+    expect(recovered?.vitalityScore).toBeGreaterThanOrEqual(0.3);
+    expect(recovered?.lastWarmedEpoch).toBe(now);
     expect(recovered?.laidAtEpoch).toBe(now);
   });
 

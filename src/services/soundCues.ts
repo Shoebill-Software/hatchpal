@@ -7,6 +7,8 @@ export const SOUND_EFFECT_IDS = [
   'shell_crack',
   'hatch_call',
   'heartbeat',
+  'thermal_hum',
+  'mist_whoosh',
 ] as const;
 
 export type SoundEffectId = (typeof SOUND_EFFECT_IDS)[number];

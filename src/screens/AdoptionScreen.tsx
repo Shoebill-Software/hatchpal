@@ -1,19 +1,9 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  useWindowDimensions,
-} from 'react-native';
+import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EggCarousel } from '@/components/EggCarousel';
-import { GrowthPreviewSheet } from '@/components/GrowthPreviewSheet';
 import { NestStatusBar } from '@/components/NestStatusBar';
 import { TaxonFilterBar } from '@/components/TaxonFilterBar';
 import { useNestPalette } from '@/constants/nest';
@@ -32,19 +22,16 @@ export default function AdoptionScreen() {
   const palette = useNestPalette();
   const { width } = useWindowDimensions();
   const { t } = useTranslation();
-  const params = useLocalSearchParams<{ replacing?: string }>();
-  const { pet, adoptPet } = useActivePet();
-  const replacing = params.replacing === '1' || pet != null;
+  const params = useLocalSearchParams<{ replacing?: string | string[] }>();
+  const { pet } = useActivePet();
+  const replacingParam = Array.isArray(params.replacing) ? params.replacing[0] : params.replacing;
+  const replacing = replacingParam === '1' || pet != null;
   const [selectedId, setSelectedId] = useState<SpeciesId>(SPECIES[0]?.id ?? 'silkie_chicken');
   const [filter, setFilter] = useState<RosterFilter>('all');
-  const [previewId, setPreviewId] = useState<SpeciesId | null>(null);
-  const [nickname, setNickname] = useState('Pip');
-  const [error, setError] = useState<string | null>(null);
 
   const roster = useMemo(() => speciesMatchingFilter(SPECIES, filter), [filter]);
   const cardWidth = Math.min(Math.max(width - Spacing.four * 2, 260), 420);
   const selected = roster.find((species) => species.id === selectedId) ?? roster[0] ?? SPECIES[0];
-  const previewSpecies = SPECIES.find((species) => species.id === previewId) ?? null;
 
   useEffect(() => {
     if (roster.length === 0) {
@@ -58,23 +45,8 @@ export default function AdoptionScreen() {
     }
   }, [roster, selectedId]);
 
-  const submit = () => {
-    if (!selected) {
-      setError(t('adoption.error'));
-      return;
-    }
-    try {
-      adoptPet(selected.id, nickname);
-      router.replace('/');
-    } catch {
-      setError(t('adoption.error'));
-    }
-  };
-
   return (
-    <KeyboardAvoidingView
-      style={[styles.flex, { backgroundColor: palette.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <View style={[styles.flex, { backgroundColor: palette.background }]}>
       <NestStatusBar />
       <ScrollView
         contentContainerStyle={[
@@ -83,8 +55,7 @@ export default function AdoptionScreen() {
             paddingTop: Spacing.four,
             paddingBottom: insets.bottom + Spacing.four,
           },
-        ]}
-        keyboardShouldPersistTaps="handled">
+        ]}>
         <Text style={[styles.title, { color: palette.text }]}>
           {replacing ? t('adoption.replaceTitle') : t('adoption.title')}
         </Text>
@@ -93,65 +64,22 @@ export default function AdoptionScreen() {
         </Text>
 
         <Text style={[styles.fieldLabel, { color: palette.textMuted }]}>{t('adoption.selectSpecies')}</Text>
-        <TaxonFilterBar
-          value={filter}
-          onChange={(next) => {
-            setFilter(next);
-            setError(null);
-          }}
-        />
+        <TaxonFilterBar value={filter} onChange={setFilter} />
         <EggCarousel
           species={roster}
           selectedId={selected?.id ?? selectedId}
           cardWidth={cardWidth}
-          onSelect={(id) => {
+          onSelect={setSelectedId}
+          onInspect={(id) => {
             setSelectedId(id);
-            setError(null);
+            router.push({
+              pathname: '/showcase',
+              params: { speciesId: id, replacing: replacing ? '1' : '0' },
+            });
           }}
-          onInspect={setPreviewId}
         />
-        <GrowthPreviewSheet
-          species={previewSpecies}
-          visible={previewSpecies != null}
-          onClose={() => setPreviewId(null)}
-        />
-
-        <Text style={[styles.fieldLabel, { color: palette.textMuted }]}>{t('adoption.nickname')}</Text>
-        <TextInput
-          value={nickname}
-          onChangeText={(value) => {
-            setNickname(value);
-            setError(null);
-          }}
-          maxLength={24}
-          autoCorrect={false}
-          placeholder={t('adoption.placeholder')}
-          placeholderTextColor={palette.textMuted}
-          accessibilityLabel={t('adoption.nicknameA11y')}
-          style={[
-            styles.input,
-            {
-              color: palette.text,
-              backgroundColor: palette.surface,
-              borderColor: error ? palette.warning : palette.border,
-            },
-          ]}
-        />
-        {error ? <Text style={[styles.error, { color: palette.warning }]}>{error}</Text> : null}
-
-        <Pressable
-          accessibilityRole="button"
-          onPress={submit}
-          style={({ pressed }) => [
-            styles.submit,
-            { backgroundColor: palette.action, opacity: pressed ? 0.86 : 1 },
-          ]}>
-          <Text style={[styles.submitLabel, { color: palette.actionText }]}>
-            {replacing ? t('adoption.replaceSubmit') : t('adoption.submit')}
-          </Text>
-        </Pressable>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -177,28 +105,5 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.6,
     textTransform: 'uppercase',
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 12,
-    minHeight: 48,
-    paddingHorizontal: Spacing.three,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  error: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  submit: {
-    marginTop: Spacing.two,
-    minHeight: 48,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  submitLabel: {
-    fontSize: 16,
-    fontWeight: '700',
   },
 });

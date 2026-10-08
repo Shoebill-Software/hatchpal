@@ -2,45 +2,36 @@ import { create } from 'zustand';
 import { createStore, type StateCreator, type StoreApi } from 'zustand/vanilla';
 import { persist, type StateStorage } from 'zustand/middleware';
 
-import type { LocaleOverride } from '@/i18n/locale';
 import { createMemoryStateStorage, createSafeJsonStorage } from '@/store/createPetStore';
 import { preferencesMmkvStateStorage } from '@/store/storage';
 
 export const PREFERENCES_STORE_PERSIST_KEY = 'hatchpal.preferences';
-export const PREFERENCES_STORE_PERSIST_VERSION = 1;
+export const PREFERENCES_STORE_PERSIST_VERSION = 2;
 
 export type PreferencesState = {
-  localeOverride: LocaleOverride;
   soundEnabled: boolean;
   hapticsEnabled: boolean;
   notificationsEnabled: boolean;
 };
 
 export type PreferencesStore = PreferencesState & {
-  setLocaleOverride: (localeOverride: LocaleOverride) => void;
   setSoundEnabled: (enabled: boolean) => void;
   setHapticsEnabled: (enabled: boolean) => void;
   setNotificationsEnabled: (enabled: boolean) => Promise<void>;
 };
 
 export const DEFAULT_PREFERENCES: PreferencesState = {
-  localeOverride: 'system',
   soundEnabled: true,
   hapticsEnabled: true,
   notificationsEnabled: true,
 };
 
-function isLocaleOverride(value: unknown): value is LocaleOverride {
-  return value === 'system' || value === 'en' || value === 'de';
-}
-
-/** Drops unknown or corrupt fields so a bad MMKV payload cannot crash startup. */
+/** Drops unknown or corrupt fields, including a retired language override. */
 export function sanitizePreferences(value: unknown): PreferencesState {
   const record =
     value != null && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 
   return {
-    localeOverride: isLocaleOverride(record.localeOverride) ? record.localeOverride : 'system',
     soundEnabled: typeof record.soundEnabled === 'boolean' ? record.soundEnabled : true,
     hapticsEnabled: typeof record.hapticsEnabled === 'boolean' ? record.hapticsEnabled : true,
     notificationsEnabled:
@@ -74,10 +65,6 @@ function refreshAlerts(): Promise<void> {
 function createPreferencesSlice(): StateCreator<PreferencesStore> {
   return (set) => ({
     ...DEFAULT_PREFERENCES,
-    setLocaleOverride: (localeOverride) => {
-      set({ localeOverride });
-      void refreshAlerts();
-    },
     setSoundEnabled: (soundEnabled) => {
       set({ soundEnabled });
     },
@@ -97,7 +84,6 @@ function persistPreferences(storage: StateStorage) {
     version: PREFERENCES_STORE_PERSIST_VERSION,
     storage: createSafeJsonStorage<PreferencesState>(() => storage),
     partialize: (state): PreferencesState => ({
-      localeOverride: state.localeOverride,
       soundEnabled: state.soundEnabled,
       hapticsEnabled: state.hapticsEnabled,
       notificationsEnabled: state.notificationsEnabled,

@@ -1,11 +1,12 @@
 import { getSpeciesConfig, listSpeciesConfigs, SPECIES_REGISTRY } from '@/data/species';
-import { speciesDe, speciesEn } from '@/data/species/catalogCopy';
+import { parsePortraitKey } from '@/data/species/showcase';
+import { speciesEn } from '@/data/species/catalogCopy';
 import { silkieChickenConfig } from '@/data/species/chicken';
 import { leopardGeckoConfig } from '@/data/species/gecko';
 import { speciesMatchingFilter } from '@/data/species/roster';
 import { greenSeaTurtleConfig } from '@/data/species/turtle';
-import type { DevelopmentStage, LocalizedCopy, SpeciesId } from '@/domain/types';
-import { SPECIES_IDS } from '@/domain/types';
+import type { DevelopmentStage, SpeciesId } from '@/domain/types';
+import { DIFFICULTY_TAGS, SPECIES_IDS } from '@/domain/types';
 import { calculateCurrentWeightGrams } from '@/domain/timeEngine';
 
 function expectMilestonesOrdered(milestones: { day: number }[]): void {
@@ -50,17 +51,15 @@ describe('Species data registry', () => {
     }
   });
 
-  it('stores common names and milestone copy in English and German', () => {
-    const expectCopy = (copy: LocalizedCopy): void => {
-      expect(copy.en.trim().length).toBeGreaterThan(0);
-      expect(copy.de.trim().length).toBeGreaterThan(0);
-    };
-
+  it('stores common names and milestone copy as English strings', () => {
     for (const config of Object.values(SPECIES_REGISTRY)) {
-      expectCopy(config.commonName);
+      expect(typeof config.commonName).toBe('string');
+      expect(config.commonName.trim().length).toBeGreaterThan(0);
+      expect(config.egg.description.trim().length).toBeGreaterThan(0);
+      expect(config.growth.fieldNotes.trim().length).toBeGreaterThan(0);
       for (const milestone of config.milestones) {
-        expectCopy(milestone.title);
-        expectCopy(milestone.scientificSummary);
+        expect(milestone.title.trim().length).toBeGreaterThan(0);
+        expect(milestone.scientificSummary.trim().length).toBeGreaterThan(0);
       }
     }
   });
@@ -86,6 +85,8 @@ describe('Species data registry', () => {
         'barn_owl',
         'mandarin_duck',
         'common_ostrich',
+        'emu',
+        'american_robin',
         'veiled_chameleon',
         'saltwater_crocodile',
         'ball_python',
@@ -100,6 +101,8 @@ describe('Species data registry', () => {
       mandarin_duck: 28,
       emperor_penguin: 64,
       common_ostrich: 42,
+      emu: 56,
+      american_robin: 14,
       leopard_gecko: 50,
       veiled_chameleon: 180,
       ball_python: 55,
@@ -159,17 +162,39 @@ describe('Species data registry', () => {
     expect(speciesMatchingFilter(all, 'reptilia').length).toBeGreaterThanOrEqual(5);
   });
 
-  it('mirrors new species names and field notes in both locale catalogs', () => {
-    expect(Object.keys(speciesEn).sort()).toEqual(Object.keys(speciesDe).sort());
-    expect(speciesEn['species.peregrineFalcon.name']).toBe(
-      getSpeciesConfig('peregrine_falcon').commonName.en
-    );
-    expect(speciesDe['species.platypus.name']).toBe(getSpeciesConfig('platypus').commonName.de);
+  it('gives every species a dossier with facts, habitat, and illustration keys', () => {
+    for (const config of Object.values(SPECIES_REGISTRY)) {
+      expect(config.showcase.funFacts.length).toBeGreaterThanOrEqual(2);
+      expect(config.showcase.funFacts.length).toBeLessThanOrEqual(3);
+      for (const fact of config.showcase.funFacts) {
+        expect(fact.trim().length).toBeGreaterThan(0);
+      }
+      expect(config.showcase.habitat.trim().length).toBeGreaterThan(0);
+      expect(config.showcase.temperament.trim().length).toBeGreaterThan(0);
+      expect(DIFFICULTY_TAGS).toContain(config.showcase.difficultyTag);
+      expect(config.showcase.babyIllustration.trim().length).toBeGreaterThan(0);
+      expect(config.showcase.adultIllustration.trim().length).toBeGreaterThan(0);
+      expect(parsePortraitKey(config.showcase.babyIllustration)).toEqual({
+        speciesId: config.id,
+        stage: 'baby',
+      });
+      expect(parsePortraitKey(config.showcase.adultIllustration)).toEqual({
+        speciesId: config.id,
+        stage: 'adult',
+      });
+    }
+    expect(parsePortraitKey('not-a-portrait')).toBeNull();
+    expect(parsePortraitKey('silkie_chicken.egg')).toBeNull();
+  });
+
+  it('keeps expanded roster names and field notes aligned with the English catalog', () => {
+    expect(speciesEn['species.peregrineFalcon.name']).toBe(getSpeciesConfig('peregrine_falcon').commonName);
+    expect(speciesEn['species.platypus.name']).toBe(getSpeciesConfig('platypus').commonName);
     expect(speciesEn['species.saltwaterCrocodile.notes']).toBe(
-      getSpeciesConfig('saltwater_crocodile').growth.fieldNotes.en
+      getSpeciesConfig('saltwater_crocodile').growth.fieldNotes
     );
-    expect(speciesDe['species.emperorPenguin.juvenile']).toBe(
-      getSpeciesConfig('emperor_penguin').juvenile.title.de
-    );
+    expect(speciesEn['species.emperorPenguin.juvenile']).toBe(getSpeciesConfig('emperor_penguin').juvenile.title);
+    expect(getSpeciesConfig('emu').commonName).toBe('Emu');
+    expect(getSpeciesConfig('american_robin').commonName).toBe('American Robin');
   });
 });

@@ -3,6 +3,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import * as SystemUI from 'expo-system-ui';
 import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { NestStatusBar } from '@/components/NestStatusBar';
@@ -12,9 +13,11 @@ SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   return (
-    <I18nProvider>
-      <RootNavigator />
-    </I18nProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <I18nProvider>
+        <RootNavigator />
+      </I18nProvider>
+    </GestureHandlerRootView>
   );
 }
 
@@ -53,6 +56,16 @@ function RootNavigator() {
             headerShown: true,
             title: t('nav.adoption'),
             presentation: 'modal',
+          }}
+        />
+        <Stack.Screen
+          name="showcase"
+          options={{
+            headerShown: false,
+            presentation: 'fullScreenModal',
+            animation: 'slide_from_bottom',
+            gestureEnabled: true,
+            contentStyle: { backgroundColor: '#0C0A09' },
           }}
         />
       </Stack>

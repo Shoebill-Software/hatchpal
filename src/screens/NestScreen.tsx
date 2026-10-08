@@ -1,47 +1,56 @@
-import { useState, useRef } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AccessibilityInfo, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, {
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
+import Svg, { Path } from 'react-native-svg';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ChangeEggDialog } from '@/components/ChangeEggDialog';
-import { NestStatusBar } from '@/components/NestStatusBar';
-import { SettingsModal } from '@/components/SettingsModal';
-import { EggContainer, type EggContainerHandle } from '@/components/EggContainer';
+import { ClimateControls } from '@/components/ClimateControls';
+import { EGG_FRAME, EggContainer } from '@/components/EggContainer';
 import { HatchingCeremony } from '@/components/HatchingCeremony';
 import { HatchlingContainer } from '@/components/HatchlingContainer';
-import { MetricCard } from '@/components/MetricCard';
+import { NestStatusBar } from '@/components/NestStatusBar';
+import { SettingsModal } from '@/components/SettingsModal';
 import { useNestPalette } from '@/constants/nest';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { readClimate, caredHeartRate } from '@/domain/climateEngine';
 import { resolveHatchEpoch } from '@/domain/timeEngine';
 import { useActivePet } from '@/hooks/useActivePet';
-import { useNestPipAudio } from '@/hooks/useSoundEffects';
+import { useNestPipAudio, useSoundEffects } from '@/hooks/useSoundEffects';
 import {
-  formatAgo,
   formatBiologicalWeight,
   formatCarePhrase,
-  formatLocaleDate,
+  formatCompactDate,
   formatPostHatchAge,
-  formatTurnPhrase,
   getElapsedSpan,
-  lifeStageBadgeKey,
   lifeStageLabelKey,
-  localizeCopy,
   useTranslation,
 } from '@/i18n';
-import type { TranslateFn } from '@/i18n/translate';
-import type { BiologicalWeight } from '@/i18n/format';
 import { ImpactFeedbackStyle, triggerImpact } from '@/services/hapticFeedback';
-import { canTurnEgg, speciesRequiresTurning } from '@/utils/eggCare';
+
+const HEART = '#C45B5B';
+const FIGURE = { width: 168, height: 188 };
 
 export default function NestScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const palette = useNestPalette();
-  const { t, locale } = useTranslation();
-  const eggRef = useRef<EggContainerHandle>(null);
+  const { t } = useTranslation();
+  const { play } = useSoundEffects();
+  const mistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [warmPulse, setWarmPulse] = useState(0);
+  const [mistPulse, setMistPulse] = useState(0);
   const [changeEggVisible, setChangeEggVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
+  const [heroBox, setHeroBox] = useState({ width: 0, height: 0 });
   const {
     pet,
     species,
@@ -55,6 +64,19 @@ export default function NestScreen() {
   } = useActivePet();
   useNestPipAudio(Boolean(snapshot?.isPipped), snapshot?.currentMilestone.stage ?? null);
 
+  useEffect(() => {
+    return () => {
+      if (mistTimer.current != null) {
+        clearTimeout(mistTimer.current);
+      }
+    };
+  }, []);
+
+  const onHeroLayout = useCallback((event: LayoutChangeEvent) => {
+    const { width, height } = event.nativeEvent.layout;
+    setHeroBox((current) => (current.width === width && current.height === height ? current : { width, height }));
+  }, []);
+
   if (!hasHydrated) {
     return (
       <View style={[styles.flex, { backgroundColor: palette.background }]}>
@@ -67,28 +89,24 @@ export default function NestScreen() {
     return (
       <View style={[styles.flex, { backgroundColor: palette.background }]}>
         <NestStatusBar />
-        <NestTopBar onOpenSettings={() => setSettingsVisible(true)} />
-        <View
-          style={[
-            styles.flex,
-            styles.center,
-            {
-              paddingBottom: insets.bottom + BottomTabInset + Spacing.three,
-              paddingHorizontal: Spacing.four,
-            },
-          ]}>
-          <Text style={[styles.emptyTitle, { color: palette.text }]}>{t('nest.emptyTitle')}</Text>
-          <Text style={[styles.emptyBody, { color: palette.textMuted }]}>{t('nest.emptyBody')}</Text>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => router.push('/adopt')}
-            style={({ pressed }) => [
-              styles.primaryButton,
-              { backgroundColor: palette.action, opacity: pressed ? 0.86 : 1 },
-            ]}>
-            <Text style={[styles.primaryButtonLabel, { color: palette.actionText }]}>{t('nest.adoptEgg')}</Text>
-          </Pressable>
-        </View>
+        <SafeAreaView style={styles.flex} edges={['top', 'left', 'right']}>
+          <View style={[styles.flex, styles.frame, { paddingBottom: BottomTabInset }]}>
+            <NestTopBar title={t('common.hatchpal')} onOpenSettings={() => setSettingsVisible(true)} />
+            <View style={[styles.flex, styles.center, { paddingHorizontal: Spacing.four }]}>
+              <Text style={[styles.emptyTitle, { color: palette.text }]}>{t('nest.emptyTitle')}</Text>
+              <Text style={[styles.emptyBody, { color: palette.textMuted }]}>{t('nest.emptyBody')}</Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => router.push('/adopt')}
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  { backgroundColor: palette.action, opacity: pressed ? 0.86 : 1 },
+                ]}>
+                <Text style={[styles.primaryButtonLabel, { color: palette.actionText }]}>{t('nest.adoptEgg')}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </SafeAreaView>
         <SettingsModal visible={settingsVisible} onClose={() => setSettingsVisible(false)} />
       </View>
     );
@@ -97,27 +115,21 @@ export default function NestScreen() {
   const hatched = pet.isHatched;
   const incubationDay = Math.min(snapshot.ageDays, species.incubationDays);
   const progressPct = Math.round((hatched ? snapshot.maturationProgress : snapshot.progress) * 100);
-  const turningAllowed = canTurnEgg(snapshot, species);
-  const showTurnAction = speciesRequiresTurning(species);
-  const heartDetected = snapshot.currentHeartRate > 0;
-  const hasTurned = pet.lastTurnedEpoch > pet.laidAtEpoch;
-  const turnSpan = getElapsedSpan(pet.lastTurnedEpoch, nowEpoch);
-  const turnPhrase = !turningAllowed ? t('turn.lockdown') : formatTurnPhrase(hasTurned, turnSpan, t);
-  const badgeLabel = !showTurnAction
-    ? t('turn.noTurningBadge')
-    : !turningAllowed
-      ? t('turn.lockdownBadge')
-      : null;
-  const eggHint = !showTurnAction ? t('turn.noTurningHint') : turnPhrase;
-  const commonName = localizeCopy(species.commonName, locale);
+  const climate = readClimate(pet, species, nowEpoch);
+  const heartRate = caredHeartRate(snapshot.currentHeartRate, climate.vitalityScore);
+  const heartDetected = heartRate > 0;
   const stageLabel = t(lifeStageLabelKey(snapshot.lifeStage));
-  const milestoneTitle = hatched ? stageLabel : localizeCopy(snapshot.currentMilestone.title, locale);
-  const hatchLabel = formatLocaleDate(resolveHatchEpoch(pet, species), locale);
-  const mistSpan = getElapsedSpan(pet.lastMistedEpoch, nowEpoch);
-  const incubationStatus = snapshot.isReadyToHatch ? 'optimal' : isClockTampered ? 'warning' : 'optimal';
-  const weight = formatBiologicalWeight(snapshot.currentWeightGrams, locale);
-  const hatchMass = formatBiologicalWeight(species.hatchWeightGrams, locale);
-  const adultMass = formatBiologicalWeight(species.adultWeightGrams, locale);
+  const hatchLabel = formatCompactDate(resolveHatchEpoch(pet, species));
+  const dayValue = t('metric.spanOf', {
+    day: Math.floor(incubationDay),
+    total: species.incubationDays,
+  });
+  const heartValue = heartDetected ? `${heartRate} ${t('common.bpm')}` : t('metric.none');
+  const climateValue = t('metric.climatePair', {
+    temp: climate.temperatureCelsius.toFixed(1),
+    humidity: Math.round(climate.humidityPct),
+  });
+  const weight = formatBiologicalWeight(snapshot.currentWeightGrams);
   const weightUnit = t(weight.unit === 'kg' ? 'weight.kilograms' : 'weight.grams');
   const daysLeft = snapshot.daysUntilAdult;
   const fedPhrase = formatCarePhrase(
@@ -133,6 +145,30 @@ export default function NestScreen() {
     t
   );
   const changeLabel = hatched ? t('nest.changeCompanion') : t('nest.changeEgg');
+  const eggScale = fitToBox(heroBox, EGG_FRAME);
+  const figureScale = fitToBox(heroBox, FIGURE);
+  const holdHint = t('nest.holdToCandle');
+
+  const warmNest = () => {
+    recordInteraction('warm_nest');
+    setWarmPulse((pulse) => pulse + 1);
+    void triggerImpact(ImpactFeedbackStyle.Medium);
+    play('thermal_hum');
+  };
+
+  const mistSubstrate = () => {
+    recordInteraction('mist_nest');
+    setMistPulse((pulse) => pulse + 1);
+    void triggerImpact(ImpactFeedbackStyle.Light);
+    play('mist_whoosh');
+    if (mistTimer.current != null) {
+      clearTimeout(mistTimer.current);
+    }
+    mistTimer.current = setTimeout(() => {
+      void triggerImpact(ImpactFeedbackStyle.Light);
+      mistTimer.current = null;
+    }, 110);
+  };
 
   const confirmChangeEgg = () => {
     setChangeEggVisible(false);
@@ -140,260 +176,113 @@ export default function NestScreen() {
     router.push({ pathname: '/adopt', params: { replacing: '1' } });
   };
 
+  const leftTop: Reading = hatched
+    ? { label: t('nest.ageLabel'), value: formatPostHatchAge(snapshot.postHatchAgeDays, t) }
+    : {
+        label: t('nest.dayLabel'),
+        value: dayValue,
+        accessibilityLabel: `${t('nest.dayLabel')}, ${dayValue}. ${t('nest.incubationA11y', { percent: progressPct })}`,
+      };
+  const leftBottom: Reading = hatched
+    ? { label: t('nest.stageLabel'), value: stageLabel }
+    : { label: t('nest.hatchLabel'), value: hatchLabel };
+  const rightTop: Reading = hatched
+    ? { label: t('nest.weightLabel'), value: `${weight.value} ${weightUnit}` }
+    : {
+        label: t('nest.heartLabel'),
+        value: heartValue,
+        dot: heartDetected ? { color: HEART, pulse: true } : undefined,
+      };
+  const rightBottom: Reading = hatched
+    ? {
+        label: t('nest.maturityLabel'),
+        value: daysLeft === 0 ? t('metric.mature') : `${daysLeft} ${t(daysLeft === 1 ? 'metric.dayUnit' : 'metric.daysUnit')}`,
+      }
+    : {
+        label: t('nest.climateLabel'),
+        value: climateValue,
+        dot: { color: climate.inSweetSpot ? palette.optimal : palette.warning, pulse: false },
+      };
+
   return (
     <View style={[styles.flex, { backgroundColor: palette.background }]}>
       <NestStatusBar />
-      <NestTopBar onOpenSettings={() => setSettingsVisible(true)} />
-      <ScrollView
-        contentContainerStyle={[
-          styles.content,
-          {
-            paddingTop: Spacing.two,
-            paddingBottom: insets.bottom + BottomTabInset + Spacing.four,
-          },
-        ]}
-        showsVerticalScrollIndicator={false}>
-        {isClockTampered ? (
-          <View
-            accessibilityRole="alert"
-            style={[
-              styles.banner,
-              { backgroundColor: palette.banner, borderColor: palette.bannerBorder },
-            ]}>
-            <Text style={[styles.bannerTitle, { color: palette.bannerText }]}>{t('clock.paused')}</Text>
-          </View>
-        ) : null}
-
-        <View style={styles.header}>
-          <View style={styles.headerRow}>
-            <Text style={[styles.nickname, { color: palette.text }]}>{pet.nickname}</Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={changeLabel}
-              onPress={() => setChangeEggVisible(true)}
-              hitSlop={8}
-              style={({ pressed }) => [styles.changeEggButton, { opacity: pressed ? 0.7 : 1 }]}>
-              <Text style={[styles.changeEggLabel, { color: palette.textMuted }]}>{changeLabel}</Text>
-            </Pressable>
-          </View>
-          <Text style={[styles.scientific, { color: palette.textMuted }]}>{species.scientificName}</Text>
-          <Text style={[styles.milestone, { color: palette.text }]}>{milestoneTitle}</Text>
-          <View
-            accessible
-            accessibilityRole="progressbar"
-            accessibilityValue={{ min: 0, max: 100, now: progressPct }}
-            accessibilityLabel={
-              hatched
-                ? t('nest.maturationA11y', { percent: progressPct })
-                : t('nest.incubationA11y', { percent: progressPct })
-            }
-            style={[styles.progressTrack, { backgroundColor: palette.progressTrack }]}>
-            <View
-              style={[
-                styles.progressFill,
-                { width: `${progressPct}%`, backgroundColor: palette.progressFill },
-              ]}
-            />
-          </View>
-          <Text style={[styles.progressLabel, { color: palette.textMuted }]}>
-            {hatched
-              ? t('nest.maturationPercent', { percent: progressPct })
-              : t('nest.incubationPercent', { percent: progressPct })}
-          </Text>
-        </View>
-
-        {hatched ? (
-          <HatchlingContainer
-            speciesId={species.id}
-            maturationProgress={snapshot.maturationProgress}
-            accessibilityLabel={t('hatchling.a11y', { name: pet.nickname, stage: stageLabel })}
-            hint={t('care.chirpHint')}
-            scaleLabel={t('care.growthScale', {
-              hatch: massLabel(hatchMass, t),
-              adult: massLabel(adultMass, t),
-            })}
-            onPet={() => {
-              recordInteraction('pet');
-            }}
+      <SafeAreaView style={styles.flex} edges={['top', 'left', 'right']}>
+        <View style={[styles.flex, styles.frame, { paddingBottom: BottomTabInset }]}>
+          <NestTopBar
+            title={pet.nickname}
+            onOpenSettings={() => setSettingsVisible(true)}
+            accessory={{ label: changeLabel, onPress: () => setChangeEggVisible(true) }}
           />
-        ) : (
-          <EggContainer
-            ref={eggRef}
-            snapshot={snapshot}
-            species={species}
-            healthMultiplier={pet.healthMultiplier}
-            canTurn={turningAllowed}
-            hint={eggHint}
-            badgeLabel={badgeLabel}
-            accessibilityLabel={t('egg.a11y', { name: commonName, status: eggHint })}
-            accessibilityHint={turningAllowed ? t('turn.tapHint') : t('turn.lockedHint')}
-            onTurnEgg={() => {
-              recordInteraction('turn_egg');
-            }}
-          />
-        )}
 
-        {hatched ? (
-          <View style={styles.grid}>
-            <View style={styles.gridRow}>
-              <MetricCard
-                label={t('metric.age')}
-                value={formatPostHatchAge(snapshot.postHatchAgeDays, t)}
-                status="optimal"
-              />
-              <MetricCard
-                label={t('metric.currentWeight')}
-                value={weight.value}
-                unit={weightUnit}
-                status="optimal"
-              />
-            </View>
-            <View style={styles.gridRow}>
-              <MetricCard
-                label={t('metric.lifeStage')}
-                value={stageLabel}
-                badgeLabel={t(lifeStageBadgeKey(snapshot.lifeStage))}
-                status={snapshot.lifeStage === 'adult' ? 'optimal' : 'neutral'}
-              />
-              <MetricCard
-                label={t('metric.daysToMaturity')}
-                value={daysLeft === 0 ? t('metric.mature') : daysLeft}
-                unit={daysLeft === 0 ? undefined : t(daysLeft === 1 ? 'metric.dayUnit' : 'metric.daysUnit')}
-                status={daysLeft === 0 ? 'optimal' : 'neutral'}
-              />
-            </View>
-          </View>
-        ) : (
-          <View style={styles.grid}>
-            <View style={styles.gridRow}>
-              <MetricCard
-                label={t('metric.incubationDay')}
-                value={t('metric.dayOf', { day: incubationDay, total: species.incubationDays })}
-                status={incubationStatus}
-              />
-              <MetricCard
-                label={t('metric.heartRate')}
-                value={heartDetected ? snapshot.currentHeartRate : t('metric.undetected')}
-                unit={heartDetected ? t('common.bpm') : undefined}
-                status={heartDetected ? 'optimal' : 'neutral'}
-              />
-            </View>
-            <View style={styles.gridRow}>
-              <MetricCard
-                label={t('metric.temperature')}
-                value={species.temperatureTargetCelsius.toFixed(1)}
-                unit="°C"
-                status="optimal"
-              />
-              <MetricCard
-                label={t('metric.humidity')}
-                value={species.humidityTargetPct}
-                unit="%"
-                status="optimal"
-              />
-            </View>
-            <MetricCard
-              label={t('metric.estimatedHatch')}
-              value={hatchLabel}
-              status={snapshot.isReadyToHatch ? 'optimal' : 'neutral'}
-            />
-          </View>
-        )}
+          {isClockTampered ? (
+            <Text accessibilityRole="alert" numberOfLines={2} style={[styles.clock, { color: palette.bannerText }]}>
+              {t('clock.paused')}
+            </Text>
+          ) : null}
 
-        <View style={styles.actions}>
-          {hatched ? (
-            <>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityHint={fedPhrase}
-                onPress={() => {
+          <View style={styles.heroRow}>
+            <TelemetryColumn align="end" top={leftTop} bottom={leftBottom} />
+            <View style={styles.hero} onLayout={onHeroLayout}>
+              {hatched ? (
+                <HatchlingContainer
+                  speciesId={species.id}
+                  maturationProgress={snapshot.maturationProgress}
+                  accessibilityLabel={t('hatchling.a11y', { name: pet.nickname, stage: stageLabel })}
+                  hint={t('care.chirpHint')}
+                  scaleLabel=""
+                  showCaption={false}
+                  width={Math.round(FIGURE.width * figureScale)}
+                  height={Math.round(FIGURE.height * figureScale)}
+                  onPet={() => {
+                    recordInteraction('pet');
+                  }}
+                />
+              ) : (
+                <EggContainer
+                  snapshot={snapshot}
+                  species={species}
+                  vitalityScore={climate.vitalityScore}
+                  inSweetSpot={climate.inSweetSpot}
+                  heartRate={heartRate}
+                  warmPulse={warmPulse}
+                  mistPulse={mistPulse}
+                  fitScale={eggScale}
+                  accessibilityLabel={t('egg.a11y', { name: species.commonName, status: holdHint })}
+                  accessibilityHint={t('nest.eggGestureHint')}
+                  candleLabel={t('nest.candleEgg')}
+                  onCandle={() => router.push('/candling')}
+                />
+              )}
+            </View>
+            <TelemetryColumn align="start" top={rightTop} bottom={rightBottom} />
+          </View>
+
+          <View style={styles.dock}>
+            {hatched ? (
+              <CareDock
+                fedLabel={t('care.feed')}
+                weighLabel={t('care.weigh')}
+                fedHint={fedPhrase}
+                weighHint={weighPhrase}
+                onFeed={() => {
                   recordInteraction('feed');
                   void triggerImpact(ImpactFeedbackStyle.Light);
                 }}
-                style={({ pressed }) => [
-                  styles.actionButton,
-                  { backgroundColor: palette.action, opacity: pressed ? 0.88 : 1 },
-                ]}>
-                <Text style={[styles.actionLabel, { color: palette.actionText }]}>{t('care.feed')}</Text>
-                <Text style={[styles.actionMeta, { color: palette.actionText }]}>{fedPhrase}</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityHint={weighPhrase}
-                onPress={() => {
+                onWeigh={() => {
                   recordInteraction('weigh');
                   void triggerImpact(ImpactFeedbackStyle.Light);
                 }}
-                style={({ pressed }) => [
-                  styles.actionButton,
-                  { backgroundColor: palette.secondaryAction, opacity: pressed ? 0.88 : 1 },
-                ]}>
-                <Text style={[styles.actionLabel, { color: palette.actionText }]}>{t('care.weigh')}</Text>
-                <Text style={[styles.actionMeta, { color: palette.actionText }]}>{weighPhrase}</Text>
-              </Pressable>
-            </>
-          ) : showTurnAction ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ disabled: !turningAllowed }}
-              accessibilityHint={turnPhrase}
-              disabled={!turningAllowed}
-              onPress={() => eggRef.current?.turn()}
-              style={({ pressed }) => [
-                styles.actionButton,
-                {
-                  backgroundColor: turningAllowed ? palette.action : palette.actionDisabled,
-                  opacity: pressed && turningAllowed ? 0.88 : 1,
-                },
-              ]}>
-              <Text
-                style={[
-                  styles.actionLabel,
-                  { color: turningAllowed ? palette.actionText : palette.actionDisabledText },
-                ]}>
-                {t('turn.action')}
-              </Text>
-              <Text
-                style={[
-                  styles.actionMeta,
-                  { color: turningAllowed ? palette.actionText : palette.actionDisabledText },
-                ]}>
-                {turnPhrase}
-              </Text>
-            </Pressable>
-          ) : (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => {
-                recordInteraction('mist_nest');
-                void triggerImpact(ImpactFeedbackStyle.Light);
-              }}
-              style={({ pressed }) => [
-                styles.actionButton,
-                { backgroundColor: palette.secondaryAction, opacity: pressed ? 0.88 : 1 },
-              ]}>
-              <Text style={[styles.actionLabel, { color: palette.actionText }]}>{t('nest.mistNest')}</Text>
-              <Text style={[styles.actionMeta, { color: palette.actionText }]}>
-                {t('nest.lastMist', { time: formatAgo(mistSpan, t) })}
-              </Text>
-            </Pressable>
-          )}
-
-          {hatched ? null : (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t('nest.candleEgg')}
-              accessibilityHint={t('nest.candleHint')}
-              onPress={() => router.push('/candling')}
-              style={({ pressed }) => [
-                styles.candlingButton,
-                { borderColor: palette.border, opacity: pressed ? 0.85 : 1 },
-              ]}>
-              <Text style={[styles.candlingLabel, { color: palette.text }]}>{t('nest.candleEgg')}</Text>
-            </Pressable>
-          )}
+              />
+            ) : (
+              <ClimateControls species={species} climate={climate} onWarm={warmNest} onMist={mistSubstrate} />
+            )}
+            <Text maxFontSizeMultiplier={1.2} style={[styles.hint, { color: palette.textMuted }]}>
+              {hatched ? t('care.chirpHint') : holdHint}
+            </Text>
+          </View>
         </View>
-      </ScrollView>
+      </SafeAreaView>
 
       <HatchingCeremony
         visible={snapshot.isReadyToHatch && !pet.isHatched}
@@ -414,71 +303,292 @@ export default function NestScreen() {
   );
 }
 
-function NestTopBar({ onOpenSettings }: { onOpenSettings: () => void }) {
-  const insets = useSafeAreaInsets();
+interface Reading {
+  label: string;
+  value: string;
+  accessibilityLabel?: string;
+  dot?: { color: string; pulse: boolean };
+}
+
+function NestTopBar({
+  title,
+  onOpenSettings,
+  accessory,
+}: {
+  title: string;
+  onOpenSettings: () => void;
+  accessory?: { label: string; onPress: () => void };
+}) {
   const palette = useNestPalette();
   const { t } = useTranslation();
 
   return (
-    <View style={[styles.topBar, { paddingTop: insets.top + Spacing.two }]}>
-      <Text style={[styles.emptyKicker, { color: palette.textMuted }]}>{t('common.hatchpal')}</Text>
+    <View style={styles.topBar}>
+      <Text
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.7}
+        maxFontSizeMultiplier={1.2}
+        style={[styles.wordmark, { color: palette.text }]}>
+        {title}
+      </Text>
+      {accessory ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={accessory.label}
+          onPress={accessory.onPress}
+          hitSlop={8}
+          style={({ pressed }) => [styles.changeHit, { opacity: pressed ? 0.6 : 1 }]}>
+          <Text numberOfLines={1} maxFontSizeMultiplier={1.2} style={[styles.changeLabel, { color: palette.textMuted }]}>
+            {accessory.label}
+          </Text>
+        </Pressable>
+      ) : null}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={t('settings.open')}
         onPress={onOpenSettings}
         hitSlop={8}
-        style={({ pressed }) => [
-          styles.settingsButton,
-          {
-            backgroundColor: palette.surface,
-            borderColor: palette.border,
-            opacity: pressed ? 0.72 : 1,
-          },
-        ]}>
+        style={({ pressed }) => [styles.settingsHit, { opacity: pressed ? 0.55 : 1 }]}>
         <SymbolView
           name={{ ios: 'gearshape', android: 'settings', web: 'settings' }}
           size={20}
-          tintColor={palette.text}
-          fallback={<Text style={[styles.settingsGlyph, { color: palette.text }]}>⚙</Text>}
+          tintColor={palette.textMuted}
+          fallback={<Text style={[styles.settingsGlyph, { color: palette.textMuted }]}>⚙</Text>}
         />
       </Pressable>
     </View>
   );
 }
 
-function massLabel(weight: BiologicalWeight, translate: TranslateFn): string {
-  const unit = translate(weight.unit === 'kg' ? 'weight.kilograms' : 'weight.grams');
-  return `${weight.value} ${unit}`;
+function TelemetryColumn({
+  align,
+  top,
+  bottom,
+}: {
+  align: 'start' | 'end';
+  top: Reading;
+  bottom: Reading;
+}) {
+  return (
+    <View style={[styles.flank, align === 'end' ? styles.flankEnd : styles.flankStart]}>
+      <ReadingBlock align={align} reading={top} />
+      <ReadingBlock align={align} reading={bottom} />
+    </View>
+  );
+}
+
+function ReadingBlock({ align, reading }: { align: 'start' | 'end'; reading: Reading }) {
+  const palette = useNestPalette();
+  const ended = align === 'end';
+
+  return (
+    <View
+      accessible
+      accessibilityLabel={reading.accessibilityLabel ?? `${reading.label}, ${reading.value}`}
+      style={styles.reading}>
+      <Text
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.72}
+        maxFontSizeMultiplier={1.15}
+        style={[styles.readingLabel, ended ? styles.alignEnd : styles.alignStart, { color: palette.textMuted }]}>
+        {reading.label}
+      </Text>
+      <View style={[styles.valueRow, ended ? styles.flankEnd : styles.flankStart]}>
+        {reading.dot ? <PulseDot color={reading.dot.color} pulse={reading.dot.pulse} /> : null}
+        <Text
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.7}
+          maxFontSizeMultiplier={1.15}
+          style={[styles.readingValue, ended ? styles.alignEnd : styles.alignStart, { color: palette.text }]}>
+          {reading.value}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function PulseDot({ color, pulse }: { color: string; pulse: boolean }) {
+  const reduceMotion = useReduceMotion();
+  const opacity = useSharedValue(1);
+
+  useEffect(() => {
+    if (!pulse || reduceMotion) {
+      cancelAnimation(opacity);
+      opacity.value = 1;
+      return;
+    }
+    opacity.value = withRepeat(withSequence(withTiming(0.35, { duration: 700 }), withTiming(1, { duration: 700 })), -1, false);
+    return () => {
+      cancelAnimation(opacity);
+    };
+  }, [opacity, pulse, reduceMotion]);
+
+  const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
+
+  return <Animated.View style={[styles.dot, { backgroundColor: color }, style]} />;
+}
+
+function CareDock({
+  fedLabel,
+  weighLabel,
+  fedHint,
+  weighHint,
+  onFeed,
+  onWeigh,
+}: {
+  fedLabel: string;
+  weighLabel: string;
+  fedHint: string;
+  weighHint: string;
+  onFeed: () => void;
+  onWeigh: () => void;
+}) {
+  return (
+    <View style={styles.careRow}>
+      <MicroAction label={fedLabel} hint={fedHint} onPress={onFeed} glyph="feed" />
+      <MicroAction label={weighLabel} hint={weighHint} onPress={onWeigh} glyph="weigh" />
+    </View>
+  );
+}
+
+function MicroAction({
+  label,
+  hint,
+  onPress,
+  glyph,
+}: {
+  label: string;
+  hint: string;
+  onPress: () => void;
+  glyph: 'feed' | 'weigh';
+}) {
+  const palette = useNestPalette();
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityHint={hint}
+      onPress={onPress}
+      style={({ pressed }) => [styles.micro, { opacity: pressed ? 0.62 : 1, transform: [{ scale: pressed ? 0.96 : 1 }] }]}>
+      <View style={[styles.microGlyph, { borderColor: palette.border }]}>
+        {glyph === 'feed' ? <FeedGlyph color={palette.text} /> : <WeighGlyph color={palette.text} />}
+      </View>
+      <Text numberOfLines={1} maxFontSizeMultiplier={1.15} style={[styles.microHint, { color: palette.textMuted }]}>
+        {hint}
+      </Text>
+    </Pressable>
+  );
+}
+
+function FeedGlyph({ color }: { color: string }) {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 24 24">
+      <Path
+        d="M12 20 C8 16.5 6.5 13 8.5 10.5 C10 12 11 13.2 12 14.5 C13 13.2 14 12 15.5 10.5 C17.5 13 16 16.5 12 20 Z"
+        stroke={color}
+        strokeWidth={1.35}
+        strokeLinejoin="round"
+        fill="none"
+      />
+      <Path d="M12 14.5 C12 10 13.5 6.5 17 4.5" stroke={color} strokeWidth={1.35} strokeLinecap="round" fill="none" />
+    </Svg>
+  );
+}
+
+function WeighGlyph({ color }: { color: string }) {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 24 24">
+      <Path d="M12 4 V15" stroke={color} strokeWidth={1.35} strokeLinecap="round" />
+      <Path d="M5 8 H19" stroke={color} strokeWidth={1.35} strokeLinecap="round" />
+      <Path d="M5 8 L2.5 13.5 H7.5 Z" stroke={color} strokeWidth={1.2} strokeLinejoin="round" fill="none" />
+      <Path d="M19 8 L16.5 13.5 H21.5 Z" stroke={color} strokeWidth={1.2} strokeLinejoin="round" fill="none" />
+      <Path d="M8 18.5 H16" stroke={color} strokeWidth={1.35} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+function fitToBox(
+  box: { width: number; height: number },
+  frame: { width: number; height: number }
+): number {
+  if (box.width <= 0 || box.height <= 0) {
+    return 0.84;
+  }
+  return Math.max(0.46, Math.min(1, (box.width - 4) / frame.width, (box.height - 4) / frame.height));
+}
+
+function useReduceMotion(): boolean {
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((enabled) => {
+        if (active) {
+          setReduceMotion(enabled);
+        }
+      })
+      .catch(() => undefined);
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', (enabled) => {
+      setReduceMotion(enabled);
+    });
+    return () => {
+      active = false;
+      subscription.remove();
+    };
+  }, []);
+
+  return reduceMotion;
 }
 
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
+  frame: {
+    width: '100%',
+    maxWidth: MaxContentWidth,
+    alignSelf: 'center',
+    overflow: 'hidden',
+  },
   center: {
     justifyContent: 'center',
     alignItems: 'center',
     gap: Spacing.three,
   },
-  content: {
-    paddingHorizontal: Spacing.three,
-    gap: Spacing.three,
-    maxWidth: MaxContentWidth,
-    width: '100%',
-    alignSelf: 'center',
-  },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: Spacing.three,
-    paddingBottom: Spacing.one,
+    paddingTop: Spacing.one,
+    minHeight: 48,
+    gap: Spacing.two,
   },
-  settingsButton: {
+  wordmark: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '500',
+    letterSpacing: 2.8,
+    textTransform: 'uppercase',
+  },
+  changeHit: {
+    maxWidth: 108,
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  changeLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    letterSpacing: 0.2,
+  },
+  settingsHit: {
     width: 44,
     height: 44,
-    borderRadius: 22,
-    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -486,105 +596,108 @@ const styles = StyleSheet.create({
     fontSize: 18,
     lineHeight: 22,
   },
-  header: {
-    gap: 6,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing.two,
-  },
-  nickname: {
-    flex: 1,
-    fontSize: 32,
-    lineHeight: 38,
-    fontWeight: '700',
-  },
-  changeEggButton: {
-    minHeight: 36,
-    paddingHorizontal: Spacing.two,
-    justifyContent: 'center',
-  },
-  changeEggLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  scientific: {
-    fontSize: 14,
-    fontStyle: 'italic',
+  clock: {
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: '500',
+    textAlign: 'center',
+    paddingHorizontal: Spacing.four,
+    marginBottom: 2,
   },
-  milestone: {
-    marginTop: 4,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  progressTrack: {
-    marginTop: Spacing.two,
-    height: 10,
-    borderRadius: 999,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 999,
-  },
-  banner: {
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: Spacing.three,
-    gap: 4,
-  },
-  bannerTitle: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: '700',
-  },
-  progressLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  grid: {
-    gap: Spacing.two,
-  },
-  gridRow: {
+  heroRow: {
+    flex: 1,
+    minHeight: 0,
     flexDirection: 'row',
-    gap: Spacing.two,
+    alignItems: 'center',
+    paddingHorizontal: Spacing.two,
   },
-  actions: {
-    gap: Spacing.two,
+  flank: {
+    width: 96,
+    flexShrink: 1,
+    justifyContent: 'center',
+    gap: 22,
   },
-  actionButton: {
-    minHeight: 58,
-    borderRadius: 14,
+  flankEnd: {
+    alignItems: 'flex-end',
+  },
+  flankStart: {
+    alignItems: 'flex-start',
+  },
+  hero: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    gap: 2,
   },
-  actionLabel: {
-    fontSize: 16,
-    fontWeight: '700',
-    textAlign: 'center',
+  reading: {
+    maxWidth: '100%',
+    gap: 3,
   },
-  actionMeta: {
+  readingLabel: {
+    fontSize: 9,
+    fontWeight: '500',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+  },
+  readingValue: {
+    flexShrink: 1,
+    fontSize: 14,
+    fontWeight: '400',
+    letterSpacing: 0.15,
+  },
+  valueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    maxWidth: '100%',
+  },
+  alignEnd: {
+    textAlign: 'right',
+  },
+  alignStart: {
+    textAlign: 'left',
+  },
+  dot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+  },
+  dock: {
+    alignItems: 'center',
+    gap: 8,
+    paddingTop: Spacing.one,
+    paddingBottom: Spacing.two,
+  },
+  hint: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '400',
+    letterSpacing: 0.3,
     textAlign: 'center',
-    opacity: 0.88,
   },
-  candlingButton: {
-    minHeight: 48,
-    borderRadius: 14,
-    borderWidth: 1.5,
+  careRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    gap: 36,
+  },
+  micro: {
+    width: 108,
+    alignItems: 'center',
+    gap: 5,
+  },
+  microGlyph: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  candlingLabel: {
-    fontSize: 15,
-    fontWeight: '700',
+  microHint: {
+    fontSize: 10,
+    fontWeight: '500',
+    textAlign: 'center',
   },
   primaryButton: {
     minHeight: 48,
@@ -598,16 +711,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
-  emptyKicker: {
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 1.4,
-    textTransform: 'uppercase',
-  },
   emptyTitle: {
     fontSize: 28,
-    fontWeight: '700',
+    fontWeight: '500',
     textAlign: 'center',
+    letterSpacing: 0.2,
   },
   emptyBody: {
     fontSize: 15,

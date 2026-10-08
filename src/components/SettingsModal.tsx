@@ -18,7 +18,6 @@ import { useNestPalette, type NestPaletteTokens } from '@/constants/nest';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTranslation } from '@/i18n';
 import type { TranslationKey } from '@/i18n/en';
-import type { LocaleOverride } from '@/i18n/locale';
 import { playSoundEffect } from '@/services/audio';
 import { ImpactFeedbackStyle, triggerImpact } from '@/services/hapticFeedback';
 import {
@@ -30,12 +29,6 @@ import { usePetStore } from '@/store/usePetStore';
 import { usePreferencesStore } from '@/store/usePreferencesStore';
 
 const REPOSITORY_URL = 'https://github.com/Shoebill-Software/hatchpal';
-
-const LOCALE_OPTIONS: readonly { id: LocaleOverride; label: TranslationKey }[] = [
-  { id: 'system', label: 'settings.locale.system' },
-  { id: 'en', label: 'settings.locale.en' },
-  { id: 'de', label: 'settings.locale.de' },
-];
 
 export interface SettingsModalProps {
   visible: boolean;
@@ -81,15 +74,13 @@ async function openRepository(): Promise<void> {
 export function SettingsModal({ visible, onClose }: SettingsModalProps) {
   const palette = useNestPalette();
   const insets = useSafeAreaInsets();
-  const { t, locale } = useTranslation();
+  const { t } = useTranslation();
   const [permission, setPermission] = useState<OsNotificationPermission>('undetermined');
   const [resetStep, setResetStep] = useState<0 | 1 | 2>(0);
 
-  const localeOverride = usePreferencesStore((state) => state.localeOverride);
   const soundEnabled = usePreferencesStore((state) => state.soundEnabled);
   const hapticsEnabled = usePreferencesStore((state) => state.hapticsEnabled);
   const notificationsEnabled = usePreferencesStore((state) => state.notificationsEnabled);
-  const setLocaleOverride = usePreferencesStore((state) => state.setLocaleOverride);
   const setSoundEnabled = usePreferencesStore((state) => state.setSoundEnabled);
   const setHapticsEnabled = usePreferencesStore((state) => state.setHapticsEnabled);
   const setNotificationsEnabled = usePreferencesStore((state) => state.setNotificationsEnabled);
@@ -127,7 +118,7 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
     void (async () => {
       await setNotificationsEnabled(enabled);
       if (enabled) {
-        await requestNotificationPermissions(locale);
+        await requestNotificationPermissions();
         void triggerImpact(ImpactFeedbackStyle.Light);
       }
       setPermission(await readNotificationPermission());
@@ -172,39 +163,6 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
               { paddingBottom: Math.max(insets.bottom, Spacing.four) + Spacing.three },
             ]}
             showsVerticalScrollIndicator={false}>
-            <Section title={t('settings.languageTitle')}>
-              <Text style={[styles.hint, { color: palette.textMuted }]}>{t('settings.languageHint')}</Text>
-              <View
-                accessibilityRole="radiogroup"
-                style={[styles.segment, { backgroundColor: palette.progressTrack }]}>
-                {LOCALE_OPTIONS.map((option) => {
-                  const selected = localeOverride === option.id;
-                  return (
-                    <Pressable
-                      key={option.id}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected }}
-                      onPress={() => {
-                        setLocaleOverride(option.id);
-                        void triggerImpact(ImpactFeedbackStyle.Light);
-                      }}
-                      style={[
-                        styles.segmentItem,
-                        selected ? { backgroundColor: palette.surface } : null,
-                      ]}>
-                      <Text
-                        style={[
-                          styles.segmentLabel,
-                          { color: selected ? palette.text : palette.textMuted },
-                        ]}>
-                        {t(option.label)}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </Section>
-
             <Section title={t('settings.sensoryTitle')}>
               <ToggleRow
                 label={t('settings.sound')}
@@ -462,26 +420,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 22,
     fontWeight: '700',
-  },
-  segment: {
-    flexDirection: 'row',
-    borderRadius: 12,
-    padding: 4,
-    gap: 4,
-  },
-  segmentItem: {
-    flex: 1,
-    minHeight: 40,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: Spacing.one,
-    paddingVertical: Spacing.two,
-  },
-  segmentLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    textAlign: 'center',
   },
   toggleRow: {
     flexDirection: 'row',

@@ -1,8 +1,9 @@
-import type { LifeStage, LocalizedCopy } from '@/domain/types';
+import type { LifeStage } from '@/domain/types';
 
-import type { LocaleCode } from './locale';
 import type { TranslationKey } from './en';
 import type { TranslateFn } from './translate';
+
+const NUMBER_LOCALE = 'en-US';
 
 export type ElapsedSpan =
   | { unit: 'now' }
@@ -11,14 +12,6 @@ export type ElapsedSpan =
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
-
-export function localizeCopy(copy: LocalizedCopy, locale: LocaleCode): string {
-  const preferred = copy[locale];
-  if (preferred.trim().length > 0) {
-    return preferred;
-  }
-  return copy.en;
-}
 
 export function getElapsedSpan(fromEpoch: number, nowEpoch: number): ElapsedSpan {
   if (!Number.isFinite(fromEpoch) || !Number.isFinite(nowEpoch)) {
@@ -57,16 +50,6 @@ export function formatAgo(span: ElapsedSpan, t: TranslateFn): string {
     return t('time.justNow');
   }
   return t('time.ago', { time: formatDuration(span, t) });
-}
-
-export function formatTurnPhrase(hasTurned: boolean, span: ElapsedSpan, t: TranslateFn): string {
-  if (!hasTurned) {
-    return t('turn.swipe');
-  }
-  if (span.unit === 'now') {
-    return t('turn.justNow');
-  }
-  return t('turn.ago', { time: formatDuration(span, t) });
 }
 
 const WEEK_DAY_THRESHOLD = 14;
@@ -112,17 +95,16 @@ export type BiologicalWeight = {
   unit: 'g' | 'kg';
 };
 
-export function formatBiologicalWeight(grams: number, locale: LocaleCode): BiologicalWeight {
+export function formatBiologicalWeight(grams: number): BiologicalWeight {
   if (!Number.isFinite(grams) || grams < 0) {
     return { value: '0', unit: 'g' };
   }
 
-  const numberLocale = locale === 'de' ? 'de-DE' : 'en-US';
   if (grams >= 1000) {
     const kilograms = grams / 1000;
     const digits = kilograms >= 100 ? 0 : 1;
     return {
-      value: new Intl.NumberFormat(numberLocale, {
+      value: new Intl.NumberFormat(NUMBER_LOCALE, {
         minimumFractionDigits: digits,
         maximumFractionDigits: digits,
       }).format(kilograms),
@@ -132,7 +114,7 @@ export function formatBiologicalWeight(grams: number, locale: LocaleCode): Biolo
 
   const digits = grams < 10 ? 1 : 0;
   return {
-    value: new Intl.NumberFormat(numberLocale, {
+    value: new Intl.NumberFormat(NUMBER_LOCALE, {
       minimumFractionDigits: digits,
       maximumFractionDigits: digits,
     }).format(grams),
@@ -156,34 +138,46 @@ export function formatCarePhrase(
   return kind === 'feed' ? t('care.fedAgo', { time }) : t('care.weighedAgo', { time });
 }
 
-export function formatLocaleDate(epoch: number, locale: LocaleCode): string {
+export function formatLocaleDate(epoch: number): string {
   if (!Number.isFinite(epoch)) {
     return '—';
   }
 
-  return new Intl.DateTimeFormat(locale === 'de' ? 'de-DE' : 'en-US', {
+  return new Intl.DateTimeFormat(NUMBER_LOCALE, {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
   }).format(new Date(epoch));
 }
 
-export function formatBiologicalDay(day: number, locale: LocaleCode): string {
+/** Month and day only, such as Oct 28. */
+export function formatCompactDate(epoch: number): string {
+  if (!Number.isFinite(epoch)) {
+    return '—';
+  }
+
+  return new Intl.DateTimeFormat(NUMBER_LOCALE, {
+    month: 'short',
+    day: 'numeric',
+  }).format(new Date(epoch));
+}
+
+export function formatBiologicalDay(day: number): string {
   if (!Number.isFinite(day)) {
     return '0';
   }
 
   const tenths = Math.round(day * 10) / 10;
   const whole = Math.abs(tenths - Math.round(tenths)) < 0.001;
-  return new Intl.NumberFormat(locale === 'de' ? 'de-DE' : 'en-US', {
+  return new Intl.NumberFormat(NUMBER_LOCALE, {
     minimumFractionDigits: 0,
     maximumFractionDigits: whole ? 0 : 1,
   }).format(tenths);
 }
 
-export function formatWholePercent(fraction: number, locale: LocaleCode): string {
+export function formatWholePercent(fraction: number): string {
   const safe = Number.isFinite(fraction) ? Math.min(1, Math.max(0, fraction)) : 0;
-  return new Intl.NumberFormat(locale === 'de' ? 'de-DE' : 'en-US', {
+  return new Intl.NumberFormat(NUMBER_LOCALE, {
     maximumFractionDigits: 0,
   }).format(Math.round(safe * 100));
 }

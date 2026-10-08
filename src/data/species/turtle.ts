@@ -1,8 +1,10 @@
-import { localized, SpeciesConfig } from '@/domain/types';
+import { SpeciesConfig } from '@/domain/types';
+
+import { speciesShowcase } from './showcase';
 
 export const greenSeaTurtleConfig: SpeciesConfig = {
   id: 'green_sea_turtle',
-  commonName: localized('Green Sea Turtle', 'Grüne Meeresschildkröte'),
+  commonName: 'Green Sea Turtle',
   scientificName: 'Chelonia mydas',
   incubationDays: 60,
   adultMaturationDays: 730,
@@ -11,14 +13,10 @@ export const greenSeaTurtleConfig: SpeciesConfig = {
   baseHeartRateBpm: 90,
   temperatureTargetCelsius: 29.0,
   humidityTargetPct: 85,
-  turningRequiredUntilDay: 0,
   taxon: 'reptilia',
   tag: 'testudine',
   egg: {
-    description: localized(
-      'Spherical, soft-shelled clutch egg, pale and chalky.',
-      'Kugeliges, weichschaliges Gelege-Ei, blass und kreidig.'
-    ),
+    description: 'Spherical, soft-shelled clutch egg, pale and chalky.',
     lengthMm: 45,
     widthMm: 44,
     massGrams: 40,
@@ -50,39 +48,25 @@ export const greenSeaTurtleConfig: SpeciesConfig = {
     adultMeasureCm: 110,
     referenceScale: 'person',
     referenceCentimeters: 170,
-    reference: localized('an adult person', 'eine erwachsene Person'),
-    behavior: localized(
-      'A marine turtle. The hatchling crawls to the surf, and the adult carapace is a long oceanic life compressed onto this clock.',
-      'Eine Meeresschildkröte. Der Schlüpfling kriecht zur Brandung, und der adulte Carapax ist ein langes ozeanisches Leben, das auf diese Uhr verdichtet ist.'
-    ),
-    fieldNotes: localized(
-      'Green turtle eggs are nearly spherical and incubate for about 60 days in beach sand. The hatchling is lime-sized. On this compressed clock the adult plateau sits near 150 kg and a carapace length of about 110 cm.',
-      'Eier der Grünen Meeresschildkröte sind fast kugelig und brüten etwa 60 Tage im Strandsand. Der Schlüpfling hat die Größe einer Limette. Auf dieser verdichteten Uhr liegt das adulte Plateau nahe 150 kg und einer Carapaxlänge von etwa 110 cm.'
-    ),
+    reference: 'an adult person',
+    behavior: 'A marine turtle. The hatchling crawls to the surf, and the adult carapace is a long oceanic life compressed onto this clock.',
+    fieldNotes: 'Green turtle eggs are nearly spherical and incubate for about 60 days in beach sand. The hatchling is lime-sized. On this compressed clock the adult plateau sits near 150 kg and a carapace length of about 110 cm.',
   },
   juvenile: {
-    title: localized('Juvenile carapace', 'Juveniler Carapax'),
-    scientificSummary: localized(
-      'Scutes keratinize and the flipper stroke lengthens. On this compressed clock the turtle leaves the surface drift and begins sustained swimming.',
-      'Die Schilde verhornen, und der Flossenschlag wird länger. Auf dieser verdichteten Uhr verlässt die Schildkröte die oberflächennahe Drift und beginnt ausdauernd zu schwimmen.'
-    ),
+    title: 'Juvenile carapace',
+    scientificSummary: 'Scutes keratinize and the flipper stroke lengthens. On this compressed clock the turtle leaves the surface drift and begins sustained swimming.',
   },
   adult: {
-    title: localized('Adult ocean mass', 'Adulte Meeresmasse'),
-    scientificSummary: localized(
-      'The carapace is fully ossified and mass has reached the compressed adult plateau near 150 kg, enough for sustained oceanic travel.',
-      'Der Carapax ist vollständig verknöchert, und die Masse hat das verdichtete adulte Plateau um 150 kg erreicht, ausreichend für anhaltende ozeanische Wanderung.'
-    ),
+    title: 'Adult ocean mass',
+    scientificSummary: 'The carapace is fully ossified and mass has reached the compressed adult plateau near 150 kg, enough for sustained oceanic travel.',
   },
+  showcase: speciesShowcase.green_sea_turtle,
   milestones: [
     {
       day: 0,
       stage: 'cleavage',
-      title: localized('Nest-Chamber Clutch', 'Gelege in der Nestkammer'),
-      scientificSummary: localized(
-        'Leathery egg is deposited in a humid sand chamber. Cleavage proceeds without turning; moisture preservation is critical.',
-        'Das ledrige Ei liegt in einer feuchten Sandkammer. Die Furchung verläuft ohne Wenden; der Feuchtigkeitserhalt ist entscheidend.'
-      ),
+      title: 'Nest-Chamber Clutch',
+      scientificSummary: 'Leathery egg is deposited in a humid sand chamber. Cleavage proceeds without turning; moisture preservation is critical.',
       candling: {
         bloodVesselsVisible: false,
         eyeSpotVisible: false,
@@ -95,11 +79,8 @@ export const greenSeaTurtleConfig: SpeciesConfig = {
     {
       day: 9,
       stage: 'vascular',
-      title: localized('Yolk Vascularization', 'Dottervaskularisation'),
-      scientificSummary: localized(
-        'Blood islands coalesce over the yolk sac. A slow embryonic pulse becomes detectable under strong candling light.',
-        'Blutinseln verbinden sich über dem Dottersack. Unter starkem Durchlicht wird ein langsamer embryonaler Puls erkennbar.'
-      ),
+      title: 'Yolk Vascularization',
+      scientificSummary: 'Blood islands coalesce over the yolk sac. A slow embryonic pulse becomes detectable under strong candling light.',
       candling: {
         bloodVesselsVisible: true,
         eyeSpotVisible: false,
@@ -112,11 +93,8 @@ export const greenSeaTurtleConfig: SpeciesConfig = {
     {
       day: 23,
       stage: 'organogenesis',
-      title: localized('Carapace Fold & Eye Spot', 'Carapaxfalte und Augenfleck'),
-      scientificSummary: localized(
-        'Carapacial ridge forms. The pigmented eye is a distinct dark locus; extraembryonic membranes line the shell.',
-        'Die Carapaxleiste bildet sich. Das pigmentierte Auge ist ein deutlicher dunkler Punkt; extraembryonale Membranen kleiden die Schale aus.'
-      ),
+      title: 'Carapace Fold & Eye Spot',
+      scientificSummary: 'Carapacial ridge forms. The pigmented eye is a distinct dark locus; extraembryonic membranes line the shell.',
       candling: {
         bloodVesselsVisible: true,
         eyeSpotVisible: true,
@@ -129,11 +107,8 @@ export const greenSeaTurtleConfig: SpeciesConfig = {
     {
       day: 40,
       stage: 'organogenesis',
-      title: localized('Late Embryo Fill', 'Späte Embryofüllung'),
-      scientificSummary: localized(
-        'Body mass occupies most of the egg. Flipper movement is occasionally visible; residual yolk remains substantial.',
-        'Die Körpermasse füllt den größten Teil des Eis. Flossenbewegung ist gelegentlich sichtbar; ein erheblicher Restdotter bleibt.'
-      ),
+      title: 'Late Embryo Fill',
+      scientificSummary: 'Body mass occupies most of the egg. Flipper movement is occasionally visible; residual yolk remains substantial.',
       candling: {
         bloodVesselsVisible: true,
         eyeSpotVisible: true,
@@ -146,11 +121,8 @@ export const greenSeaTurtleConfig: SpeciesConfig = {
     {
       day: 57,
       stage: 'internal_pip',
-      title: localized('Internal Pip', 'Innerer Pick'),
-      scientificSummary: localized(
-        'Beak pierces into the air cell. Pulmonary breathing begins in the crowded nest chamber before the shell is opened.',
-        'Der Schnabel stößt in die Luftkammer. Die Lungenatmung beginnt in der engen Nestkammer, bevor die Schale geöffnet wird.'
-      ),
+      title: 'Internal Pip',
+      scientificSummary: 'Beak pierces into the air cell. Pulmonary breathing begins in the crowded nest chamber before the shell is opened.',
       candling: {
         bloodVesselsVisible: false,
         eyeSpotVisible: false,
@@ -163,11 +135,8 @@ export const greenSeaTurtleConfig: SpeciesConfig = {
     {
       day: 59,
       stage: 'external_pip',
-      title: localized('External Pip', 'Äußerer Pick'),
-      scientificSummary: localized(
-        'Caruncle ruptures the leathery shell. Hatchlings often wait for siblings so the cohort emerges together.',
-        'Die Caruncula reißt die ledrige Schale auf. Die Schlüpflinge warten oft auf Geschwister, damit die Gruppe gemeinsam erscheint.'
-      ),
+      title: 'External Pip',
+      scientificSummary: 'Caruncle ruptures the leathery shell. Hatchlings often wait for siblings so the cohort emerges together.',
       candling: {
         bloodVesselsVisible: false,
         eyeSpotVisible: false,
@@ -180,11 +149,8 @@ export const greenSeaTurtleConfig: SpeciesConfig = {
     {
       day: 60,
       stage: 'hatchling',
-      title: localized('Emergence', 'Schlupf'),
-      scientificSummary: localized(
-        'Hatchling completes yolk internalization, opens the nest plug with siblings, and begins the crawl toward the sea.',
-        'Das Jungtier schließt die Dotteraufnahme ab, öffnet mit den Geschwistern den Nestpfropfen und beginnt den Marsch zum Meer.'
-      ),
+      title: 'Emergence',
+      scientificSummary: 'Hatchling completes yolk internalization, opens the nest plug with siblings, and begins the crawl toward the sea.',
       candling: {
         bloodVesselsVisible: false,
         eyeSpotVisible: false,

@@ -49,8 +49,11 @@ function pet(partial: Partial<PetInstance> & Pick<PetInstance, 'laidAtEpoch'>): 
     lastVerifiedEpoch: partial.laidAtEpoch,
     lastInteractedEpoch: partial.laidAtEpoch,
     healthMultiplier: 1,
-    lastTurnedEpoch: partial.laidAtEpoch,
+    currentTemperatureCelsius: 37.5,
+    currentHumidityPct: 55,
+    lastWarmedEpoch: partial.laidAtEpoch,
     lastMistedEpoch: partial.laidAtEpoch,
+    vitalityScore: 1,
     isHatched: false,
     ...partial,
   };
@@ -84,12 +87,7 @@ describe('milestone notification scheduling', () => {
 
   it('skips milestones that are in the past or exactly now', () => {
     const now = laidAt + 20 * INCUBATION_DAY_MS;
-    const alerts = selectUpcomingMilestoneAlerts(
-      pet({ laidAtEpoch: laidAt }),
-      silkieChickenConfig,
-      'en',
-      now
-    );
+    const alerts = selectUpcomingMilestoneAlerts(pet({ laidAtEpoch: laidAt }), silkieChickenConfig, now);
 
     expect(alerts.map((alert) => alert.day)).toEqual([21]);
     expect(milestoneTriggerEpoch(laidAt, 20)).toBe(now);
@@ -106,12 +104,7 @@ describe('milestone notification scheduling', () => {
       return request.identifier ?? 'generated';
     });
 
-    const ids = await scheduleMilestoneNotifications(
-      pet({ laidAtEpoch: laidAt }),
-      silkieChickenConfig,
-      'en',
-      laidAt
-    );
+    const ids = await scheduleMilestoneNotifications(pet({ laidAtEpoch: laidAt }), silkieChickenConfig, laidAt);
 
     expect(ids).toEqual([
       'hatchpal.milestone.pet-1.3',
@@ -147,9 +140,10 @@ describe('milestone notification scheduling', () => {
       body: 'Vital blood vessels have formed and can now be seen under light.',
       categoryIdentifier: 'hatchpal.milestone',
     });
-    expect(byDay.get(19)?.content.body).toBe(
-      'The beak has entered the air cell. Faint tapping or peeping can be heard.'
-    );
+    expect(byDay.get(19)?.content).toMatchObject({
+      title: 'Internal Pip Detected',
+      body: 'Faint tapping heard inside the shell. The beak has entered the air cell.',
+    });
     expect(byDay.get(20)?.content.body).toBe(
       'The egg tooth has cracked the outer shell. Turning must cease.'
     );
@@ -157,7 +151,7 @@ describe('milestone notification scheduling', () => {
     expect(byDay.has(0)).toBe(false);
   });
 
-  it('uses German biological copy and species-specific gecko timestamps', async () => {
+  it('uses English biological copy and species-specific gecko timestamps', async () => {
     const geckoLaid = 1_800_000_000_000;
     const ids = await scheduleMilestoneNotifications(
       pet({
@@ -167,7 +161,6 @@ describe('milestone notification scheduling', () => {
         laidAtEpoch: geckoLaid,
       }),
       leopardGeckoConfig,
-      'de',
       geckoLaid + 10 * INCUBATION_DAY_MS
     );
 
@@ -182,13 +175,12 @@ describe('milestone notification scheduling', () => {
     expect(calls.map((call) => call.trigger.date)).toEqual(
       [19, 33, 47, 49, 50].map((day) => geckoLaid + day * 86400 * 1000)
     );
-    const internalPip = calls.find((call) => call.content.title === 'Innerer Pick');
+    const internalPip = calls.find((call) => call.content.title === 'Internal Pip Detected');
     expect(internalPip?.content.subtitle).toBe('Nova');
     expect(internalPip?.content.body).toBe(
-      'Die Schnauze hat die Luftkammer erreicht. Leises Klopfen oder Piepen ist hörbar.'
+      'The snout has entered the air cell. Faint tapping or peeping can be heard.'
     );
-    expect(calls.some((call) => call.content.body.includes('Blutgefäße'))).toBe(false);
-    expect(calls.some((call) => call.content.body.includes('schlüpft'))).toBe(true);
+    expect(calls.some((call) => call.content.body.includes('emerging'))).toBe(true);
   });
 
   it('does not schedule when permission is denied and still resolves', async () => {
@@ -199,12 +191,7 @@ describe('milestone notification scheduling', () => {
       expires: 'never',
     });
 
-    const ids = await scheduleMilestoneNotifications(
-      pet({ laidAtEpoch: laidAt }),
-      silkieChickenConfig,
-      'en',
-      laidAt
-    );
+    const ids = await scheduleMilestoneNotifications(pet({ laidAtEpoch: laidAt }), silkieChickenConfig, laidAt);
 
     expect(ids).toEqual([]);
     expect(notifications.requestPermissionsAsync).not.toHaveBeenCalled();
@@ -232,12 +219,7 @@ describe('milestone notification scheduling', () => {
 
   it('schedules nothing and does not throw when every milestone is already past', async () => {
     const now = laidAt + 40 * INCUBATION_DAY_MS;
-    const ids = await scheduleMilestoneNotifications(
-      pet({ laidAtEpoch: laidAt }),
-      silkieChickenConfig,
-      'de',
-      now
-    );
+    const ids = await scheduleMilestoneNotifications(pet({ laidAtEpoch: laidAt }), silkieChickenConfig, now);
 
     expect(ids).toEqual([]);
     expect(notifications.scheduleNotificationAsync).not.toHaveBeenCalled();
@@ -247,12 +229,13 @@ describe('milestone notification scheduling', () => {
   it('creates the Android channel before scheduling', async () => {
     (Platform as { OS: string }).OS = 'android';
 
-    await scheduleMilestoneNotifications(pet({ laidAtEpoch: laidAt }), silkieChickenConfig, 'de', laidAt);
+    await scheduleMilestoneNotifications(pet({ laidAtEpoch: laidAt }), silkieChickenConfig, laidAt);
 
     expect(notifications.setNotificationChannelAsync).toHaveBeenCalledWith(
       'hatchpal.milestones',
       expect.objectContaining({
-        name: 'Brutmeilensteine',
+        name: 'Incubation milestones',
+        description: 'Offline alerts for biological incubation milestones.',
         importance: 6,
       })
     );

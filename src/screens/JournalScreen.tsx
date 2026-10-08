@@ -19,13 +19,13 @@ import {
 } from '@/domain/milestones';
 import { resolveHatchEpoch } from '@/domain/timeEngine';
 import { useActivePet } from '@/hooks/useActivePet';
-import { formatLocaleDate, localizeCopy, useTranslation } from '@/i18n';
+import { formatLocaleDate, useTranslation } from '@/i18n';
 
 export default function JournalScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const palette = useNestPalette();
-  const { t, locale } = useTranslation();
+  const { t } = useTranslation();
   const { pet, species, snapshot, hasHydrated } = useActivePet();
   const [openId, setOpenId] = useState<string | null>(null);
 
@@ -106,10 +106,10 @@ export default function JournalScreen() {
             {species.scientificName}
           </Text>
           <Text style={[styles.meta, { color: palette.textMuted }]}>
-            {localizeCopy(species.commonName, locale)}
+            {species.commonName}
           </Text>
           <Text style={[styles.meta, { color: palette.textMuted }]}>
-            {t('journal.adoptedOn', { date: formatLocaleDate(pet.laidAtEpoch, locale) })}
+            {t('journal.adoptedOn', { date: formatLocaleDate(pet.laidAtEpoch) })}
           </Text>
           <Text style={[styles.meta, { color: palette.text }]}>
             {t(dayCount === 1 ? 'journal.dayRecorded' : 'journal.daysRecorded', { count: dayCount })}

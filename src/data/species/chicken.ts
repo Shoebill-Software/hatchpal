@@ -1,8 +1,10 @@
-import { localized, SpeciesConfig } from '@/domain/types';
+import { SpeciesConfig } from '@/domain/types';
+
+import { speciesShowcase } from './showcase';
 
 export const silkieChickenConfig: SpeciesConfig = {
   id: 'silkie_chicken',
-  commonName: localized('Silkie Chicken', 'Seidenhuhn'),
+  commonName: 'Silkie Chicken',
   scientificName: 'Gallus gallus domesticus',
   incubationDays: 21,
   adultMaturationDays: 126, // ~18 weeks to full adult plumage
@@ -11,14 +13,10 @@ export const silkieChickenConfig: SpeciesConfig = {
   baseHeartRateBpm: 220,
   temperatureTargetCelsius: 37.5,
   humidityTargetPct: 55,
-  turningRequiredUntilDay: 18,
   taxon: 'aves',
   tag: 'galliform',
   egg: {
-    description: localized(
-      'Warm buff oval with a faint chalky bloom.',
-      'Warmes, beigefarbenes Oval mit zartem Kalkschleier.'
-    ),
+    description: 'Warm buff oval with a faint chalky bloom.',
     lengthMm: 52,
     widthMm: 39,
     massGrams: 48,
@@ -50,39 +48,25 @@ export const silkieChickenConfig: SpeciesConfig = {
     adultMeasureCm: 28,
     referenceScale: 'hand',
     referenceCentimeters: 18,
-    reference: localized('an adult hand', 'eine Erwachsenenhand'),
-    behavior: localized(
-      'A domestic bantam with a crest and feathered feet. The chick is precocial, and the adult silhouette is round rather than long-winged.',
-      'Ein Haushuhn mit Haube und befiederten Füßen. Das Küken ist nestflüchtig, und die adulte Silhouette ist rund statt langflügelig.'
-    ),
-    fieldNotes: localized(
-      'Silkie eggs incubate in 21 days at a steady 37.5 °C. The chick hatches covered in fluffy down, and the adult crest, mulberry comb, and feathered shanks are fully expressed by about 18 weeks.',
-      'Seidenhuhneier brüten in 21 Tagen bei gleichmäßigen 37,5 °C. Das Küken schlüpft mit flauschigem Dunenkleid, und Haube, Maulbeerkamm sowie befiederte Läufe sind nach etwa 18 Wochen voll ausgeprägt.'
-    ),
+    reference: 'an adult hand',
+    behavior: 'A domestic bantam with a crest and feathered feet. The chick is precocial, and the adult silhouette is round rather than long-winged.',
+    fieldNotes: 'Silkie eggs incubate in 21 days at a steady 37.5 °C. The chick hatches covered in fluffy down, and the adult crest, mulberry comb, and feathered shanks are fully expressed by about 18 weeks.',
   },
   juvenile: {
-    title: localized('Juvenile plumage', 'Jugendgefieder'),
-    scientificSummary: localized(
-      'Natal down is replaced by contour feathers. The crest and feathered shanks start to read as silkie traits, and daily mass gain is steepest in this window.',
-      'Die Nestdaunen werden durch Konturfedern ersetzt. Haube und befiederte Läufe werden als Seidenhuhn-Merkmale lesbar, und die tägliche Massenzunahme ist in diesem Fenster am steilsten.'
-    ),
+    title: 'Juvenile plumage',
+    scientificSummary: 'Natal down is replaced by contour feathers. The crest and feathered shanks start to read as silkie traits, and daily mass gain is steepest in this window.',
   },
   adult: {
-    title: localized('Adult plumage', 'Adultgefieder'),
-    scientificSummary: localized(
-      'Crest, mulberry comb, and feathered feet are fully expressed. Body mass settles on the adult plateau near 1,300 g and linear growth stops.',
-      'Haube, Maulbeerkamm und befiederte Füße sind vollständig ausgeprägt. Die Körpermasse liegt auf dem adulten Plateau um 1.300 g, das Längenwachstum endet.'
-    ),
+    title: 'Adult plumage',
+    scientificSummary: 'Crest, mulberry comb, and feathered feet are fully expressed. Body mass settles on the adult plateau near 1,300 g and linear growth stops.',
   },
+  showcase: speciesShowcase.silkie_chicken,
   milestones: [
     {
       day: 0,
       stage: 'cleavage',
-      title: localized('Freshly Laid Blastoderm', 'Frisch gelegter Blastoderm'),
-      scientificSummary: localized(
-        'Cellular division begins atop the yolk. Germinal disc is barely visible.',
-        'Die Zellteilung beginnt auf dem Dotter. Die Keimscheibe ist kaum sichtbar.'
-      ),
+      title: 'Freshly Laid Blastoderm',
+      scientificSummary: 'Cellular division begins atop the yolk. Germinal disc is barely visible.',
       candling: {
         bloodVesselsVisible: false,
         eyeSpotVisible: false,
@@ -95,11 +79,8 @@ export const silkieChickenConfig: SpeciesConfig = {
     {
       day: 3,
       stage: 'vascular',
-      title: localized('Vitelline Circulation', 'Dotterkreislauf'),
-      scientificSummary: localized(
-        'Blood islands coalesce into the sinus terminalis. Faint embryonic heart begins pumping.',
-        'Blutinseln verbinden sich zum Sinus terminalis. Ein schwaches embryonales Herz beginnt zu schlagen.'
-      ),
+      title: 'Vitelline Circulation',
+      scientificSummary: 'Blood islands coalesce into the sinus terminalis. Faint embryonic heart begins pumping.',
       candling: {
         bloodVesselsVisible: true,
         eyeSpotVisible: false,
@@ -112,11 +93,8 @@ export const silkieChickenConfig: SpeciesConfig = {
     {
       day: 8,
       stage: 'organogenesis',
-      title: localized('Eye Pigmentation & Limb Buds', 'Augenpigment und Gliedmaßenknospen'),
-      scientificSummary: localized(
-        'Chorioallantoic membrane expands. Prominent pigmented eye spot and limb buds form.',
-        'Die Chorioallantoismembran dehnt sich aus. Ein deutlich pigmentierter Augenfleck und Gliedmaßenknospen entstehen.'
-      ),
+      title: 'Eye Pigmentation & Limb Buds',
+      scientificSummary: 'Chorioallantoic membrane expands. Prominent pigmented eye spot and limb buds form.',
       candling: {
         bloodVesselsVisible: true,
         eyeSpotVisible: true,
@@ -129,11 +107,8 @@ export const silkieChickenConfig: SpeciesConfig = {
     {
       day: 14,
       stage: 'organogenesis',
-      title: localized('Down Feathers & Rapid Growth', 'Daunen und schnelles Wachstum'),
-      scientificSummary: localized(
-        'Embryo turns along the long axis. Feathers begin developing; silhouette fills the egg.',
-        'Der Embryo dreht sich entlang der Längsachse. Federn beginnen zu wachsen; die Silhouette füllt das Ei.'
-      ),
+      title: 'Down Feathers & Rapid Growth',
+      scientificSummary: 'Embryo turns along the long axis. Feathers begin developing; silhouette fills the egg.',
       candling: {
         bloodVesselsVisible: true,
         eyeSpotVisible: true,
@@ -146,11 +121,8 @@ export const silkieChickenConfig: SpeciesConfig = {
     {
       day: 19,
       stage: 'internal_pip',
-      title: localized('Internal Pip', 'Innerer Pick'),
-      scientificSummary: localized(
-        'Beak penetrates the air cell. Pulmonary respiration initiates; faint clicking and peeping audible.',
-        'Der Schnabel durchstößt die Luftkammer. Die Lungenatmung beginnt; leises Klicken und Piepen ist hörbar.'
-      ),
+      title: 'Internal Pip',
+      scientificSummary: 'Beak penetrates the air cell. Pulmonary respiration initiates; faint clicking and peeping audible.',
       candling: {
         bloodVesselsVisible: false,
         eyeSpotVisible: false,
@@ -163,11 +135,8 @@ export const silkieChickenConfig: SpeciesConfig = {
     {
       day: 20,
       stage: 'external_pip',
-      title: localized('External Pip', 'Äußerer Pick'),
-      scientificSummary: localized(
-        'Egg tooth fractures the outer calcified shell. Turning must cease completely.',
-        'Der Eizahn bricht die verkalkte Außenschale. Das Wenden muss vollständig eingestellt werden.'
-      ),
+      title: 'External Pip',
+      scientificSummary: 'Egg tooth fractures the outer calcified shell. Turning must cease completely.',
       candling: {
         bloodVesselsVisible: false,
         eyeSpotVisible: false,
@@ -180,11 +149,8 @@ export const silkieChickenConfig: SpeciesConfig = {
     {
       day: 21,
       stage: 'hatchling',
-      title: localized('Emergence', 'Schlupf'),
-      scientificSummary: localized(
-        'Chick completes rotation around the blunt pole, pushes the cap open, and emerges wet and exhausted.',
-        'Das Küken vollendet die Drehung um den stumpfen Pol, drückt die Kappe auf und schlüpft nass und erschöpft.'
-      ),
+      title: 'Emergence',
+      scientificSummary: 'Chick completes rotation around the blunt pole, pushes the cap open, and emerges wet and exhausted.',
       candling: {
         bloodVesselsVisible: false,
         eyeSpotVisible: false,

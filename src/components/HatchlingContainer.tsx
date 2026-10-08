@@ -25,6 +25,10 @@ export interface HatchlingContainerProps {
   hint: string;
   scaleLabel: string;
   onPet: () => void;
+  /** Hides the caption stack so the figure can sit in a fixed viewport. */
+  showCaption?: boolean;
+  width?: number;
+  height?: number;
 }
 
 function clampProgress(value: number): number {
@@ -41,6 +45,9 @@ export function HatchlingContainer({
   hint,
   scaleLabel,
   onPet,
+  showCaption = true,
+  width = 220,
+  height = 240,
 }: HatchlingContainerProps) {
   const palette = useNestPalette();
   const { play } = useSoundEffects();
@@ -75,19 +82,24 @@ export function HatchlingContainer({
   };
 
   return (
-    <View style={styles.stage}>
+    <View style={[styles.stage, showCaption ? null : styles.stageCompact]}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
         accessibilityHint={hint}
         onPress={handlePet}
-        style={styles.hit}>
+        style={[styles.hit, showCaption ? null : styles.hitCompact]}>
         <Animated.View style={motion}>
-          <HatchlingFigure speciesId={speciesId} maturationProgress={maturationProgress} />
+          <HatchlingFigure
+            speciesId={speciesId}
+            maturationProgress={maturationProgress}
+            width={width}
+            height={height}
+          />
         </Animated.View>
       </Pressable>
-      <Text style={[styles.hint, { color: palette.text }]}>{hint}</Text>
-      <Text style={[styles.scale, { color: palette.textMuted }]}>{scaleLabel}</Text>
+      {showCaption ? <Text style={[styles.hint, { color: palette.text }]}>{hint}</Text> : null}
+      {showCaption ? <Text style={[styles.scale, { color: palette.textMuted }]}>{scaleLabel}</Text> : null}
     </View>
   );
 }
@@ -100,11 +112,20 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.three,
     gap: Spacing.two,
   },
+  stageCompact: {
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    gap: 0,
+  },
   hit: {
     minWidth: 220,
     minHeight: 220,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  hitCompact: {
+    minWidth: 0,
+    minHeight: 0,
   },
   hint: {
     fontSize: 15,

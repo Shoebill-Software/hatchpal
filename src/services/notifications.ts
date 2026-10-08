@@ -2,7 +2,6 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
 import type { PetInstance, SpeciesConfig } from '@/domain/types';
-import type { LocaleCode } from '@/i18n/locale';
 
 import {
   MILESTONE_CATEGORY_ID,
@@ -59,11 +58,11 @@ async function ensureMilestoneCategory(): Promise<void> {
   }
 }
 
-async function ensureMilestoneChannel(locale: LocaleCode): Promise<void> {
+async function ensureMilestoneChannel(): Promise<void> {
   if (Platform.OS !== 'android') {
     return;
   }
-  const copy = milestoneChannelCopy(locale);
+  const copy = milestoneChannelCopy();
   try {
     await Notifications.setNotificationChannelAsync(MILESTONE_CHANNEL_ID, {
       name: copy.name,
@@ -104,14 +103,14 @@ export async function readNotificationPermission(): Promise<OsNotificationPermis
  * Checks notification permission and requests it when the system can still ask.
  * A denial returns false and never throws, so gameplay continues offline.
  */
-export async function requestNotificationPermissions(locale: LocaleCode = 'en'): Promise<boolean> {
+export async function requestNotificationPermissions(): Promise<boolean> {
   if (Platform.OS === 'web') {
     return false;
   }
 
   try {
     installForegroundHandler();
-    await ensureMilestoneChannel(locale === 'de' ? 'de' : 'en');
+    await ensureMilestoneChannel();
     const current = await Notifications.getPermissionsAsync();
     if (isGranted(current)) {
       return true;
@@ -140,21 +139,19 @@ export async function requestNotificationPermissions(locale: LocaleCode = 'en'):
 export async function scheduleMilestoneNotifications(
   pet: PetInstance,
   species: SpeciesConfig,
-  locale: LocaleCode,
   nowEpoch: number = Date.now()
 ): Promise<string[]> {
-  const safeLocale: LocaleCode = locale === 'de' ? 'de' : 'en';
   installForegroundHandler();
   await ensureMilestoneCategory();
 
-  const allowed = await requestNotificationPermissions(safeLocale);
+  const allowed = await requestNotificationPermissions();
   if (!allowed) {
     return [];
   }
 
   await cancelAllPetNotifications();
 
-  const alerts = selectUpcomingMilestoneAlerts(pet, species, safeLocale, nowEpoch);
+  const alerts = selectUpcomingMilestoneAlerts(pet, species, nowEpoch);
   const identifiers: string[] = [];
 
   for (const alert of alerts) {

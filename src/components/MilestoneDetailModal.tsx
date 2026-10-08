@@ -7,7 +7,7 @@ import { Fonts, Spacing } from '@/constants/theme';
 import type { JournalMilestone } from '@/domain/milestones';
 import type { AudioMilestoneTrigger, CandlingFeatures, DevelopmentStage, SpeciesId } from '@/domain/types';
 import { useSoundEffects } from '@/hooks/useSoundEffects';
-import { formatBiologicalDay, formatWholePercent, localizeCopy, useTranslation } from '@/i18n';
+import { formatBiologicalDay, formatWholePercent, useTranslation } from '@/i18n';
 import type { TranslationKey } from '@/i18n/en';
 import { ImpactFeedbackStyle, triggerImpact } from '@/services/hapticFeedback';
 import type { SoundEffectId } from '@/services/soundCues';
@@ -23,7 +23,7 @@ export function MilestoneDetailModal({ milestone, speciesId, visible, onClose }:
   const palette = useNestPalette();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
-  const { t, locale } = useTranslation();
+  const { t } = useTranslation();
   const { play } = useSoundEffects();
 
   const soundId = milestone ? soundForTrigger(milestone.audioTrigger) : null;
@@ -31,8 +31,8 @@ export function MilestoneDetailModal({ milestone, speciesId, visible, onClose }:
     milestone == null
       ? ''
       : milestone.postHatchDay == null
-        ? t('journal.day', { day: formatBiologicalDay(milestone.day, locale) })
-        : t('journal.postHatchDay', { day: formatBiologicalDay(milestone.postHatchDay, locale) });
+        ? t('journal.day', { day: formatBiologicalDay(milestone.day) })
+        : t('journal.postHatchDay', { day: formatBiologicalDay(milestone.postHatchDay) });
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
@@ -80,7 +80,7 @@ export function MilestoneDetailModal({ milestone, speciesId, visible, onClose }:
               </View>
 
               <Text style={[styles.title, { color: palette.text }]}>
-                {localizeCopy(milestone.title, locale)}
+                {milestone.title}
               </Text>
 
               <MilestoneDiagram
@@ -95,7 +95,7 @@ export function MilestoneDetailModal({ milestone, speciesId, visible, onClose }:
                 {t('journal.scientificObservation')}
               </Text>
               <Text selectable style={[styles.body, { color: palette.text, fontFamily: Fonts.serif }]}>
-                {localizeCopy(milestone.scientificSummary, locale)}
+                {milestone.scientificSummary}
               </Text>
 
               {milestone.duringIncubation && milestone.candling ? (
@@ -129,7 +129,7 @@ export function MilestoneDetailModal({ milestone, speciesId, visible, onClose }:
 
 function CandlingReadout({ candling }: { candling: CandlingFeatures }) {
   const palette = useNestPalette();
-  const { t, locale } = useTranslation();
+  const { t } = useTranslation();
 
   const rows: ReadonlyArray<{ label: string; value: string }> = [
     {
@@ -142,11 +142,11 @@ function CandlingReadout({ candling }: { candling: CandlingFeatures }) {
     },
     {
       label: t('journal.silhouette'),
-      value: t('journal.percentValue', { percent: formatWholePercent(candling.embryoSilhouettePct, locale) }),
+      value: t('journal.percentValue', { percent: formatWholePercent(candling.embryoSilhouettePct) }),
     },
     {
       label: t('journal.airCell'),
-      value: t('journal.percentValue', { percent: formatWholePercent(candling.airCellPct, locale) }),
+      value: t('journal.percentValue', { percent: formatWholePercent(candling.airCellPct) }),
     },
     {
       label: t('journal.movement'),

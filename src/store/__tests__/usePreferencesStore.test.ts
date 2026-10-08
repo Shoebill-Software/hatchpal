@@ -23,13 +23,13 @@ import {
 } from '@/store/usePreferencesStore';
 
 describe('Preferences store', () => {
-  it('starts from the sensory, language, and notification defaults', () => {
+  it('starts from the sensory and notification defaults', () => {
     const store = createPreferencesStoreApi();
-    expect(store.getState().localeOverride).toBe(DEFAULT_PREFERENCES.localeOverride);
     expect(store.getState().soundEnabled).toBe(true);
     expect(store.getState().hapticsEnabled).toBe(true);
     expect(store.getState().notificationsEnabled).toBe(true);
-    expect(store.getState().localeOverride).toBe('system');
+    expect(store.getState()).toMatchObject(DEFAULT_PREFERENCES);
+    expect(store.getState()).not.toHaveProperty('localeOverride');
   });
 
   it('updates and persists sensory toggles', () => {
@@ -47,22 +47,29 @@ describe('Preferences store', () => {
     expect(second.getState().soundEnabled).toBe(false);
     expect(second.getState().hapticsEnabled).toBe(false);
     expect(second.getState().notificationsEnabled).toBe(false);
-    expect(second.getState().localeOverride).toBe('system');
+    expect(second.getState()).not.toHaveProperty('localeOverride');
   });
 
-  it('updates and persists the language override', () => {
+  it('drops a previously persisted language override', () => {
     const storage = createMemoryStateStorage();
-    const first = createPreferencesStoreApi({ storage });
-    first.getState().setLocaleOverride('de');
-    expect(first.getState().localeOverride).toBe('de');
+    storage.setItem(
+      PREFERENCES_STORE_PERSIST_KEY,
+      JSON.stringify({
+        state: {
+          localeOverride: 'de',
+          soundEnabled: false,
+          hapticsEnabled: true,
+          notificationsEnabled: true,
+        },
+        version: 1,
+      })
+    );
 
-    const second = createPreferencesStoreApi({ storage });
-    expect(second.getState().localeOverride).toBe('de');
-    expect(second.getState().soundEnabled).toBe(true);
-
-    second.getState().setLocaleOverride('en');
-    const third = createPreferencesStoreApi({ storage });
-    expect(third.getState().localeOverride).toBe('en');
+    const store = createPreferencesStoreApi({ storage });
+    expect(store.getState().soundEnabled).toBe(false);
+    expect(store.getState().hapticsEnabled).toBe(true);
+    expect(store.getState().notificationsEnabled).toBe(true);
+    expect(store.getState()).not.toHaveProperty('localeOverride');
   });
 
   it('drops corrupt persisted fields back to safe defaults', () => {
@@ -81,10 +88,10 @@ describe('Preferences store', () => {
     );
 
     const store = createPreferencesStoreApi({ storage });
-    expect(store.getState().localeOverride).toBe('system');
     expect(store.getState().soundEnabled).toBe(false);
     expect(store.getState().hapticsEnabled).toBe(true);
     expect(store.getState().notificationsEnabled).toBe(true);
+    expect(store.getState()).not.toHaveProperty('localeOverride');
     expect(sanitizePreferences(null)).toEqual(DEFAULT_PREFERENCES);
   });
 });

@@ -16,6 +16,8 @@ const SOUND_SOURCES: Record<SoundEffectId, number> = {
   shell_crack: require('../../assets/audio/shell_crack.wav'),
   hatch_call: require('../../assets/audio/hatch_call.wav'),
   heartbeat: require('../../assets/audio/heartbeat.wav'),
+  thermal_hum: require('../../assets/audio/thermal_hum.wav'),
+  mist_whoosh: require('../../assets/audio/mist_whoosh.wav'),
 };
 
 const DEFAULT_VOLUME: Record<SoundEffectId, number> = {
@@ -25,6 +27,8 @@ const DEFAULT_VOLUME: Record<SoundEffectId, number> = {
   shell_crack: 0.7,
   hatch_call: 0.82,
   heartbeat: 0.34,
+  thermal_hum: 0.28,
+  mist_whoosh: 0.4,
 };
 
 type CueSubscription = {
