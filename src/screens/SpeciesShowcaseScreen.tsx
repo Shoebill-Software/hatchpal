@@ -324,11 +324,12 @@ function FormStage({
   const adultDrawH = Math.round(adultFit.height * pairScale);
   const babyW = Math.round(babyFit.width * pairScale);
   const babyDrawH = Math.round(babyFit.height * pairScale);
-  const travel = Math.min(108, Math.round(stageInner * 0.24));
+  const babyHome = -Math.round((adultW + pairGap) / 2);
+  const adultHome = Math.round((babyW + pairGap) / 2);
   const solo = Math.min(1.8, adultH / babyH);
 
-  const babyX = useSharedValue(-travel);
-  const adultX = useSharedValue(travel);
+  const babyX = useSharedValue(babyHome);
+  const adultX = useSharedValue(adultHome);
   const babyZoom = useSharedValue(1);
   const adultZoom = useSharedValue(1);
   const babyOpacity = useSharedValue(1);
@@ -337,8 +338,8 @@ function FormStage({
   useEffect(() => {
     const timing = { duration: reduceMotion ? 0 : 380, easing: Easing.out(Easing.cubic) };
     if (mode === 'both') {
-      babyX.value = withTiming(-travel, timing);
-      adultX.value = withTiming(travel, timing);
+      babyX.value = withTiming(babyHome, timing);
+      adultX.value = withTiming(adultHome, timing);
       babyZoom.value = withTiming(1, timing);
       adultZoom.value = withTiming(1, timing);
       babyOpacity.value = withTiming(1, timing);
@@ -347,20 +348,20 @@ function FormStage({
     }
     if (mode === 'baby') {
       babyX.value = withTiming(0, timing);
-      adultX.value = withTiming(travel * 0.4, timing);
+      adultX.value = withTiming(adultHome, timing);
       babyZoom.value = withTiming(solo, timing);
       adultZoom.value = withTiming(0.92, timing);
       babyOpacity.value = withTiming(1, timing);
       adultOpacity.value = withTiming(0, timing);
       return;
     }
-    babyX.value = withTiming(-travel * 0.4, timing);
+    babyX.value = withTiming(babyHome, timing);
     adultX.value = withTiming(0, timing);
     babyZoom.value = withTiming(0.9, timing);
     adultZoom.value = withTiming(1.04, timing);
     babyOpacity.value = withTiming(0, timing);
     adultOpacity.value = withTiming(1, timing);
-  }, [adultOpacity, adultX, adultZoom, babyOpacity, babyX, babyZoom, mode, reduceMotion, solo, travel]);
+  }, [adultHome, adultOpacity, adultX, adultZoom, babyHome, babyOpacity, babyX, babyZoom, mode, reduceMotion, solo]);
 
   const babyShift = useAnimatedStyle(() => ({
     opacity: babyOpacity.value,

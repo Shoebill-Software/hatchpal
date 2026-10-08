@@ -1,5 +1,5 @@
 {
-  "summary": "Scientific animal silhouettes used for hatchling and adult previews. Both stages share one plate per species because PhyloPic and Wikimedia had no matching public-domain baby silhouettes. CC0 and Public Domain Mark images have no attribution requirement. The python image is CC BY 4.0 and must stay credited.",
+  "summary": "Adult plates are scientific silhouettes from PhyloPic. CC0 and Public Domain Mark images have no attribution requirement. The python image is CC BY 4.0 and must stay credited. Hatchlings reuse the adult plate, drawn smaller. The egg carousel shows only that adult plate.",
   "images": [
     {
       "speciesId": "silkie_chicken",
@@ -223,7 +223,7 @@
       "source": "PhyloPic",
       "sourceUrl": "https://www.phylopic.org/images/3ca524e8-74c5-45ad-a267-9f599ab7d751",
       "uuid": "3ca524e8-74c5-45ad-a267-9f599ab7d751",
-      "note": "Swimming adult. No public-domain juvenile plate was available."
+      "note": "Swimming adult. Hatchlings reuse this plate at a smaller size."
     }
   ]
 }

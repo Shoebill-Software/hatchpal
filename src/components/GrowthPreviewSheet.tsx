@@ -88,7 +88,7 @@ export function GrowthPreviewSheet({ species, visible, onClose }: GrowthPreviewS
                 height={columnHeight(hatchCm, maxCm)}>
                 <GrowthSilhouette
                   speciesId={species.id}
-                  stage="juvenile"
+                  stage="adult"
                   width={64}
                   height={columnHeight(hatchCm, maxCm)}
                   fill={species.growth.shadow}

@@ -2,7 +2,7 @@ import Svg, { Defs, FeGaussianBlur, Filter, G, Path } from 'react-native-svg';
 
 import type { SpeciesId } from '@/domain/types';
 
-import { SILHOUETTE_ART } from './silhouetteArt';
+import { getSilhouettePlate } from './silhouettes';
 
 /** Largest box that fits the plate inside the max frame without stretching it. */
 export function fitSilhouette(
@@ -10,7 +10,7 @@ export function fitSilhouette(
   maxWidth: number,
   maxHeight: number,
 ): { width: number; height: number } {
-  const art = SILHOUETTE_ART[speciesId];
+  const art = getSilhouettePlate(speciesId);
   const aspect = art.viewBoxWidth / Math.max(art.viewBoxHeight, 1);
   const safeWidth = Math.max(maxWidth, 1);
   const safeHeight = Math.max(maxHeight, 1);
@@ -47,7 +47,7 @@ export function GrowthSilhouette({
   rim,
   filterSuffix = 'main',
 }: GrowthSilhouetteProps) {
-  const art = SILHOUETTE_ART[speciesId];
+  const art = getSilhouettePlate(speciesId);
   const filterId = `sil-${speciesId}-${stage}-${filterSuffix}`;
   const softened = blur > 0;
   const rimWidth = rim != null ? (1.15 * art.viewBoxWidth) / Math.max(width, 1) : 0;

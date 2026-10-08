@@ -56,8 +56,8 @@ export function HatchlingFigure({
         <View style={{ position: 'absolute', left: 0, right: 0, bottom: 16, alignItems: 'center' }}>
           <GrowthSilhouette
             speciesId={speciesId}
-            stage={maturationProgress >= 0.66 ? 'adult' : 'juvenile'}
-            {...fitSilhouette(speciesId, width * 0.92, height * 0.78)}
+            stage="adult"
+            {...fitSilhouette(speciesId, width * 0.92 * body, height * 0.78 * body)}
             fill={getSpeciesConfig(speciesId).growth.body}
           />
         </View>
