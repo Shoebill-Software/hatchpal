@@ -168,15 +168,16 @@ describe('Post-hatch maturation', () => {
     });
 
     store.getState().adoptPet('silkie_chicken', 'Pip', baseEpoch);
-    store.getState().recordInteraction('feed', baseEpoch + 1_000);
+    store.getState().recordInteraction('warm_nest', baseEpoch + 1_000);
     expect(store.getState().pets['pet-1']?.isHatched).toBe(false);
-    expect(store.getState().pets['pet-1']?.lastFedEpoch).toBeUndefined();
 
     store.getState().markHatched(baseEpoch + 10 * dayMs);
     expect(store.getState().pets['pet-1']?.isHatched).toBe(false);
     expect(store.getState().pets['pet-1']?.hatchedAtEpoch).toBeUndefined();
 
     const hatchEpoch = baseEpoch + silkieChickenConfig.incubationDays * dayMs;
+    store.getState().recordInteraction('warm_nest', hatchEpoch - 60 * 60 * 1000);
+    store.getState().recordInteraction('mist_nest', hatchEpoch - 60 * 60 * 1000);
     store.getState().markHatched(hatchEpoch);
     const hatched = store.getState().pets['pet-1'];
     expect(hatched?.isHatched).toBe(true);
@@ -186,13 +187,5 @@ describe('Post-hatch maturation', () => {
     store.getState().markHatched(hatchEpoch + dayMs);
     expect(store.getState().pets['pet-1']?.hatchedAtEpoch).toBe(hatchEpoch);
     expect(store.getState().pets['pet-1']?.isHatched).toBe(true);
-
-    store.getState().recordInteraction('feed', hatchEpoch + 5_000);
-    store.getState().recordInteraction('weigh', hatchEpoch + 8_000);
-    store.getState().recordInteraction('pet', hatchEpoch + 9_000);
-    const cared = store.getState().pets['pet-1'];
-    expect(cared?.lastFedEpoch).toBe(hatchEpoch + 5_000);
-    expect(cared?.lastWeighedEpoch).toBe(hatchEpoch + 8_000);
-    expect(cared?.lastInteractedEpoch).toBe(hatchEpoch + 9_000);
   });
 });

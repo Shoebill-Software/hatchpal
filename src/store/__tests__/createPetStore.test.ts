@@ -79,6 +79,8 @@ describe('Pet store', () => {
     expect(store.getState().pets['pet-1']?.isHatched).toBe(false);
 
     const hatchEpoch = baseEpoch + silkieChickenConfig.incubationDays * dayMs;
+    store.getState().recordInteraction('warm_nest', hatchEpoch - 60 * 60 * 1000);
+    store.getState().recordInteraction('mist_nest', hatchEpoch - 60 * 60 * 1000);
     store.getState().syncHatchState(hatchEpoch);
     expect(store.getState().pets['pet-1']?.isHatched).toBe(true);
     expect(store.getState().pets['pet-1']?.hatchedAtEpoch).toBe(hatchEpoch);

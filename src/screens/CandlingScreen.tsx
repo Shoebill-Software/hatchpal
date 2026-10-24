@@ -1,5 +1,5 @@
 import { Redirect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
@@ -12,16 +12,18 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { CandlingView } from '@/components/CandlingView';
+import { CandlingVisualizer } from '@/components/candling/CandlingVisualizer';
+import {
+  candlingStageLabelKey,
+  resolveCandlingStage,
+} from '@/components/candling/candlingStages';
 import { NestStatusBar } from '@/components/NestStatusBar';
-import { ImpactFeedbackStyle, triggerImpact } from '@/services/hapticFeedback';
 import { Spacing } from '@/constants/theme';
-import { caredHeartRate, readClimate } from '@/domain/climateEngine';
+import { caredHeartRate, displayedVitality, readClimate } from '@/domain/climateEngine';
 import { useActivePet } from '@/hooks/useActivePet';
 import { useSoundEffects } from '@/hooks/useSoundEffects';
 import { useTranslation } from '@/i18n';
 import { heartbeatIntervalMs } from '@/hooks/hapticHeartbeat';
-import { useCandlingTouch, type CandlingLightMode } from '@/hooks/useCandlingTouch';
 import { useHapticHeartbeat } from '@/hooks/useHapticHeartbeat';
 
 const CHAMBER = '#070504';
@@ -35,18 +37,13 @@ export default function CandlingScreen() {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const { pet, species, snapshot, hasHydrated, isClockTampered, nowEpoch } = useActivePet();
-  const [lightMode, setLightMode] = useState<CandlingLightMode>('manual');
-
-  const touch = useCandlingTouch({
-    mode: lightMode,
-    onTouchBegin: () => {
-      void triggerImpact(ImpactFeedbackStyle.Light);
-    },
-  });
 
   const climate = pet && species ? readClimate(pet, species, nowEpoch) : null;
-  const bpm = caredHeartRate(snapshot?.currentHeartRate ?? 0, climate?.vitalityScore ?? 1);
-  const candlingActive = Boolean(snapshot) && touch.isIlluminated && bpm > 0;
+  const bpm = caredHeartRate(
+    snapshot?.currentHeartRate ?? 0,
+    climate ? displayedVitality(climate) : 1
+  );
+  const candlingActive = Boolean(snapshot) && bpm > 0 && !snapshot?.isUnviable;
   const { play } = useSoundEffects();
   const playHeartbeat = useCallback(() => {
     play('heartbeat');
@@ -55,7 +52,7 @@ export default function CandlingScreen() {
   useHapticHeartbeat({
     bpm,
     active: candlingActive,
-    pulseImmediately: lightMode === 'fixed',
+    pulseImmediately: true,
     onPulse: playHeartbeat,
   });
 
@@ -71,14 +68,20 @@ export default function CandlingScreen() {
     return <View style={styles.flex} />;
   }
 
-  if (!pet || !species || !snapshot || pet.isHatched) {
+  if (!pet || !species || !snapshot || pet.isHatched || snapshot.isUnviable) {
     return <Redirect href="/" />;
   }
 
   const heartLabel = bpm > 0 ? `${bpm} ${t('common.bpm')}` : t('metric.undetected');
   const milestoneTitle = snapshot.currentMilestone.title;
   const summary = snapshot.currentMilestone.scientificSummary;
-  const lightModeLabel = lightMode === 'fixed' ? t('candling.backlight') : t('candling.fingerLight');
+  const stage = resolveCandlingStage(snapshot.incubationProgress);
+  const incubationDay = Math.min(snapshot.ageDays + 1, species.incubationDays);
+  const stageCaption = t('candling.stageCaption', {
+    stage: t(candlingStageLabelKey(stage.id)),
+    day: incubationDay,
+    total: species.incubationDays,
+  });
 
   return (
     <View style={[styles.flex, { paddingTop: insets.top }]}>
@@ -113,40 +116,13 @@ export default function CandlingScreen() {
         </View>
       ) : null}
 
-      <CandlingView
-        snapshot={snapshot}
-        species={species}
-        lightX={touch.lightX}
-        lightY={touch.lightY}
-        isLightActive={touch.isIlluminated}
-        glow={touch.glow}
-        eggCx={touch.eggCx}
-        eggCy={touch.eggCy}
-        eggRx={touch.eggRx}
-        eggRy={touch.eggRy}
-        layout={touch.layout}
-        gesture={touch.gesture}
-        onLayout={touch.handleLayout}
-      />
+      <CandlingVisualizer snapshot={snapshot} species={species} />
 
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, Spacing.three) }]}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('candling.toggleLight')}
-          onPress={() => setLightMode((mode) => (mode === 'manual' ? 'fixed' : 'manual'))}
-          style={({ pressed }) => [styles.toggleButton, { opacity: pressed ? 0.84 : 1 }]}>
-          <Text style={styles.toggleLabel}>{t('candling.toggleLight')}</Text>
-          <Text style={styles.toggleMeta}>{t('candling.lightMode', { mode: lightModeLabel })}</Text>
-        </Pressable>
+        <Text style={styles.stageCaption}>{stageCaption}</Text>
         <Text style={styles.labKicker}>{t('candling.labNote')}</Text>
         <Text style={styles.labBody}>{summary}</Text>
-        <Text style={styles.hint}>
-          {lightMode === 'fixed'
-            ? t('candling.hintFixed')
-            : touch.isIlluminated
-              ? t('candling.hintFollowing')
-              : t('candling.hintIdle')}
-        </Text>
+        <Text style={styles.hint}>{t('candling.alwaysOnHint')}</Text>
       </View>
     </View>
   );
@@ -303,25 +279,11 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.three,
     gap: Spacing.two,
   },
-  toggleButton: {
-    minHeight: 48,
-    borderRadius: 12,
-    backgroundColor: '#C4783A',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    gap: 2,
-  },
-  toggleLabel: {
-    color: '#1A1410',
-    fontSize: 14,
+  stageCaption: {
+    color: GOLD,
+    fontSize: 13,
     fontWeight: '800',
-  },
-  toggleMeta: {
-    color: '#3A2A1C',
-    fontSize: 12,
-    fontWeight: '600',
+    letterSpacing: 0.3,
   },
   labKicker: {
     color: GOLD,

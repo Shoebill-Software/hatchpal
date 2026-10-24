@@ -34,6 +34,15 @@ describe('Time & Simulation Engine', () => {
     isHatched: false,
   };
 
+  const withCare = (epoch: number, pet: PetInstance = mockPet): PetInstance => ({
+    ...pet,
+    lastWarmedEpoch: epoch,
+    lastMistedEpoch: epoch,
+    lastInteractedEpoch: epoch,
+    currentTemperatureCelsius: 37.5,
+    currentHumidityPct: 55,
+  });
+
   it('calculates elapsed seconds exactly and clamps reversed clocks to zero', () => {
     expect(calculateElapsedSeconds(baseEpoch, baseEpoch + 3600 * 1000)).toBe(3600);
     expect(calculateElapsedSeconds(baseEpoch, baseEpoch - 5000)).toBe(0);
@@ -129,23 +138,27 @@ describe('Time & Simulation Engine', () => {
     expect(day0.progress).toBe(0);
     expect(day0.currentHeartRate).toBe(0);
 
-    const mid = resolvePetSnapshot(mockPet, silkieChickenConfig, baseEpoch + 8 * dayMs);
+    const midEpoch = baseEpoch + 8 * dayMs;
+    const mid = resolvePetSnapshot(withCare(midEpoch), silkieChickenConfig, midEpoch);
     expect(mid.currentMilestone.day).toBe(8);
     expect(mid.currentMilestone.stage).toBe('organogenesis');
     expect(mid.progress).toBeCloseTo(8 / 21, 5);
 
-    const internalPip = resolvePetSnapshot(mockPet, silkieChickenConfig, baseEpoch + 19 * dayMs);
+    const internalEpoch = baseEpoch + 19 * dayMs;
+    const internalPip = resolvePetSnapshot(withCare(internalEpoch), silkieChickenConfig, internalEpoch);
     expect(internalPip.currentMilestone.stage).toBe('internal_pip');
     expect(internalPip.isPipped).toBe(true);
     expect(internalPip.lifeStage).toBe('pip');
     expect(internalPip.currentHeartRate).toBe(198);
 
-    const externalPip = resolvePetSnapshot(mockPet, silkieChickenConfig, baseEpoch + 20 * dayMs);
+    const externalEpoch = baseEpoch + 20 * dayMs;
+    const externalPip = resolvePetSnapshot(withCare(externalEpoch), silkieChickenConfig, externalEpoch);
     expect(externalPip.currentMilestone.stage).toBe('external_pip');
     expect(externalPip.isPipped).toBe(true);
     expect(externalPip.isReadyToHatch).toBe(false);
 
-    const hatchDay = resolvePetSnapshot(mockPet, silkieChickenConfig, baseEpoch + 21 * dayMs);
+    const hatchEpoch = baseEpoch + 21 * dayMs;
+    const hatchDay = resolvePetSnapshot(withCare(hatchEpoch), silkieChickenConfig, hatchEpoch);
     expect(hatchDay.progress).toBe(1);
     expect(hatchDay.isReadyToHatch).toBe(true);
     expect(hatchDay.currentMilestone.stage).toBe('hatchling');

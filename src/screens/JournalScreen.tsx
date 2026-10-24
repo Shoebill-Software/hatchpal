@@ -3,18 +3,12 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { GrowthLog } from '@/components/GrowthLog';
 import { NestStatusBar } from '@/components/NestStatusBar';
 import { MilestoneDetailModal } from '@/components/MilestoneDetailModal';
 import { MilestoneTimeline } from '@/components/MilestoneTimeline';
 import { useNestPalette } from '@/constants/nest';
 import { BottomTabInset, Fonts, MaxContentWidth, Spacing } from '@/constants/theme';
-import {
-  buildJournalTimeline,
-  generateWeightHistory,
-  getWeightMarks,
-  type JournalMilestone,
-} from '@/domain/milestones';
+import { buildJournalTimeline, type JournalMilestone } from '@/domain/milestones';
 import { resolveHatchEpoch } from '@/domain/timeEngine';
 import { useActivePet } from '@/hooks/useActivePet';
 import { formatLocaleDate, useTranslation } from '@/i18n';
@@ -40,17 +34,6 @@ export default function JournalScreen() {
       postHatchAgeDays: snapshot.postHatchAgeDays,
       hatchEpoch,
     });
-  }, [hatchEpoch, pet, species, snapshot]);
-
-  const growth = useMemo(() => {
-    if (!pet || !species || !snapshot || !snapshot.isHatched) {
-      return { samples: [], marks: [] };
-    }
-    const currentEpoch = Math.max(hatchEpoch, pet.laidAtEpoch + snapshot.ageSeconds * 1000);
-    return {
-      samples: generateWeightHistory(species, hatchEpoch, currentEpoch),
-      marks: getWeightMarks(species, hatchEpoch, currentEpoch),
-    };
   }, [hatchEpoch, pet, species, snapshot]);
 
   const openMilestone = timeline.find((entry) => entry.id === openId) ?? null;
@@ -111,14 +94,6 @@ export default function JournalScreen() {
         </View>
 
         <MilestoneTimeline milestones={timeline} onSelect={(entry: JournalMilestone) => setOpenId(entry.id)} />
-
-        <GrowthLog
-          species={species}
-          isHatched={snapshot.isHatched}
-          currentWeightGrams={snapshot.currentWeightGrams}
-          samples={growth.samples}
-          marks={growth.marks}
-        />
       </ScrollView>
 
       <MilestoneDetailModal

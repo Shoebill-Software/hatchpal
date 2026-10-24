@@ -28,6 +28,14 @@ export default function AppTabs() {
         <NativeTabs.Trigger.Label>{t('nav.journal')}</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf={{ default: 'book', selected: 'book.fill' }} md="menu_book" />
       </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="sanctuary">
+        <NativeTabs.Trigger.Label>{t('nav.sanctuary')}</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
+          sf={{ default: 'building.columns', selected: 'building.columns.fill' }}
+          md="museum"
+        />
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }

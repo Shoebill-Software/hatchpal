@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -42,7 +42,7 @@ export interface HatchingCeremonyProps {
   visible: boolean;
   nickname: string;
   speciesId: SpeciesId;
-  onComplete: () => void;
+  onComplete: (name: string) => void;
 }
 
 export function HatchingCeremony({ visible, nickname, speciesId, onComplete }: HatchingCeremonyProps) {
@@ -51,6 +51,7 @@ export function HatchingCeremony({ visible, nickname, speciesId, onComplete }: H
   const { t } = useTranslation();
   const { play } = useSoundEffects();
   const [taps, setTaps] = useState(0);
+  const [name, setName] = useState(nickname);
   const tapsRef = useRef(0);
   const capY = useSharedValue(0);
   const capRotate = useSharedValue(0);
@@ -64,6 +65,7 @@ export function HatchingCeremony({ visible, nickname, speciesId, onComplete }: H
     if (!visible) {
       tapsRef.current = 0;
       setTaps((current) => (current === 0 ? current : 0));
+      setName(nickname);
       capY.value = 0;
       capRotate.value = 0;
       creatureScale.value = 0.35;
@@ -204,20 +206,37 @@ export function HatchingCeremony({ visible, nickname, speciesId, onComplete }: H
 
         {emerged ? (
           <View style={styles.reveal}>
+            <Text style={[styles.achievement, { color: palette.action }]}>{t('hatch.achievement')}</Text>
             <Text accessibilityLiveRegion="polite" style={[styles.welcome, { color: palette.text }]}>
-              {t('hatch.welcome', { nickname })}
+              {t('hatch.welcome', { nickname: name.trim().length > 0 ? name.trim() : nickname })}
             </Text>
             <Text style={[styles.emerged, { color: palette.textMuted }]}>
-              {t('hatch.emerged', { nickname })}
+              {t('hatch.emerged', { nickname: name.trim().length > 0 ? name.trim() : nickname })}
             </Text>
+            <Text style={[styles.nameLabel, { color: palette.textMuted }]}>{t('hatch.nameLabel')}</Text>
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              maxLength={24}
+              autoCorrect={false}
+              placeholder={t('hatch.namePlaceholder')}
+              placeholderTextColor={palette.textMuted}
+              accessibilityLabel={t('hatch.nameLabel')}
+              style={[
+                styles.nameInput,
+                { color: palette.text, backgroundColor: palette.surface, borderColor: palette.border },
+              ]}
+            />
             <Pressable
               accessibilityRole="button"
-              onPress={onComplete}
+              onPress={() => onComplete(name.trim().length > 0 ? name.trim() : nickname)}
               style={({ pressed }) => [
                 styles.complete,
                 { backgroundColor: palette.action, opacity: pressed ? 0.88 : 1 },
               ]}>
-              <Text style={[styles.completeLabel, { color: palette.actionText }]}>{t('hatch.complete')}</Text>
+              <Text style={[styles.completeLabel, { color: palette.actionText }]}>
+                {t('hatch.placeInSanctuary')}
+              </Text>
             </Pressable>
           </View>
         ) : (
@@ -309,6 +328,30 @@ const styles = StyleSheet.create({
   assist: {
     marginTop: Spacing.three,
     fontSize: 18,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  achievement: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+  },
+  nameLabel: {
+    marginTop: Spacing.one,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    alignSelf: 'center',
+  },
+  nameInput: {
+    alignSelf: 'stretch',
+    borderWidth: 1,
+    borderRadius: 12,
+    minHeight: 48,
+    paddingHorizontal: Spacing.three,
+    fontSize: 16,
     fontWeight: '700',
     textAlign: 'center',
   },

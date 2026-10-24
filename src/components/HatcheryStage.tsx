@@ -288,12 +288,11 @@ function WashPaint({ speciesId }: { speciesId: SpeciesId }) {
   return (
     <Svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
       <Defs>
-        <RadialGradient id={glowId} cx="50" cy="40" r="42" gradientUnits="userSpaceOnUse">
-          <Stop offset="0%" stopColor={atmosphere.high} stopOpacity={0.95} />
-          <Stop offset="32%" stopColor={atmosphere.mid} stopOpacity={0.62} />
-          <Stop offset="68%" stopColor={atmosphere.low} stopOpacity={0.2} />
+        <LinearGradient id={glowId} x1="50" y1="0" x2="50" y2="70" gradientUnits="userSpaceOnUse">
+          <Stop offset="0%" stopColor={atmosphere.high} stopOpacity={0.28} />
+          <Stop offset="42%" stopColor={atmosphere.mid} stopOpacity={0.1} />
           <Stop offset="100%" stopColor={atmosphere.low} stopOpacity={0} />
-        </RadialGradient>
+        </LinearGradient>
         <LinearGradient id={scrimId} x1="0" y1="0" x2="0" y2="1">
           <Stop offset="0%" stopColor={HATCHERY.ground} stopOpacity={0.82} />
           <Stop offset="16%" stopColor={HATCHERY.ground} stopOpacity={0.28} />
@@ -315,13 +314,13 @@ function HabitatGlow({ speciesId, atmosphere }: { speciesId: SpeciesId; atmosphe
   return (
     <Svg width="100%" height="100%" viewBox="0 0 100 100">
       <Defs>
-        <RadialGradient id={id} cx="50" cy="58" r="46" gradientUnits="userSpaceOnUse">
-          <Stop offset="0%" stopColor={atmosphere.high} stopOpacity={0.9} />
-          <Stop offset="38%" stopColor={atmosphere.mid} stopOpacity={0.45} />
+        <LinearGradient id={id} x1="50" y1="8" x2="50" y2="88" gradientUnits="userSpaceOnUse">
+          <Stop offset="0%" stopColor={atmosphere.high} stopOpacity={0.22} />
+          <Stop offset="48%" stopColor={atmosphere.mid} stopOpacity={0.08} />
           <Stop offset="100%" stopColor={atmosphere.low} stopOpacity={0} />
-        </RadialGradient>
+        </LinearGradient>
       </Defs>
-      <Ellipse cx="50" cy="62" rx="42" ry="30" fill={`url(#${id})`} />
+      <Rect x="18" y="8" width="64" height="80" fill={`url(#${id})`} />
     </Svg>
   );
 }

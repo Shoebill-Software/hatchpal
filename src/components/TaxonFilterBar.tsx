@@ -37,13 +37,19 @@ export function TaxonFilterBar({ value, onChange }: TaxonFilterBarProps) {
               void triggerImpact(ImpactFeedbackStyle.Light);
               onChange(filter);
             }}
-            style={({ pressed }) => [styles.hit, { opacity: pressed ? 0.6 : 1 }]}>
+            style={({ pressed }) => [
+              styles.hit,
+              {
+                backgroundColor: selected ? 'rgba(246, 240, 230, 0.08)' : 'transparent',
+                borderColor: selected ? 'rgba(232, 220, 196, 0.28)' : 'rgba(232, 220, 196, 0.12)',
+                opacity: pressed ? 0.7 : 1,
+              },
+            ]}>
             <Text
               maxFontSizeMultiplier={1.15}
               style={[styles.label, { color: selected ? HATCHERY.ink : HATCHERY.quiet }]}>
               {t(FILTER_LABEL[filter])}
             </Text>
-            <View style={[styles.mark, { backgroundColor: selected ? HATCHERY.amber : 'transparent' }]} />
           </Pressable>
         );
       })}
@@ -55,25 +61,25 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     justifyContent: 'center',
-    alignItems: 'flex-start',
-    gap: 6,
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
     paddingHorizontal: 12,
+    paddingBottom: 4,
   },
   hit: {
-    minHeight: 36,
-    paddingHorizontal: 10,
-    paddingTop: 6,
+    minHeight: 32,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   label: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
-    letterSpacing: 0.2,
-  },
-  mark: {
-    marginTop: 6,
-    width: 16,
-    height: 2,
-    borderRadius: 1,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
 });

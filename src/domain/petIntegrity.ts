@@ -1,7 +1,7 @@
 import { climateSetpoint } from '@/data/species/climateSetpoints';
 
 import { clampVitality, freshNestClimate } from './climateEngine';
-import { SPECIES_IDS, PetInstance, SpeciesId } from './types';
+import { SPECIES_IDS, PetInstance, PetStatus, SpeciesId } from './types';
 
 const FALLBACK_SPECIES_ID: SpeciesId = 'silkie_chicken';
 
@@ -54,8 +54,13 @@ export function createPetInstance(input: {
     lastInteractedEpoch: nowEpoch,
     healthMultiplier: 1,
     ...freshNestClimate(nowEpoch, setpoints.temperatureTargetCelsius, setpoints.humidityTargetPct),
+    status: 'incubating',
     isHatched: false,
   };
+}
+
+function resolvePetStatus(value: unknown): PetStatus {
+  return value === 'unviable' ? 'unviable' : 'incubating';
 }
 
 export function sanitizePetInstance(value: unknown, nowEpoch = 0): PetInstance | null {
@@ -93,17 +98,12 @@ export function sanitizePetInstance(value: unknown, nowEpoch = 0): PetInstance |
     lastWarmedEpoch: toFiniteEpoch(raw.lastWarmedEpoch, laidAtEpoch),
     lastMistedEpoch: toFiniteEpoch(raw.lastMistedEpoch, laidAtEpoch),
     vitalityScore: clampVitality(raw.vitalityScore),
+    status: resolvePetStatus(raw.status),
     isHatched: raw.isHatched === true,
   };
 
   if (raw.hatchedAtEpoch !== undefined) {
     pet.hatchedAtEpoch = toFiniteEpoch(raw.hatchedAtEpoch, laidAtEpoch);
-  }
-  if (typeof raw.lastFedEpoch === 'number') {
-    pet.lastFedEpoch = toFiniteEpoch(raw.lastFedEpoch, laidAtEpoch);
-  }
-  if (typeof raw.lastWeighedEpoch === 'number') {
-    pet.lastWeighedEpoch = toFiniteEpoch(raw.lastWeighedEpoch, laidAtEpoch);
   }
 
   return pet;

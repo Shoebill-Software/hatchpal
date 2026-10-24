@@ -1,3 +1,4 @@
+import { displayedVitality, isEmbryoUnviable, readClimate } from './climateEngine';
 import { getCurrentMilestone, getMilestoneAtDay, isPipStage } from './milestones';
 import {
   ClockAnomaly,
@@ -275,8 +276,12 @@ export function resolvePetSnapshot(
     ? getMilestoneAtDay(milestoneDay, species.milestones)
     : getCurrentMilestone(incubationProgress, species.incubationDays, species.milestones);
 
-  const isPipped = !pet.isHatched && isPipStage(currentMilestone.stage);
-  const isReadyToHatch = !pet.isHatched && incubationProgress >= 1.0;
+  const climate = readClimate(pet, species, effectiveEpoch);
+  const isUnviable = isEmbryoUnviable(pet, species, effectiveEpoch);
+  const vitality = isUnviable ? 0 : displayedVitality(climate);
+
+  const isPipped = !pet.isHatched && !isUnviable && isPipStage(currentMilestone.stage);
+  const isReadyToHatch = !pet.isHatched && !isUnviable && incubationProgress >= 1.0;
   const lifeStage = resolveLifeStage(pet.isHatched, isPipped, maturationProgress);
   const currentHeartRate = pet.isHatched
     ? Math.round(Number.isFinite(species.baseHeartRateBpm) ? species.baseHeartRateBpm : 0)
@@ -298,6 +303,8 @@ export function resolvePetSnapshot(
     isPipped,
     isReadyToHatch,
     isHatched: pet.isHatched,
+    vitality,
+    isUnviable,
     isClockTampered: clock.isClockTampered,
     clockAnomaly: clock.anomaly,
   };
