@@ -5,6 +5,7 @@ export const en = {
   'nav.candling': 'Candling',
   'nav.adoption': 'Adoption',
   'nav.journal': 'Field Journal',
+  'nav.sanctuary': 'Sanctuary',
   'nav.docs': 'Docs',
 
   'common.hatchpal': 'HatchPal',
@@ -74,6 +75,14 @@ export const en = {
   'nest.maturationPercent': 'Growth {{percent}}%',
   'nest.maturationA11y': 'Growth {{percent}} percent toward adulthood',
   'nest.changeCompanion': 'New egg',
+  'nest.unviableTitle': 'The nest has gone cold',
+  'nest.unviableBody': 'The embryo did not survive the prolonged climate drop.',
+  'nest.unviableDetail':
+    'Vitality held at zero for too long. This clutch can no longer develop, but you can begin again whenever you are ready.',
+  'nest.clearAndRestart': 'Clear Nest and Restart',
+  'nest.clearA11y': 'Clear the failed nest and return to the empty sanctuary',
+  'nest.placeHatched': 'Place in the Sanctuary',
+  'nest.hatchedReady': '{{nickname}} has emerged. Enshrine them in the gallery.',
 
   'climate.warmth': 'Warmth',
   'climate.humidity': 'Humidity',
@@ -117,6 +126,13 @@ export const en = {
   'candling.chamberLabel': 'Candling chamber with egg',
   'candling.chamberActive': 'The egg is being candled',
   'candling.chamberIdle': 'Rest a finger on the egg to light the interior',
+  'candling.alwaysOnHint':
+    'The warm backlight stays on while you inspect the egg. Tilt your device to watch the contents settle.',
+  'candling.stageCaption': '{{stage}} · Day {{day}} of {{total}}',
+  'candling.stage.early': 'Translucent albumen',
+  'candling.stage.vascular': 'Vascular spider',
+  'candling.stage.embryo': 'Embryonic growth',
+  'candling.stage.prehatch': 'Shadowed and crowded',
 
   'changeEgg.title': 'Change Egg',
   'changeEgg.body':
@@ -150,9 +166,9 @@ export const en = {
   'adoption.selectSpecies': 'Select a species',
   'adoption.inspectGrowth': 'Inspect Growth',
   'adoption.filter.all': 'All',
-  'adoption.filter.birds': 'Birds',
-  'adoption.filter.reptiles': 'Reptiles',
-  'adoption.filter.exotics': 'Exotics',
+  'adoption.filter.birds': 'Aves',
+  'adoption.filter.reptiles': 'Reptilia',
+  'adoption.filter.exotics': 'Monotremata',
 
   'taxon.galliform': 'Galliformes',
   'taxon.raptor': 'Raptors',
@@ -266,6 +282,24 @@ export const en = {
   'hatch.complete': 'Complete Hatching',
   'hatch.tapProgress': '{{current}} of {{total}}',
   'hatch.emerged': '{{nickname}} has broken through.',
+  'hatch.nameLabel': 'Name your newborn',
+  'hatch.namePlaceholder': 'Choose a name',
+  'hatch.placeInSanctuary': 'Place in the Sanctuary',
+  'hatch.achievement': 'New species hatched',
+
+  'sanctuary.title': 'Sanctuary',
+  'sanctuary.subtitle': 'A permanent hall for every creature you have carried to hatching.',
+  'sanctuary.emptyTitle': 'The hall is quiet',
+  'sanctuary.emptyBody':
+    'Successfully hatched creatures are enshrined here with their field dossiers, hatch dates, and adult portraits.',
+  'sanctuary.emptyCta': 'Adopt an egg',
+  'sanctuary.species': 'Species',
+  'sanctuary.specimens': 'Specimens',
+  'sanctuary.speciesCount': '{{count}} species',
+  'sanctuary.hatchedOn': 'Hatched {{date}}',
+  'sanctuary.incubation': '{{days}}-day incubation',
+  'sanctuary.dossier': 'Dossier No. {{number}}',
+  'sanctuary.cardA11y': '{{name}}, {{species}}, hatched {{date}}',
 
   'care.pet': 'Pet',
   'care.feed': 'Log Feeding',

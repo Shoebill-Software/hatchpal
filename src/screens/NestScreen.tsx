@@ -21,7 +21,6 @@ import { ClimateControls, describeClimate } from '@/components/ClimateControls';
 import { EGG_FRAME, EggContainer } from '@/components/EggContainer';
 import { EmptyNestView } from '@/components/EmptyNestView';
 import { HatchingCeremony } from '@/components/HatchingCeremony';
-import { HatchlingContainer } from '@/components/HatchlingContainer';
 import { NestPresence } from '@/components/NestPresence';
 import { NestStatusBar } from '@/components/NestStatusBar';
 import { SettingsModal } from '@/components/SettingsModal';
@@ -33,28 +32,20 @@ import { useNestPalette } from '@/constants/nest';
 import { SANCTUARY_CRADLE_LIMIT } from '@/domain/cradleCapacity';
 import { priceStringFor, SANCTUARY_PASS_PRODUCT_ID } from '@/domain/entitlements';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { readClimate, caredHeartRate } from '@/domain/climateEngine';
+import { caredHeartRate, displayedVitality, readClimate } from '@/domain/climateEngine';
 import { resolveHatchEpoch } from '@/domain/timeEngine';
 import type { PetInstance, PetSnapshot, SpeciesConfig } from '@/domain/types';
 import { useActivePet, type ActivePetView } from '@/hooks/useActivePet';
 import { useReduceMotion } from '@/hooks/useReduceMotion';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useNestPipAudio, useSoundEffects } from '@/hooks/useSoundEffects';
-import {
-  formatBiologicalWeight,
-  formatCarePhrase,
-  formatCompactDate,
-  formatPostHatchAge,
-  getElapsedSpan,
-  lifeStageLabelKey,
-  useTranslation,
-} from '@/i18n';
+import { formatCompactDate, useTranslation } from '@/i18n';
 import { ImpactFeedbackStyle, NotificationFeedbackType, triggerImpact, triggerNotification } from '@/services/hapticFeedback';
 import { isPurchaseCancelled } from '@/services/purchaseErrors';
+import { useCollectionStore } from '@/store/useCollectionStore';
 import { usePurchasesStore } from '@/store/usePurchasesStore';
 
 const HEART = '#C45B5B';
-const FIGURE = { width: 220, height: 246 };
 /** Clears the floating iOS tab bar, including the labels under the care buttons. */
 const TAB_CLEARANCE = Platform.select({ ios: 136, android: 108, default: 108 }) ?? 108;
 
@@ -83,6 +74,7 @@ export default function NestScreen() {
   const isPro = usePurchasesStore((state) => state.isProUnlocked);
   const packages = usePurchasesStore((state) => state.availablePackages);
   const purchaseProduct = usePurchasesStore((state) => state.purchaseProduct);
+  const archiveSpecimen = useCollectionStore((state) => state.archiveSpecimen);
   const passPrice = priceStringFor(packages, SANCTUARY_PASS_PRODUCT_ID);
   const addOffer =
     cradles.length >= SANCTUARY_CRADLE_LIMIT
@@ -192,6 +184,8 @@ export default function NestScreen() {
                     recordInteraction={recordInteraction}
                     markHatched={markHatched}
                     onStepCradle={cradles.length > 0 ? stepCradle : undefined}
+                    abandonActivePet={abandonActivePet}
+                    archiveSpecimen={archiveSpecimen}
                   />
                 ) : (
                   <View style={styles.flex} />
@@ -248,6 +242,8 @@ function OccupiedNest({
   recordInteraction,
   markHatched,
   onStepCradle,
+  abandonActivePet,
+  archiveSpecimen,
 }: {
   pet: PetInstance;
   species: SpeciesConfig;
@@ -257,6 +253,8 @@ function OccupiedNest({
   recordInteraction: ActivePetView['recordInteraction'];
   markHatched: ActivePetView['markHatched'];
   onStepCradle?: (direction: -1 | 1) => void;
+  abandonActivePet: ActivePetView['abandonActivePet'];
+  archiveSpecimen: ReturnType<typeof useCollectionStore.getState>['archiveSpecimen'];
 }) {
   const router = useRouter();
   const palette = useNestPalette();
@@ -282,11 +280,10 @@ function OccupiedNest({
 
   const hatched = pet.isHatched;
   const incubationDay = Math.min(snapshot.ageDays, species.incubationDays);
-  const progressPct = Math.round((hatched ? snapshot.maturationProgress : snapshot.progress) * 100);
+  const progressPct = Math.round(snapshot.progress * 100);
   const climate = readClimate(pet, species, nowEpoch);
-  const heartRate = caredHeartRate(snapshot.currentHeartRate, climate.vitalityScore);
+  const heartRate = caredHeartRate(snapshot.currentHeartRate, displayedVitality(climate));
   const heartDetected = heartRate > 0;
-  const stageLabel = t(lifeStageLabelKey(snapshot.lifeStage));
   const hatchLabel = formatCompactDate(resolveHatchEpoch(pet, species));
   const dayValue = t('metric.spanOf', {
     day: Math.floor(incubationDay),
@@ -297,23 +294,63 @@ function OccupiedNest({
     temp: climate.temperatureCelsius.toFixed(1),
     humidity: Math.round(climate.humidityPct),
   });
-  const weight = formatBiologicalWeight(snapshot.currentWeightGrams);
-  const weightUnit = t(weight.unit === 'kg' ? 'weight.kilograms' : 'weight.grams');
-  const daysLeft = snapshot.daysUntilAdult;
-  const fedPhrase = formatCarePhrase(
-    'feed',
-    pet.lastFedEpoch != null,
-    getElapsedSpan(pet.lastFedEpoch ?? nowEpoch, nowEpoch),
-    t
-  );
-  const weighPhrase = formatCarePhrase(
-    'weigh',
-    pet.lastWeighedEpoch != null,
-    getElapsedSpan(pet.lastWeighedEpoch ?? nowEpoch, nowEpoch),
-    t
-  );
+
+  const placeInSanctuary = (name: string) => {
+    archiveSpecimen({
+      speciesId: species.id,
+      nickname: name,
+      commonName: species.commonName,
+      scientificName: species.scientificName,
+      hatchDateEpoch: resolveHatchEpoch(pet, species),
+      incubationDurationDays: species.incubationDays,
+      adultSilhouette: species.id,
+    });
+    abandonActivePet();
+    router.push('/sanctuary');
+  };
+
+  if (snapshot.isUnviable) {
+    return (
+      <View style={[styles.flex, styles.somberCenter]}>
+        <Text style={styles.somberKicker}>{pet.nickname}</Text>
+        <Text style={[styles.somberTitle, { color: palette.text }]}>{t('nest.unviableTitle')}</Text>
+        <Text style={[styles.somberBody, { color: palette.textMuted }]}>{t('nest.unviableBody')}</Text>
+        <Text style={[styles.somberDetail, { color: palette.textMuted }]}>{t('nest.unviableDetail')}</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('nest.clearA11y')}
+          onPress={() => {
+            void triggerImpact(ImpactFeedbackStyle.Medium);
+            abandonActivePet();
+          }}
+          style={({ pressed }) => [styles.somberButton, { opacity: pressed ? 0.85 : 1 }]}>
+          <Text style={styles.somberButtonLabel}>{t('nest.clearAndRestart')}</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  if (hatched) {
+    return (
+      <View style={[styles.flex, styles.somberCenter]}>
+        <Text style={[styles.somberTitle, { color: palette.text }]}>
+          {t('nest.hatchedReady', { nickname: pet.nickname })}
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => placeInSanctuary(pet.nickname)}
+          style={({ pressed }) => [
+            styles.somberButton,
+            { backgroundColor: palette.action, opacity: pressed ? 0.86 : 1 },
+          ]}>
+          <Text style={[styles.somberButtonLabel, { color: palette.actionText }]}>
+            {t('nest.placeHatched')}
+          </Text>
+        </Pressable>
+      </View>
+    );
+  }
   const eggScale = fitToStage(stageBox, EGG_FRAME);
-  const figureScale = fitToStage(stageBox, FIGURE);
   const holdHint = t('nest.holdToCandle');
   const stepRef = useRef(onStepCradle);
   stepRef.current = onStepCradle;
@@ -355,33 +392,22 @@ function OccupiedNest({
     }, 110);
   };
 
-  const leftTop: Reading = hatched
-    ? { label: t('nest.ageLabel'), value: formatPostHatchAge(snapshot.postHatchAgeDays, t) }
-    : {
-        label: t('nest.dayLabel'),
-        value: dayValue,
-        accessibilityLabel: `${t('nest.dayLabel')}, ${dayValue}. ${t('nest.incubationA11y', { percent: progressPct })}`,
-      };
-  const leftBottom: Reading = hatched
-    ? { label: t('nest.stageLabel'), value: stageLabel }
-    : { label: t('nest.hatchLabel'), value: hatchLabel };
-  const rightTop: Reading = hatched
-    ? { label: t('nest.weightLabel'), value: `${weight.value} ${weightUnit}` }
-    : {
-        label: t('nest.heartLabel'),
-        value: heartValue,
-        dot: heartDetected ? { color: HEART, pulse: true } : undefined,
-      };
-  const rightBottom: Reading = hatched
-    ? {
-        label: t('nest.maturityLabel'),
-        value: daysLeft === 0 ? t('metric.mature') : `${daysLeft} ${t(daysLeft === 1 ? 'metric.dayUnit' : 'metric.daysUnit')}`,
-      }
-    : {
-        label: t('nest.climateLabel'),
-        value: climateValue,
-        dot: { color: climate.inSweetSpot ? palette.optimal : palette.warning, pulse: false },
-      };
+  const leftTop: Reading = {
+    label: t('nest.dayLabel'),
+    value: dayValue,
+    accessibilityLabel: `${t('nest.dayLabel')}, ${dayValue}. ${t('nest.incubationA11y', { percent: progressPct })}`,
+  };
+  const leftBottom: Reading = { label: t('nest.hatchLabel'), value: hatchLabel };
+  const rightTop: Reading = {
+    label: t('nest.heartLabel'),
+    value: heartValue,
+    dot: heartDetected ? { color: HEART, pulse: true } : undefined,
+  };
+  const rightBottom: Reading = {
+    label: t('nest.climateLabel'),
+    value: climateValue,
+    dot: { color: climate.inSweetSpot ? palette.optimal : palette.warning, pulse: false },
+  };
 
   return (
     <View style={styles.flex}>
@@ -397,96 +423,64 @@ function OccupiedNest({
               <View
                 style={[
                   styles.eggWell,
-                  { height: Math.round((hatched ? FIGURE.height * figureScale : EGG_FRAME.height * eggScale) + 8) },
+                  { height: Math.round(EGG_FRAME.height * eggScale + 8) },
                 ]}>
                 <View pointerEvents="none" style={styles.haloLayer}>
                   <NestHalo
                     color={species.growth.glow}
-                    sweet={hatched || climate.inSweetSpot}
-                    scale={hatched ? figureScale : eggScale}
+                    sweet={climate.inSweetSpot}
+                    scale={eggScale}
                   />
                 </View>
-                {hatched ? (
-                  <HatchlingContainer
-                    speciesId={species.id}
-                    maturationProgress={snapshot.maturationProgress}
-                    accessibilityLabel={t('hatchling.a11y', { name: pet.nickname, stage: stageLabel })}
-                    hint={t('care.chirpHint')}
-                    scaleLabel=""
-                    showCaption={false}
-                    width={Math.round(FIGURE.width * figureScale)}
-                    height={Math.round(FIGURE.height * figureScale)}
-                    onPet={() => {
-                      recordInteraction('pet');
-                    }}
+                <TutorialAnchor targetId="egg">
+                  <EggContainer
+                    snapshot={snapshot}
+                    species={species}
+                    vitalityScore={displayedVitality(climate)}
+                    inSweetSpot={climate.inSweetSpot}
+                    temper={climate.temper}
+                    temperatureStatus={climate.temperatureStatus}
+                    humidityStatus={climate.humidityStatus}
+                    heartRate={heartRate}
+                    warmPulse={warmPulse}
+                    mistPulse={mistPulse}
+                    fitScale={eggScale}
+                    accessibilityLabel={eggLabel(
+                      t('egg.a11y', { name: species.commonName, status: holdHint }),
+                      describeClimate(climate, species, t)
+                    )}
+                    accessibilityHint={t('nest.eggGestureHint')}
+                    candleLabel={t('nest.candleEgg')}
+                    onCandle={() => router.push('/candling')}
                   />
-                ) : (
-                  <TutorialAnchor targetId="egg">
-                    <EggContainer
-                      snapshot={snapshot}
-                      species={species}
-                      vitalityScore={climate.vitalityScore}
-                      inSweetSpot={climate.inSweetSpot}
-                      temper={climate.temper}
-                      temperatureStatus={climate.temperatureStatus}
-                      humidityStatus={climate.humidityStatus}
-                      heartRate={heartRate}
-                      warmPulse={warmPulse}
-                      mistPulse={mistPulse}
-                      fitScale={eggScale}
-                      accessibilityLabel={eggLabel(
-                        t('egg.a11y', { name: species.commonName, status: holdHint }),
-                        describeClimate(climate, species, t)
-                      )}
-                      accessibilityHint={t('nest.eggGestureHint')}
-                      candleLabel={t('nest.candleEgg')}
-                      onCandle={() => router.push('/candling')}
-                    />
-                  </TutorialAnchor>
-                )}
+                </TutorialAnchor>
                 <View pointerEvents="box-none" style={styles.sideLabels}>
                   <TelemetryColumn align="end" top={leftTop} bottom={leftBottom} />
                   <TelemetryColumn
                     align="start"
                     top={rightTop}
                     bottom={rightBottom}
-                    topTarget={hatched ? undefined : 'telemetry_heart'}
+                    topTarget="telemetry_heart"
                   />
                 </View>
               </View>
               <Text maxFontSizeMultiplier={1.2} style={[styles.hint, { color: palette.textMuted }]}>
-                {hatched ? t('care.chirpHint') : holdHint}
+                {holdHint}
               </Text>
             </View>
           </View>
       </GestureDetector>
           <View style={styles.dock}>
-            {hatched ? (
-              <CareDock
-                fedLabel={t('care.feed')}
-                weighLabel={t('care.weigh')}
-                fedHint={fedPhrase}
-                weighHint={weighPhrase}
-                onFeed={() => {
-                  recordInteraction('feed');
-                  void triggerImpact(ImpactFeedbackStyle.Light);
-                }}
-                onWeigh={() => {
-                  recordInteraction('weigh');
-                  void triggerImpact(ImpactFeedbackStyle.Light);
-                }}
-              />
-            ) : (
-              <ClimateControls species={species} climate={climate} onWarm={warmNest} onMist={mistSubstrate} />
-            )}
+            <ClimateControls species={species} climate={climate} onWarm={warmNest} onMist={mistSubstrate} />
       </View>
 
       <HatchingCeremony
-        visible={snapshot.isReadyToHatch && !pet.isHatched}
+        visible={snapshot.isReadyToHatch && !pet.isHatched && !snapshot.isUnviable}
         nickname={pet.nickname}
         speciesId={species.id}
-        onComplete={() => {
+        onComplete={(name) => {
           markHatched();
+          placeInSanctuary(name);
         }}
       />
     </View>
@@ -633,86 +627,6 @@ function PulseDot({ color, pulse }: { color: string; pulse: boolean }) {
   const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
 
   return <Animated.View style={[styles.dot, { backgroundColor: color }, style]} />;
-}
-
-function CareDock({
-  fedLabel,
-  weighLabel,
-  fedHint,
-  weighHint,
-  onFeed,
-  onWeigh,
-}: {
-  fedLabel: string;
-  weighLabel: string;
-  fedHint: string;
-  weighHint: string;
-  onFeed: () => void;
-  onWeigh: () => void;
-}) {
-  return (
-    <View style={styles.careRow}>
-      <MicroAction label={fedLabel} hint={fedHint} onPress={onFeed} glyph="feed" />
-      <MicroAction label={weighLabel} hint={weighHint} onPress={onWeigh} glyph="weigh" />
-    </View>
-  );
-}
-
-function MicroAction({
-  label,
-  hint,
-  onPress,
-  glyph,
-}: {
-  label: string;
-  hint: string;
-  onPress: () => void;
-  glyph: 'feed' | 'weigh';
-}) {
-  const palette = useNestPalette();
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityHint={hint}
-      onPress={onPress}
-      style={({ pressed }) => [styles.micro, { opacity: pressed ? 0.62 : 1, transform: [{ scale: pressed ? 0.96 : 1 }] }]}>
-      <View style={[styles.microGlyph, { borderColor: palette.border }]}>
-        {glyph === 'feed' ? <FeedGlyph color={palette.text} /> : <WeighGlyph color={palette.text} />}
-      </View>
-      <Text numberOfLines={1} maxFontSizeMultiplier={1.15} style={[styles.microHint, { color: palette.textMuted }]}>
-        {hint}
-      </Text>
-    </Pressable>
-  );
-}
-
-function FeedGlyph({ color }: { color: string }) {
-  return (
-    <Svg width={22} height={22} viewBox="0 0 24 24">
-      <Path
-        d="M12 20 C8 16.5 6.5 13 8.5 10.5 C10 12 11 13.2 12 14.5 C13 13.2 14 12 15.5 10.5 C17.5 13 16 16.5 12 20 Z"
-        stroke={color}
-        strokeWidth={1.35}
-        strokeLinejoin="round"
-        fill="none"
-      />
-      <Path d="M12 14.5 C12 10 13.5 6.5 17 4.5" stroke={color} strokeWidth={1.35} strokeLinecap="round" fill="none" />
-    </Svg>
-  );
-}
-
-function WeighGlyph({ color }: { color: string }) {
-  return (
-    <Svg width={22} height={22} viewBox="0 0 24 24">
-      <Path d="M12 4 V15" stroke={color} strokeWidth={1.35} strokeLinecap="round" />
-      <Path d="M5 8 H19" stroke={color} strokeWidth={1.35} strokeLinecap="round" />
-      <Path d="M5 8 L2.5 13.5 H7.5 Z" stroke={color} strokeWidth={1.2} strokeLinejoin="round" fill="none" />
-      <Path d="M19 8 L16.5 13.5 H21.5 Z" stroke={color} strokeWidth={1.2} strokeLinejoin="round" fill="none" />
-      <Path d="M8 18.5 H16" stroke={color} strokeWidth={1.35} strokeLinecap="round" />
-    </Svg>
-  );
 }
 
 function NestHalo({ color, sweet, scale }: { color: string; sweet: boolean; scale: number }) {
@@ -897,29 +811,52 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
     textAlign: 'center',
   },
-  careRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+  somberCenter: {
     justifyContent: 'center',
-    gap: 36,
-  },
-  micro: {
-    width: 108,
     alignItems: 'center',
-    gap: 5,
+    paddingHorizontal: Spacing.four,
+    gap: Spacing.three,
   },
-  microGlyph: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+  somberKicker: {
+    color: '#8A8178',
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
   },
-  microHint: {
-    fontSize: 10,
-    fontWeight: '500',
+  somberTitle: {
+    fontSize: 26,
+    lineHeight: 32,
+    fontWeight: '700',
     textAlign: 'center',
+  },
+  somberBody: {
+    fontSize: 16,
+    lineHeight: 23,
+    fontWeight: '600',
+    textAlign: 'center',
+    maxWidth: 360,
+  },
+  somberDetail: {
+    fontSize: 14,
+    lineHeight: 21,
+    textAlign: 'center',
+    maxWidth: 360,
+  },
+  somberButton: {
+    marginTop: Spacing.two,
+    minHeight: 50,
+    minWidth: 240,
+    paddingHorizontal: Spacing.four,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#5A4A40',
+  },
+  somberButtonLabel: {
+    color: '#F1E9DF',
+    fontSize: 16,
+    fontWeight: '700',
   },
   inviteBackdrop: {
     flex: 1,

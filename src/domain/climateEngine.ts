@@ -7,8 +7,9 @@ import type { PetInstance, SpeciesConfig } from '@/domain/types';
  * Temperature relaxes toward room air on a 21-hour half-life, the midpoint of
  * the 18–24 hour band. Humidity relaxes toward a dry substrate on a 24-hour
  * time constant. Vitality rewards time inside the species sweet spot and
- * eases toward a floor when the nest is neglected. It never reaches zero:
- * a chilled egg stays alive, and the 1:1 hatch clock is not stalled.
+ * eases toward a living floor during casual neglect. A climate strike
+ * collapses displayed vitality to 0.0; more than twelve hours at zero
+ * makes the embryo unviable.
  */
 
 export const AMBIENT_ROOM_CELSIUS = 21;
@@ -20,6 +21,8 @@ export const HUMIDITY_TOLERANCE_PCT = 5;
 export const VITALITY_FLOOR = 0.3;
 export const VITALITY_CEILING = 1;
 export const FRESH_VITALITY = 0.78;
+/** Displayed vitality is 0.0 for this long after a climate strike before the embryo is lost. */
+export const UNVIABLE_AFTER_ZERO_MS = 12 * 60 * 60 * 1000;
 export const VITALITY_RISE_TAU_MS = 4 * 60 * 60 * 1000;
 export const VITALITY_FALL_TAU_MS = 18 * 60 * 60 * 1000;
 
@@ -210,7 +213,7 @@ export function readClimate(pet: PetInstance, species: SpeciesConfig, nowEpoch: 
 }
 
 export function warmNest(pet: PetInstance, species: SpeciesConfig, nowEpoch: number): PetInstance {
-  if (pet.isHatched || !Number.isFinite(nowEpoch)) {
+  if (pet.isHatched || pet.status === 'unviable' || !Number.isFinite(nowEpoch)) {
     return pet;
   }
   const now = finiteEpoch(nowEpoch, pet.lastWarmedEpoch);
@@ -224,7 +227,7 @@ export function warmNest(pet: PetInstance, species: SpeciesConfig, nowEpoch: num
 }
 
 export function mistSubstrate(pet: PetInstance, species: SpeciesConfig, nowEpoch: number): PetInstance {
-  if (pet.isHatched || !Number.isFinite(nowEpoch)) {
+  if (pet.isHatched || pet.status === 'unviable' || !Number.isFinite(nowEpoch)) {
     return pet;
   }
   const now = finiteEpoch(nowEpoch, pet.lastMistedEpoch);
@@ -458,4 +461,55 @@ function finiteEpoch(value: number, fallback: number): number {
 
 function finiteNumber(value: number, fallback: number): number {
   return Number.isFinite(value) ? value : fallback;
+}
+
+/**
+ * How long the nest has been on strike. Zero unless both climate readings have
+ * been outside the sweet spot for at least {@link STRIKE_AFTER_MS}.
+ */
+export function strikeDurationMs(reading: ClimateReading): number {
+  if (reading.temper !== 'on_strike') {
+    return 0;
+  }
+  return Math.max(0, Math.min(reading.warmthOffMs, reading.moistureOffMs) - STRIKE_AFTER_MS);
+}
+
+/**
+ * Vitality shown to the player. Casual neglect stays on the living floor;
+ * a climate strike collapses the reading to 0.0.
+ */
+export function displayedVitality(reading: ClimateReading): number {
+  return reading.temper === 'on_strike' ? 0 : reading.vitalityScore;
+}
+
+/**
+ * Whether the embryo has become unviable from prolonged climate collapse.
+ * An already-flagged egg stays unviable; later care cannot revive it.
+ */
+export function isEmbryoUnviable(pet: PetInstance, species: SpeciesConfig, nowEpoch: number): boolean {
+  if (pet.isHatched) {
+    return false;
+  }
+  if (pet.status === 'unviable') {
+    return true;
+  }
+  return strikeDurationMs(readClimate(pet, species, nowEpoch)) > UNVIABLE_AFTER_ZERO_MS;
+}
+
+/**
+ * Commits the terminal `unviable` status when the climate has collapsed.
+ * Returns the same instance when nothing changes.
+ */
+export function applyClimateMortality(
+  pet: PetInstance,
+  species: SpeciesConfig,
+  nowEpoch: number
+): PetInstance {
+  if (pet.isHatched || pet.status === 'unviable') {
+    return pet;
+  }
+  if (!isEmbryoUnviable(pet, species, nowEpoch)) {
+    return pet;
+  }
+  return { ...pet, status: 'unviable' };
 }

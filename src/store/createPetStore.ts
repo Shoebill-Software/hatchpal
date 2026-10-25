@@ -17,7 +17,7 @@ import {
 } from '@/domain/timeEngine';
 import { PetInstance, PetInteractionKind, SpeciesId } from '@/domain/types';
 import { syncNotificationsForStoredPets } from '@/services/notificationLifecycle';
-import { mistSubstrate, warmNest } from '@/domain/climateEngine';
+import { applyClimateMortality, mistSubstrate, warmNest } from '@/domain/climateEngine';
 
 export const PET_STORE_PERSIST_KEY = 'hatchpal.pet-store';
 export const PET_STORE_PERSIST_VERSION = 3;
@@ -436,34 +436,14 @@ export function createPetStoreSlice(deps: PetStoreDeps = defaultDeps): StateCrea
     },
     recordInteraction: (kind, nowEpoch) => {
       replaceActivePet(set, get, (pet, now) => {
+        if (pet.status === 'unviable' || pet.isHatched) {
+          return pet;
+        }
         if (kind === 'warm_nest' || kind === 'mist_nest') {
-          if (pet.isHatched) {
-            return pet;
-          }
           const species = getSpeciesConfig(pet.speciesId);
           return kind === 'warm_nest' ? warmNest(pet, species, now) : mistSubstrate(pet, species, now);
         }
-        if (!pet.isHatched) {
-          return pet;
-        }
-        if (kind === 'feed') {
-          return {
-            ...pet,
-            lastFedEpoch: now,
-            lastInteractedEpoch: now,
-          };
-        }
-        if (kind === 'weigh') {
-          return {
-            ...pet,
-            lastWeighedEpoch: now,
-            lastInteractedEpoch: now,
-          };
-        }
-        return {
-          ...pet,
-          lastInteractedEpoch: now,
-        };
+        return pet;
       }, nowEpoch);
     },
     refreshClock: (mode, nowEpoch) => {
@@ -475,10 +455,14 @@ export function createPetStoreSlice(deps: PetStoreDeps = defaultDeps): StateCrea
         const nextVerified = nextVerifiedEpoch(now, pet.lastVerifiedEpoch, {
           maxForwardAdvanceMs: mode === 'tick' ? LIVE_TICK_MAX_FORWARD_MS : undefined,
         });
-        if (nextVerified === pet.lastVerifiedEpoch) {
+        const advanced =
+          nextVerified === pet.lastVerifiedEpoch ? pet : { ...pet, lastVerifiedEpoch: nextVerified };
+        const species = getSpeciesConfig(advanced.speciesId);
+        const resolved = applyClimateMortality(advanced, species, advanced.lastVerifiedEpoch);
+        if (resolved === pet) {
           continue;
         }
-        pets[id] = { ...pet, lastVerifiedEpoch: nextVerified };
+        pets[id] = resolved;
         changed = true;
       }
       if (!changed) {
@@ -491,7 +475,7 @@ export function createPetStoreSlice(deps: PetStoreDeps = defaultDeps): StateCrea
     markHatched: (nowEpoch) => {
       let didHatch = false;
       replaceActivePet(set, get, (pet, now) => {
-        if (pet.isHatched) {
+        if (pet.isHatched || pet.status === 'unviable') {
           return pet;
         }
         const species = getSpeciesConfig(pet.speciesId);

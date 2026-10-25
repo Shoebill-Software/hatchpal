@@ -25,7 +25,8 @@ describe('English dictionary', () => {
     expect(translate('nest.mistNest')).toBe('Mist Substrate');
     expect(translate('clock.paused')).toBe('Biological clock paused: Device time was modified');
     expect(translate('candling.backToNest')).toBe('Back to Nest');
-    expect(translate('candling.toggleLight')).toBe('Toggle Light');
+    expect(translate('candling.alwaysOnHint')).toContain('backlight stays on');
+    expect(translate('candling.stage.vascular')).toBe('Vascular spider');
     expect(translate('candling.embryoHeartRate')).toBe('Embryo Heart Rate');
     expect(translate('metric.undetected')).toBe('Undetected');
     expect(translate('metric.optimal')).toBe('Optimal');
@@ -34,7 +35,10 @@ describe('English dictionary', () => {
     expect(translate('hatch.tapToAssist')).toBe('Tap to assist');
     expect(translate('metric.lifeStage')).toBe('Life Stage');
     expect(translate('stage.hatchling')).toBe('Hatchling');
-    expect(translate('care.weighedRecently')).toBe('Weighed recently');
+    expect(translate('nest.unviableBody')).toBe(
+      'The embryo did not survive the prolonged climate drop.'
+    );
+    expect(translate('sanctuary.title')).toBe('Sanctuary');
     expect(translate('nav.journal')).toBe('Field Journal');
     expect(translate('journal.completed')).toBe('Completed');
     expect(translate('journal.inProgress')).toBe('In Progress');

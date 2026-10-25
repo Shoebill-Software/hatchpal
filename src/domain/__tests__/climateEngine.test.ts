@@ -7,13 +7,17 @@ import {
   FRESH_VITALITY,
   HUMIDITY_TIME_CONSTANT_MS,
   TEMPERATURE_HALF_LIFE_MS,
+  UNVIABLE_AFTER_ZERO_MS,
   VITALITY_CEILING,
   VITALITY_FLOOR,
   VITALITY_RISE_TAU_MS,
+  applyClimateMortality,
   caredHeartRate,
   decayHumidity,
   decayTemperature,
+  displayedVitality,
   freshNestClimate,
+  isEmbryoUnviable,
   mistSubstrate,
   nestTemper,
   readClimate,
@@ -193,5 +197,24 @@ describe('Nest climate engine', () => {
     );
     expect(restored.temper).toBe('content');
     expect(restored.inSweetSpot).toBe(true);
+  });
+
+  it('collapses displayed vitality to zero on strike and loses the embryo after 12 more hours', () => {
+    const strikingEpoch = baseEpoch + 36 * HOUR_MS;
+    const striking = readClimate(nest(), species, strikingEpoch);
+    expect(striking.temper).toBe('on_strike');
+    expect(displayedVitality(striking)).toBe(0);
+    expect(isEmbryoUnviable(nest(), species, strikingEpoch)).toBe(false);
+
+    const lostEpoch = strikingEpoch + UNVIABLE_AFTER_ZERO_MS + HOUR_MS;
+    expect(isEmbryoUnviable(nest(), species, lostEpoch)).toBe(true);
+    const lost = applyClimateMortality(nest(), species, lostEpoch);
+    expect(lost.status).toBe('unviable');
+    expect(isEmbryoUnviable({ ...lost, lastWarmedEpoch: lostEpoch }, species, lostEpoch + HOUR_MS)).toBe(true);
+
+    const tendedEpoch = baseEpoch + 60 * HOUR_MS;
+    const tended = mistSubstrate(warmNest(nest(), species, tendedEpoch), species, tendedEpoch);
+    expect(isEmbryoUnviable(tended, species, tendedEpoch)).toBe(false);
+    expect(applyClimateMortality(tended, species, tendedEpoch)).toBe(tended);
   });
 });

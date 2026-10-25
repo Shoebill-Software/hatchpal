@@ -133,6 +133,9 @@ export type DevelopmentStage =
 
 export type LifeStage = 'egg' | 'pip' | 'hatchling' | 'juvenile' | 'adult';
 
+/** Lifecycle health of an incubating egg. `unviable` is a terminal failure state. */
+export type PetStatus = 'incubating' | 'unviable';
+
 export type AudioMilestoneTrigger =
   | 'silent'
   | 'heartbeat'
@@ -189,19 +192,20 @@ export interface PetInstance {
   laidAtEpoch: number;
   lastVerifiedEpoch: number;
   lastInteractedEpoch: number;
-  healthMultiplier: number; // 0.0 to 1.0 (modulates visual vibrancy, never kills)
+  healthMultiplier: number; // 0.0 to 1.0 (modulates visual vibrancy)
   /** Nest temperature at `lastWarmedEpoch`, before deterministic cooling. */
   currentTemperatureCelsius: number;
   /** Substrate humidity at `lastMistedEpoch`, before deterministic drying. */
   currentHumidityPct: number;
   lastWarmedEpoch: number;
   lastMistedEpoch: number;
-  /** Incubation vigor in [0.3, 1]. Neglect never lowers this through the floor. */
+  /** Stored incubation vigor in [0.3, 1]. Displayed vitality may collapse to 0 on strike. */
   vitalityScore: number;
-  /** Set by a post-hatch feeding. Absent until the first logged meal. */
-  lastFedEpoch?: number;
-  /** Set by a post-hatch weighing. Absent until the first weigh-in. */
-  lastWeighedEpoch?: number;
+  /**
+   * Lifecycle status. Defaults to `incubating`. Becomes `unviable` after the nest
+   * climate is neglected until displayed vitality holds at 0 for more than 12 hours.
+   */
+  status?: PetStatus;
   isHatched: boolean;
   hatchedAtEpoch?: number;
 }
@@ -247,8 +251,12 @@ export interface PetSnapshot {
   isPipped: boolean;
   isReadyToHatch: boolean;
   isHatched: boolean;
+  /** Displayed nest vitality in [0, 1]. 0 during a climate strike. */
+  vitality: number;
+  /** True once the embryo has become unviable from prolonged climate neglect. */
+  isUnviable: boolean;
   isClockTampered: boolean;
   clockAnomaly: ClockAnomaly;
 }
 
-export type PetInteractionKind = 'warm_nest' | 'mist_nest' | 'feed' | 'weigh' | 'pet';
+export type PetInteractionKind = 'warm_nest' | 'mist_nest';

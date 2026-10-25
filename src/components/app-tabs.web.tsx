@@ -34,6 +34,9 @@ export default function AppTabs() {
               {t('nav.journal')}
             </TabButton>
           </TabTrigger>
+          <TabTrigger name="sanctuary" href="/sanctuary" asChild>
+            <TabButton>{t('nav.sanctuary')}</TabButton>
+          </TabTrigger>
         </CustomTabList>
       </TabList>
     </Tabs>
