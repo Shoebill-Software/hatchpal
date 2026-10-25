@@ -18,6 +18,7 @@ import { useReduceMotion } from '@/hooks/useReduceMotion';
 import { useTranslation } from '@/i18n';
 import type { TranslationKey } from '@/i18n/en';
 import { ImpactFeedbackStyle, triggerImpact } from '@/services/hapticFeedback';
+import { usePurchasesStore } from '@/store/usePurchasesStore';
 
 const SPECIES = listSpeciesConfigs();
 
@@ -46,11 +47,20 @@ export default function AdoptionScreen() {
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const { t } = useTranslation();
-  const params = useLocalSearchParams<{ replacing?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    replacing?: string | string[];
+    adding?: string | string[];
+    speciesId?: string | string[];
+  }>();
   const { pet } = useActivePet();
+  const speciesAvailable = usePurchasesStore((state) => state.isSpeciesAvailable);
   const replacingParam = Array.isArray(params.replacing) ? params.replacing[0] : params.replacing;
-  const replacing = replacingParam === '1' || pet != null;
-  const [selectedId, setSelectedId] = useState<SpeciesId>(SPECIES[0]?.id ?? 'silkie_chicken');
+  const addingParam = Array.isArray(params.adding) ? params.adding[0] : params.adding;
+  const speciesParam = Array.isArray(params.speciesId) ? params.speciesId[0] : params.speciesId;
+  const adding = addingParam === '1';
+  const replacing = !adding && (replacingParam === '1' || pet != null);
+  const requested = SPECIES.find((species) => species.id === speciesParam);
+  const [selectedId, setSelectedId] = useState<SpeciesId>(requested?.id ?? SPECIES[0]?.id ?? 'silkie_chicken');
   const [filter, setFilter] = useState<RosterFilter>('all');
   const routed = useRef(false);
   const compact = height < 700;
@@ -94,7 +104,7 @@ export default function AdoptionScreen() {
     void triggerImpact(ImpactFeedbackStyle.Medium);
     router.push({
       pathname: '/showcase',
-      params: { speciesId: id, replacing: replacing ? '1' : '0' },
+      params: { speciesId: id, replacing: replacing ? '1' : '0', adding: adding ? '1' : '0' },
     });
   };
 
@@ -162,6 +172,7 @@ export default function AdoptionScreen() {
               species={selected}
               canGoBack={index > 0}
               canGoForward={index < roster.length - 1}
+              locked={!speciesAvailable(selected.id)}
               onOpen={() => openId(selected.id)}
               onStep={step}
             />
@@ -172,6 +183,7 @@ export default function AdoptionScreen() {
         <ClutchRail
           species={roster}
           selectedId={selected?.id ?? selectedId}
+          isLocked={(id) => !speciesAvailable(id)}
           onSelect={choose}
         />
 

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -9,6 +9,7 @@ import { MilestoneDetailModal } from '@/components/MilestoneDetailModal';
 import { MilestoneTimeline } from '@/components/MilestoneTimeline';
 import { useNestPalette } from '@/constants/nest';
 import { BottomTabInset, Fonts, MaxContentWidth, Spacing } from '@/constants/theme';
+import { buildFieldJournalExport } from '@/domain/journalExport';
 import {
   buildJournalTimeline,
   generateWeightHistory,
@@ -17,7 +18,8 @@ import {
 } from '@/domain/milestones';
 import { resolveHatchEpoch } from '@/domain/timeEngine';
 import { useActivePet } from '@/hooks/useActivePet';
-import { formatLocaleDate, useTranslation } from '@/i18n';
+import { formatLocaleDate, lifeStageLabelKey, useTranslation } from '@/i18n';
+import { usePurchasesStore } from '@/store/usePurchasesStore';
 
 export default function JournalScreen() {
   const router = useRouter();
@@ -25,6 +27,8 @@ export default function JournalScreen() {
   const palette = useNestPalette();
   const { t } = useTranslation();
   const { pet, species, snapshot, hasHydrated } = useActivePet();
+  const canExportFieldJournal = usePurchasesStore((state) => state.canExportFieldJournal);
+  const recordJournalExport = usePurchasesStore((state) => state.recordJournalExport);
   const [openId, setOpenId] = useState<string | null>(null);
 
   const hatchEpoch = pet && species ? resolveHatchEpoch(pet, species) : 0;
@@ -54,6 +58,37 @@ export default function JournalScreen() {
   }, [hatchEpoch, pet, species, snapshot]);
 
   const openMilestone = timeline.find((entry) => entry.id === openId) ?? null;
+
+  const exportJournal = () => {
+    if (!pet || !species || !snapshot) {
+      return;
+    }
+    if (!canExportFieldJournal()) {
+      Alert.alert(t('journal.export'), t('journal.exportLimited'));
+      return;
+    }
+    const current = snapshot.currentMilestone;
+    const message = buildFieldJournalExport({
+      nickname: pet.nickname,
+      commonName: species.commonName,
+      scientificName: species.scientificName,
+      laidAtEpoch: pet.laidAtEpoch,
+      ageDays: snapshot.ageDays,
+      lifeStage: t(lifeStageLabelKey(snapshot.lifeStage)),
+      milestoneTitle: current.title,
+      milestoneSummary: current.scientificSummary,
+    });
+    void Share.share({ message }).then(
+      (result) => {
+        if (result.action === Share.sharedAction) {
+          recordJournalExport();
+        }
+      },
+      () => {
+        Alert.alert(t('journal.export'), t('journal.exportFailed'));
+      }
+    );
+  };
 
   if (!hasHydrated) {
     return (
@@ -108,6 +143,15 @@ export default function JournalScreen() {
           <Text style={[styles.meta, { color: palette.text }]}>
             {t(dayCount === 1 ? 'journal.dayRecorded' : 'journal.daysRecorded', { count: dayCount })}
           </Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={exportJournal}
+            style={({ pressed }) => [
+              styles.exportButton,
+              { borderColor: palette.action, opacity: pressed ? 0.82 : 1 },
+            ]}>
+            <Text style={[styles.exportLabel, { color: palette.action }]}>{t('journal.export')}</Text>
+          </Pressable>
         </View>
 
         <MilestoneTimeline milestones={timeline} onSelect={(entry: JournalMilestone) => setOpenId(entry.id)} />
@@ -210,6 +254,19 @@ const styles = StyleSheet.create({
   meta: {
     fontSize: 14,
     lineHeight: 20,
+  },
+  exportButton: {
+    marginTop: Spacing.two,
+    minHeight: 44,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.three,
+  },
+  exportLabel: {
+    fontSize: 15,
+    fontWeight: '700',
   },
   empty: {
     gap: Spacing.three,

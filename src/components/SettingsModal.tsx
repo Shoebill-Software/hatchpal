@@ -2,6 +2,7 @@ import Constants from 'expo-constants';
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useState, type ReactNode } from 'react';
 import {
+  Alert,
   Linking,
   Modal,
   Pressable,
@@ -15,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { NestStatusBar } from '@/components/NestStatusBar';
 import { useNestPalette, type NestPaletteTokens } from '@/constants/nest';
+import { FREE_STARTER_IDS } from '@/domain/entitlements';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTranslation } from '@/i18n';
 import type { TranslationKey } from '@/i18n/en';
@@ -25,8 +27,10 @@ import {
   requestNotificationPermissions,
   type OsNotificationPermission,
 } from '@/services/notifications';
+import { isPurchaseCancelled } from '@/services/purchaseErrors';
 import { usePetStore } from '@/store/usePetStore';
 import { usePreferencesStore, type AppearancePreference } from '@/store/usePreferencesStore';
+import { usePurchasesStore } from '@/store/usePurchasesStore';
 
 const REPOSITORY_URL = 'https://github.com/Shoebill-Software/hatchpal';
 const PYTHON_SILHOUETTE_URL =
@@ -79,6 +83,8 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
   const { t } = useTranslation();
   const [permission, setPermission] = useState<OsNotificationPermission>('undetermined');
   const [resetStep, setResetStep] = useState<0 | 1 | 2>(0);
+  const [restoring, setRestoring] = useState(false);
+  const restorePurchases = usePurchasesStore((state) => state.restorePurchases);
 
   const appearance = usePreferencesStore((state) => state.appearance);
   const soundEnabled = usePreferencesStore((state) => state.soundEnabled);
@@ -142,6 +148,31 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
     abandonActivePet();
     setResetStep(0);
     onClose();
+  };
+
+  const restoreStorePurchases = () => {
+    setRestoring(true);
+    void restorePurchases()
+      .then(() => {
+        const state = usePurchasesStore.getState();
+        const purchased = state.unlockedSpeciesIds.filter(
+          (id) => !(FREE_STARTER_IDS as readonly string[]).includes(id)
+        );
+        const message = state.isProUnlocked
+          ? t('settings.restorePro')
+          : purchased.length > 0
+            ? t('settings.restoreSpecies', { count: purchased.length })
+            : t('settings.restoreEmpty');
+        Alert.alert(t('settings.restoreTitle'), message);
+      })
+      .catch((error: unknown) => {
+        if (!isPurchaseCancelled(error)) {
+          Alert.alert(t('settings.restoreTitle'), t('settings.restoreFailed'));
+        }
+      })
+      .finally(() => {
+        setRestoring(false);
+      });
   };
 
   const replayTutorial = () => {
@@ -280,6 +311,24 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
                 }}
                 style={({ pressed }) => [styles.linkButton, { opacity: pressed ? 0.7 : 1 }]}>
                 <Text style={[styles.linkLabel, { color: palette.action }]}>{t('settings.silhouettesLink')}</Text>
+              </Pressable>
+            </Section>
+
+            <Section title={t('settings.accountTitle')}>
+              <Text style={[styles.hint, { color: palette.textMuted }]}>{t('settings.restoreHint')}</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('settings.restorePurchases')}
+                disabled={restoring}
+                onPress={restoreStorePurchases}
+                style={({ pressed }) => [
+                  styles.replayButton,
+                  {
+                    borderColor: palette.action,
+                    opacity: restoring ? 0.55 : pressed ? 0.82 : 1,
+                  },
+                ]}>
+                <Text style={[styles.replayLabel, { color: palette.action }]}>{t('settings.restorePurchases')}</Text>
               </Pressable>
             </Section>
 

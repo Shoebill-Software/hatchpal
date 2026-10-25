@@ -1,0 +1,45 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote",
+    "requireCommit": false
+  },
+  "build": {
+    "production": {
+      "distribution": "store",
+      "environment": "production",
+      "ios": {
+        "distribution": "store",
+        "simulator": false,
+        "autoIncrement": true,
+        "image": "sdk-57",
+        "buildConfiguration": "Release",
+        "credentialsSource": "remote",
+        "applicationArchivePath": "ios/build/*.ipa"
+      }
+    },
+    "testflight": {
+      "extends": "production",
+      "distribution": "store",
+      "ios": {
+        "distribution": "store",
+        "simulator": false,
+        "autoIncrement": true,
+        "image": "sdk-57",
+        "buildConfiguration": "Release",
+        "credentialsSource": "remote",
+        "applicationArchivePath": "ios/build/*.ipa"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleTeamId": "Y6BQW63Q2S",
+        "bundleIdentifier": "com.shoebillsoftware.hatchpal",
+        "language": "en-US",
+        "appName": "HatchPal"
+      }
+    }
+  }
+}

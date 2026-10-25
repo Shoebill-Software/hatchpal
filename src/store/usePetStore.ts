@@ -8,11 +8,13 @@ import {
   createSafeJsonStorage,
   mergePetPersistedState,
   sanitizePersistedState,
+  selectCradlePets,
   type PetPersistedState,
   type PetStore,
 } from './createPetStore';
 import { PetInstance } from '@/domain/types';
-import { syncNotificationsForStoredPet } from '@/services/notificationLifecycle';
+import { syncNotificationsForStoredPets } from '@/services/notificationLifecycle';
+import { publishWidgetForPet, widgetSyncReason } from '@/services/widgetBridge';
 
 export type { PetStore, PetPersistedState, ClockRefreshMode } from './createPetStore';
 export { createPetStoreApi, createMemoryStateStorage } from './createPetStore';
@@ -24,6 +26,8 @@ export const usePetStore = create<PetStore>()(
     storage: createSafeJsonStorage<PetPersistedState>(() => mmkvStateStorage),
     partialize: (state): PetPersistedState => ({
       pets: state.pets,
+      cradleOrder: state.cradleOrder,
+      activePetIndex: state.activePetIndex,
       activePetId: state.activePetId,
     }),
     merge: (persistedState, currentState) =>
@@ -36,6 +40,9 @@ let storedNotificationsSynced = false;
 
 export function getActivePetFromStore(): PetInstance | null {
   const state = usePetStore.getState();
+  if (state.activePet) {
+    return state.activePet;
+  }
   if (!state.activePetId) {
     return null;
   }
@@ -50,10 +57,21 @@ function markStoreHydrated(): void {
     return;
   }
   storedNotificationsSynced = true;
-  syncNotificationsForStoredPet(getActivePetFromStore());
+  syncNotificationsForStoredPets(selectCradlePets(usePetStore.getState()));
 }
 
 usePetStore.persist.onFinishHydration(markStoreHydrated);
 if (usePetStore.persist.hasHydrated()) {
   markStoreHydrated();
+}
+
+usePetStore.subscribe((state, previous) => {
+  if (!widgetSyncReason(previous, state)) {
+    return;
+  }
+  publishWidgetForPet(state.activePet, Date.now(), { reload: true });
+});
+
+if (usePetStore.getState().hasHydrated) {
+  publishWidgetForPet(getActivePetFromStore(), Date.now(), { reload: true });
 }

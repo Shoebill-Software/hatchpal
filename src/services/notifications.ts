@@ -141,6 +141,11 @@ export async function scheduleMilestoneNotifications(
   species: SpeciesConfig,
   nowEpoch: number = Date.now()
 ): Promise<string[]> {
+  return replaceScheduledAlerts(selectUpcomingMilestoneAlerts(pet, species, nowEpoch));
+}
+
+/** Cancels the previous clutch schedule and installs the supplied alerts. */
+export async function replaceScheduledAlerts(alerts: readonly MilestoneAlert[]): Promise<string[]> {
   installForegroundHandler();
   await ensureMilestoneCategory();
 
@@ -151,16 +156,13 @@ export async function scheduleMilestoneNotifications(
 
   await cancelAllPetNotifications();
 
-  const alerts = selectUpcomingMilestoneAlerts(pet, species, nowEpoch);
   const identifiers: string[] = [];
-
   for (const alert of alerts) {
     const identifier = await scheduleAlert(alert);
     if (identifier) {
       identifiers.push(identifier);
     }
   }
-
   return identifiers;
 }
 

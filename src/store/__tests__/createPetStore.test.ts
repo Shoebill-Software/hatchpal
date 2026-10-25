@@ -229,4 +229,54 @@ describe('Pet store', () => {
     expect(store.getState().pets['pet-b']?.speciesId).toBe('leopard_gecko');
     expect(store.getState().pets['pet-a']).toBeUndefined();
   });
+
+  it('reloads an explicit cradle order without collapsing it', () => {
+    const petFields = {
+      laidAtEpoch: baseEpoch,
+      lastVerifiedEpoch: baseEpoch,
+      lastInteractedEpoch: baseEpoch,
+      healthMultiplier: 1,
+      currentTemperatureCelsius: 37.5,
+      currentHumidityPct: 55,
+      lastWarmedEpoch: baseEpoch,
+      lastMistedEpoch: baseEpoch,
+      vitalityScore: 1,
+      isHatched: false,
+    };
+    const storage = createMemoryStateStorage({
+      [PET_STORE_PERSIST_KEY]: JSON.stringify({
+        state: {
+          pets: {
+            'pet-a': {
+              id: 'pet-a',
+              speciesId: 'silkie_chicken',
+              nickname: 'Pip',
+              ...petFields,
+            },
+            'pet-b': {
+              id: 'pet-b',
+              speciesId: 'leopard_gecko',
+              nickname: 'Nova',
+              ...petFields,
+            },
+          },
+          cradleOrder: ['pet-a', 'pet-b'],
+          activePetIndex: 1,
+          activePetId: 'pet-b',
+        },
+        version: 3,
+      }),
+    });
+
+    const store = createPetStoreApi({
+      storage,
+      now: () => baseEpoch,
+      createId: () => 'unused',
+    });
+
+    expect(store.getState().cradleOrder).toEqual(['pet-a', 'pet-b']);
+    expect(store.getState().activePetIndex).toBe(1);
+    expect(store.getState().activePet?.nickname).toBe('Nova');
+    expect(store.getState().pets['pet-a']?.speciesId).toBe('silkie_chicken');
+  });
 });

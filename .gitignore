@@ -14,6 +14,7 @@ expo-env.d.ts
 # Native platform builds (managed workflow / not prebuilded)
 /android
 /ios
+*.ipa
 .kotlin/
 *.orig.*
 *.jks

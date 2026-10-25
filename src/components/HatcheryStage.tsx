@@ -14,6 +14,7 @@ import Svg, { Defs, Ellipse, LinearGradient, Path, RadialGradient, Rect, Stop } 
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { ADOPTION_ATMOSPHERE, HATCHERY, type AdoptionAtmosphere } from '@/components/adoptionAtmosphere';
+import { EggLockBadge } from '@/components/EggCarousel';
 import { fitSilhouette, GrowthSilhouette } from '@/components/GrowthSilhouette';
 import { SpeciesEggArt } from '@/components/SpeciesEggArt';
 import type { SpeciesConfig, SpeciesId } from '@/domain/types';
@@ -24,6 +25,7 @@ export interface HatcheryStageProps {
   species: SpeciesConfig;
   canGoBack: boolean;
   canGoForward: boolean;
+  locked?: boolean;
   onOpen: () => void;
   onStep: (delta: 1 | -1) => void;
 }
@@ -65,7 +67,14 @@ export function HatcheryWash({ speciesId }: { speciesId: SpeciesId }) {
   );
 }
 
-export function HatcheryStage({ species, canGoBack, canGoForward, onOpen, onStep }: HatcheryStageProps) {
+export function HatcheryStage({
+  species,
+  canGoBack,
+  canGoForward,
+  locked = false,
+  onOpen,
+  onStep,
+}: HatcheryStageProps) {
   const { t } = useTranslation();
   const reduceMotion = useReduceMotion();
   const atmosphere = ADOPTION_ATMOSPHERE[species.id];
@@ -219,7 +228,11 @@ export function HatcheryStage({ species, canGoBack, canGoForward, onOpen, onStep
       <View
         accessible
         accessibilityRole="button"
-        accessibilityLabel={`${species.commonName}, ${species.scientificName}`}
+        accessibilityLabel={
+          locked
+            ? `${species.commonName}, ${species.scientificName}, ${t('adoption.locked')}`
+            : `${species.commonName}, ${species.scientificName}`
+        }
         accessibilityHint={t('adoption.openDossier')}
         accessibilityActions={[
           { name: 'activate', label: t('adoption.openDossier') },
@@ -275,6 +288,11 @@ export function HatcheryStage({ species, canGoBack, canGoForward, onOpen, onStep
             <SpeciesEggArt species={species} width={eggWidth} height={eggHeight} />
           </View>
         </Animated.View>
+        {locked ? (
+          <View pointerEvents="none" style={styles.lock}>
+            <EggLockBadge />
+          </View>
+        ) : null}
       </View>
     </GestureDetector>
   );
@@ -361,6 +379,11 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: 'center',
+  },
+  lock: {
+    position: 'absolute',
+    top: 18,
+    alignSelf: 'center',
   },
   glow: {
     position: 'absolute',

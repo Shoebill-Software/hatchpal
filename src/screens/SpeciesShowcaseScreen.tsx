@@ -28,6 +28,7 @@ import { fitSilhouette, GrowthSilhouette } from '@/components/GrowthSilhouette';
 import { hexToRgba } from '@/constants/nest';
 import { Spacing } from '@/constants/theme';
 import { SPECIES_REGISTRY } from '@/data/species';
+import { priceStringFor, productIdForSpecies, SANCTUARY_PASS_PRODUCT_ID } from '@/domain/entitlements';
 import {
   DIFFICULTY_TAGS,
   SPECIES_IDS,
@@ -39,7 +40,9 @@ import {
 import { formatBiologicalWeight, useTranslation } from '@/i18n';
 import type { TranslationKey } from '@/i18n/en';
 import { ImpactFeedbackStyle, NotificationFeedbackType, triggerImpact, triggerNotification } from '@/services/hapticFeedback';
+import { isPurchaseCancelled } from '@/services/purchaseErrors';
 import { useActivePet } from '@/hooks/useActivePet';
+import { usePurchasesStore } from '@/store/usePurchasesStore';
 
 const STUDIO = '#0C0A09';
 const INK = '#F4EDE3';
@@ -77,7 +80,11 @@ type FormMode = 'both' | 'baby' | 'adult';
 
 export default function SpeciesShowcaseScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ speciesId?: string | string[]; replacing?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    speciesId?: string | string[];
+    replacing?: string | string[];
+    adding?: string | string[];
+  }>();
   const speciesId = asSpeciesId(firstParam(params.speciesId));
   const species = speciesId ? SPECIES_REGISTRY[speciesId] : null;
 
@@ -96,25 +103,66 @@ export default function SpeciesShowcaseScreen() {
     return <View style={styles.root} />;
   }
 
-  return <ShowcaseBody species={species} replacing={firstParam(params.replacing) === '1'} />;
+  return (
+    <ShowcaseBody
+      species={species}
+      replacing={firstParam(params.replacing) === '1'}
+      adding={firstParam(params.adding) === '1'}
+    />
+  );
 }
 
-function ShowcaseBody({ species, replacing }: { species: SpeciesConfig; replacing: boolean }) {
+function ShowcaseBody({
+  species,
+  replacing,
+  adding,
+}: {
+  species: SpeciesConfig;
+  replacing: boolean;
+  adding: boolean;
+}) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
-  const { adoptPet } = useActivePet();
+  const { adoptPet, adoptEggInNewCradle } = useActivePet();
   const reduceMotion = useReduceMotion();
+  const available = usePurchasesStore((state) => state.isSpeciesAvailable(species.id));
+  const packages = usePurchasesStore((state) => state.availablePackages);
+  const purchaseProduct = usePurchasesStore((state) => state.purchaseProduct);
   const [mode, setMode] = useState<FormMode>('both');
   const [naming, setNaming] = useState(false);
   const [nickname, setNickname] = useState('Pip');
   const [nameError, setNameError] = useState<string | null>(null);
+  const [purchasing, setPurchasing] = useState(false);
+  const [purchaseError, setPurchaseError] = useState<string | null>(null);
+  const speciesProductId = productIdForSpecies(species.id);
+  const speciesPrice = speciesProductId ? priceStringFor(packages, speciesProductId) : '';
+  const passPrice = priceStringFor(packages, SANCTUARY_PASS_PRODUCT_ID);
 
   useEffect(() => {
     setMode('both');
     setNaming(false);
     setNameError(null);
   }, [species.id]);
+
+  const buy = (productId: string) => {
+    setPurchasing(true);
+    setPurchaseError(null);
+    void purchaseProduct(productId)
+      .then(() => {
+        void triggerNotification(NotificationFeedbackType.Success);
+        setNameError(null);
+        setNaming(true);
+      })
+      .catch((error: unknown) => {
+        if (!isPurchaseCancelled(error)) {
+          setPurchaseError(t('showcase.purchaseFailed'));
+        }
+      })
+      .finally(() => {
+        setPurchasing(false);
+      });
+  };
 
   const close = () => {
     void triggerImpact(ImpactFeedbackStyle.Light);
@@ -132,7 +180,15 @@ function ShowcaseBody({ species, replacing }: { species: SpeciesConfig; replacin
       return;
     }
     try {
-      adoptPet(species.id, trimmed);
+      if (adding) {
+        const created = adoptEggInNewCradle(species.id, trimmed);
+        if (!created) {
+          setNameError(t('showcase.cradleFull'));
+          return;
+        }
+      } else {
+        adoptPet(species.id, trimmed);
+      }
       void triggerNotification(NotificationFeedbackType.Success);
       setNaming(false);
       if (router.canDismiss()) {
@@ -177,16 +233,41 @@ function ShowcaseBody({ species, replacing }: { species: SpeciesConfig; replacin
       </ScrollView>
 
       <View style={[styles.dock, { paddingBottom: insets.bottom + Spacing.three }]}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => {
-            void triggerImpact(ImpactFeedbackStyle.Medium);
-            setNameError(null);
-            setNaming(true);
-          }}
-          style={({ pressed }) => [styles.adopt, { opacity: pressed ? 0.88 : 1 }]}>
-          <Text style={styles.adoptLabel}>{replacing ? t('showcase.replace') : t('showcase.adopt')}</Text>
-        </Pressable>
+        {available ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              void triggerImpact(ImpactFeedbackStyle.Medium);
+              setNameError(null);
+              setNaming(true);
+            }}
+            style={({ pressed }) => [styles.adopt, { opacity: pressed ? 0.88 : 1 }]}>
+            <Text style={styles.adoptLabel}>
+              {replacing && !adding ? t('showcase.replace') : t('showcase.begin')}
+            </Text>
+          </Pressable>
+        ) : (
+          <>
+            {speciesProductId ? (
+              <Pressable
+                accessibilityRole="button"
+                disabled={purchasing}
+                onPress={() => buy(speciesProductId)}
+                style={({ pressed }) => [styles.adopt, { opacity: purchasing ? 0.6 : pressed ? 0.88 : 1 }]}>
+                <Text style={styles.adoptLabel}>{t('showcase.unlockSpecies', { price: speciesPrice })}</Text>
+              </Pressable>
+            ) : null}
+            <Pressable
+              accessibilityRole="button"
+              disabled={purchasing}
+              onPress={() => buy(SANCTUARY_PASS_PRODUCT_ID)}
+              style={({ pressed }) => [styles.pass, { opacity: purchasing ? 0.6 : pressed ? 0.88 : 1 }]}>
+              <Text style={styles.passLabel}>{t('showcase.getPass', { price: passPrice })}</Text>
+              <Text style={styles.passHint}>{t('showcase.passSubtitle')}</Text>
+            </Pressable>
+          </>
+        )}
+        {purchaseError ? <Text style={styles.purchaseError}>{purchaseError}</Text> : null}
         <Pressable accessibilityRole="button" onPress={close} style={styles.pickAnother}>
           <Text style={styles.pickAnotherLabel}>{t('showcase.pickAnother')}</Text>
         </Pressable>
@@ -973,6 +1054,36 @@ const styles = StyleSheet.create({
     color: ADOPT_TEXT,
     fontSize: 17,
     fontWeight: '800',
+    textAlign: 'center',
+  },
+  pass: {
+    minHeight: 58,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#C6B48A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  passLabel: {
+    color: '#E7D7B0',
+    fontSize: 16,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  passHint: {
+    color: MUTED,
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  purchaseError: {
+    color: '#E7B2A2',
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   pickAnother: {
     minHeight: 40,

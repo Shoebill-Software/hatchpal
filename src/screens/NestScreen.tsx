@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
+import { Alert, Modal, Platform, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import { useRouter, useIsFocused } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   cancelAnimation,
   useAnimatedStyle,
@@ -12,8 +13,10 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Defs, Ellipse, Path, RadialGradient, Stop } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { scheduleOnRN } from 'react-native-worklets';
 
 import { ChangeEggDialog } from '@/components/ChangeEggDialog';
+import { CradlePager } from '@/components/CradlePager';
 import { ClimateControls, describeClimate } from '@/components/ClimateControls';
 import { EGG_FRAME, EggContainer } from '@/components/EggContainer';
 import { EmptyNestView } from '@/components/EmptyNestView';
@@ -27,6 +30,8 @@ import { TutorialAnchor, TutorialAnchorProvider, useTutorialAnchor } from '@/com
 import { useNestTutorialTrigger } from '@/components/tutorial/useNestTutorialTrigger';
 import type { TutorialTargetId } from '@/constants/tutorial';
 import { useNestPalette } from '@/constants/nest';
+import { SANCTUARY_CRADLE_LIMIT } from '@/domain/cradleCapacity';
+import { priceStringFor, SANCTUARY_PASS_PRODUCT_ID } from '@/domain/entitlements';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { readClimate, caredHeartRate } from '@/domain/climateEngine';
 import { resolveHatchEpoch } from '@/domain/timeEngine';
@@ -44,7 +49,9 @@ import {
   lifeStageLabelKey,
   useTranslation,
 } from '@/i18n';
-import { ImpactFeedbackStyle, triggerImpact } from '@/services/hapticFeedback';
+import { ImpactFeedbackStyle, NotificationFeedbackType, triggerImpact, triggerNotification } from '@/services/hapticFeedback';
+import { isPurchaseCancelled } from '@/services/purchaseErrors';
+import { usePurchasesStore } from '@/store/usePurchasesStore';
 
 const HEART = '#C45B5B';
 const FIGURE = { width: 220, height: 246 };
@@ -57,6 +64,8 @@ export default function NestScreen() {
   const { t } = useTranslation();
   const [changeEggVisible, setChangeEggVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
+  const [passInvite, setPassInvite] = useState(false);
+  const [buyingPass, setBuyingPass] = useState(false);
   const {
     pet,
     species,
@@ -64,10 +73,24 @@ export default function NestScreen() {
     isClockTampered,
     hasHydrated,
     nowEpoch,
+    cradles,
+    activePetIndex,
+    switchCradle,
     abandonActivePet,
     recordInteraction,
     markHatched,
   } = useActivePet();
+  const isPro = usePurchasesStore((state) => state.isProUnlocked);
+  const packages = usePurchasesStore((state) => state.availablePackages);
+  const purchaseProduct = usePurchasesStore((state) => state.purchaseProduct);
+  const passPrice = priceStringFor(packages, SANCTUARY_PASS_PRODUCT_ID);
+  const addOffer =
+    cradles.length >= SANCTUARY_CRADLE_LIMIT
+      ? null
+      : {
+          label: t('nest.addCradle'),
+          hint: t(isPro ? 'nest.addCradleHintPro' : 'nest.addCradleHint'),
+        };
   useNestPipAudio(Boolean(snapshot?.isPipped), snapshot?.currentMilestone.stage ?? null);
 
   const showCreature = Boolean(hasHydrated && pet && species && snapshot);
@@ -82,8 +105,50 @@ export default function NestScreen() {
 
   const confirmChangeEgg = () => {
     setChangeEggVisible(false);
-    abandonActivePet();
+    if (cradles.length <= 1) {
+      abandonActivePet();
+    }
     router.push({ pathname: '/adopt', params: { replacing: '1' } });
+  };
+
+  const openCradle = (index: number) => {
+    if (index < 0) {
+      return;
+    }
+    if (index < cradles.length) {
+      switchCradle(index);
+      void triggerImpact(ImpactFeedbackStyle.Light);
+      return;
+    }
+    if (index >= SANCTUARY_CRADLE_LIMIT) {
+      return;
+    }
+    if (isPro) {
+      router.push({ pathname: '/adopt', params: { adding: '1' } });
+      return;
+    }
+    setPassInvite(true);
+  };
+
+  const stepCradle = (direction: -1 | 1) => {
+    openCradle(activePetIndex + direction);
+  };
+
+  const buyPass = () => {
+    setBuyingPass(true);
+    void purchaseProduct(SANCTUARY_PASS_PRODUCT_ID)
+      .then(() => {
+        void triggerNotification(NotificationFeedbackType.Success);
+        setPassInvite(false);
+      })
+      .catch((error: unknown) => {
+        if (!isPurchaseCancelled(error)) {
+          Alert.alert(t('settings.restoreTitle'), t('showcase.purchaseFailed'));
+        }
+      })
+      .finally(() => {
+        setBuyingPass(false);
+      });
   };
 
   return (
@@ -105,6 +170,14 @@ export default function NestScreen() {
                   : undefined
               }
             />
+            {pet ? (
+              <CradlePager
+                occupied={cradles.length}
+                activeIndex={activePetIndex}
+                onSelect={openCradle}
+                addOffer={addOffer}
+              />
+            ) : null}
             <NestPresence
               token={showCreature && pet ? pet.id : 'empty'}
               empty={<EmptyNestView />}
@@ -118,6 +191,7 @@ export default function NestScreen() {
                     nowEpoch={nowEpoch}
                     recordInteraction={recordInteraction}
                     markHatched={markHatched}
+                    onStepCradle={cradles.length > 0 ? stepCradle : undefined}
                   />
                 ) : (
                   <View style={styles.flex} />
@@ -136,6 +210,30 @@ export default function NestScreen() {
         onConfirm={confirmChangeEgg}
       />
       <SettingsModal visible={settingsVisible} onClose={() => setSettingsVisible(false)} />
+      <Modal visible={passInvite} transparent animationType="fade" onRequestClose={() => setPassInvite(false)}>
+        <View style={styles.inviteBackdrop}>
+          <View style={[styles.inviteCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+            <Text style={[styles.inviteTitle, { color: palette.text }]}>{t('nest.passTitle')}</Text>
+            <Text style={[styles.inviteBody, { color: palette.textMuted }]}>{t('nest.passBody')}</Text>
+            <Pressable
+              accessibilityRole="button"
+              disabled={buyingPass}
+              onPress={buyPass}
+              style={({ pressed }) => [
+                styles.inviteBuy,
+                { backgroundColor: palette.action, opacity: buyingPass ? 0.6 : pressed ? 0.88 : 1 },
+              ]}>
+              <Text style={[styles.inviteBuyLabel, { color: palette.actionText }]}>
+                {t('showcase.getPass', { price: passPrice })}
+              </Text>
+              <Text style={[styles.inviteHint, { color: palette.actionText }]}>{t('showcase.passSubtitle')}</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" onPress={() => setPassInvite(false)} style={styles.inviteLater}>
+              <Text style={[styles.inviteLaterLabel, { color: palette.action }]}>{t('nest.passLater')}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
       </View>
     </TutorialAnchorProvider>
   );
@@ -149,6 +247,7 @@ function OccupiedNest({
   nowEpoch,
   recordInteraction,
   markHatched,
+  onStepCradle,
 }: {
   pet: PetInstance;
   species: SpeciesConfig;
@@ -157,6 +256,7 @@ function OccupiedNest({
   nowEpoch: number;
   recordInteraction: ActivePetView['recordInteraction'];
   markHatched: ActivePetView['markHatched'];
+  onStepCradle?: (direction: -1 | 1) => void;
 }) {
   const router = useRouter();
   const palette = useNestPalette();
@@ -215,6 +315,24 @@ function OccupiedNest({
   const eggScale = fitToStage(stageBox, EGG_FRAME);
   const figureScale = fitToStage(stageBox, FIGURE);
   const holdHint = t('nest.holdToCandle');
+  const stepRef = useRef(onStepCradle);
+  stepRef.current = onStepCradle;
+  const glide = useCallback((direction: -1 | 1) => {
+    stepRef.current?.(direction);
+  }, []);
+  const cradlePan = Gesture.Pan()
+    .enabled(onStepCradle != null)
+    .activeOffsetX([-28, 28])
+    .failOffsetY([-22, 22])
+    .onEnd((event) => {
+      if (event.translationX <= -56) {
+        scheduleOnRN(glide, 1);
+        return;
+      }
+      if (event.translationX >= 56) {
+        scheduleOnRN(glide, -1);
+      }
+    });
 
   const warmNest = () => {
     recordInteraction('warm_nest');
@@ -273,6 +391,7 @@ function OccupiedNest({
         </Text>
       ) : null}
 
+      <GestureDetector gesture={cradlePan}>
       <View style={styles.stage} onLayout={onStageLayout}>
             <View style={styles.specimen}>
               <View
@@ -340,6 +459,7 @@ function OccupiedNest({
               </Text>
             </View>
           </View>
+      </GestureDetector>
           <View style={styles.dock}>
             {hatched ? (
               <CareDock
@@ -800,5 +920,58 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '500',
     textAlign: 'center',
+  },
+  inviteBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(22, 16, 12, 0.52)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: Spacing.four,
+  },
+  inviteCard: {
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: Spacing.four,
+    gap: Spacing.three,
+  },
+  inviteTitle: {
+    fontSize: 22,
+    lineHeight: 28,
+    fontWeight: '700',
+  },
+  inviteBody: {
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '500',
+  },
+  inviteBuy: {
+    minHeight: 56,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+  },
+  inviteBuyLabel: {
+    fontSize: 16,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  inviteHint: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  inviteLater: {
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inviteLaterLabel: {
+    fontSize: 15,
+    fontWeight: '700',
   },
 });

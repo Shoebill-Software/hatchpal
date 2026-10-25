@@ -4,9 +4,11 @@ import { createMmkvStateStorage } from './mmkvStateStorage';
 
 const PET_MMKV_ID = 'hatchpal.pets';
 const PREFERENCES_MMKV_ID = 'hatchpal.preferences';
+const PURCHASES_MMKV_ID = 'hatchpal.purchases';
 
 let petMmkv: ReturnType<typeof createMMKV> | undefined;
 let preferencesMmkv: ReturnType<typeof createMMKV> | undefined;
+let purchasesMmkv: ReturnType<typeof createMMKV> | undefined;
 
 export function getPetMmkv(): ReturnType<typeof createMMKV> {
   if (!petMmkv) {
@@ -36,6 +38,21 @@ export const preferencesMmkvStateStorage: StateStorage = createMmkvStateStorage(
     getPreferencesMmkv().set(key, value);
   },
   remove: (key) => getPreferencesMmkv().remove(key),
+});
+
+export function getPurchasesMmkv(): ReturnType<typeof createMMKV> {
+  if (!purchasesMmkv) {
+    purchasesMmkv = createMMKV({ id: PURCHASES_MMKV_ID });
+  }
+  return purchasesMmkv;
+}
+
+export const purchasesMmkvStateStorage: StateStorage = createMmkvStateStorage({
+  getString: (key) => getPurchasesMmkv().getString(key),
+  set: (key, value) => {
+    getPurchasesMmkv().set(key, value);
+  },
+  remove: (key) => getPurchasesMmkv().remove(key),
 });
 
 export { createMmkvStateStorage } from './mmkvStateStorage';

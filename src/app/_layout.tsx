@@ -61,6 +61,14 @@ function RootNavigator() {
         }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen
+          name="cradle/[petId]"
+          options={{
+            headerShown: false,
+            animation: 'none',
+            contentStyle: { backgroundColor: canvas },
+          }}
+        />
+        <Stack.Screen
           name="candling"
           options={{
             headerShown: false,

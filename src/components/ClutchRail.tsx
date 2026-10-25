@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Pressable, ScrollView, StyleSheet, useWindowDimensions } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -9,6 +9,7 @@ import Animated, {
 import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
 
 import { ADOPTION_ATMOSPHERE } from '@/components/adoptionAtmosphere';
+import { EggLockBadge } from '@/components/EggCarousel';
 import { SpeciesEggArt } from '@/components/SpeciesEggArt';
 import type { SpeciesConfig, SpeciesId } from '@/domain/types';
 import { useReduceMotion } from '@/hooks/useReduceMotion';
@@ -23,10 +24,11 @@ const EGG_HEIGHT = 60;
 export interface ClutchRailProps {
   species: readonly SpeciesConfig[];
   selectedId: SpeciesId;
+  isLocked?: (id: SpeciesId) => boolean;
   onSelect: (id: SpeciesId) => void;
 }
 
-export function ClutchRail({ species, selectedId, onSelect }: ClutchRailProps) {
+export function ClutchRail({ species, selectedId, isLocked, onSelect }: ClutchRailProps) {
   const reduceMotion = useReduceMotion();
   const { width } = useWindowDimensions();
   const listRef = useRef<ScrollView>(null);
@@ -64,6 +66,7 @@ export function ClutchRail({ species, selectedId, onSelect }: ClutchRailProps) {
           key={item.id}
           species={item}
           selected={item.id === selectedId}
+          locked={isLocked?.(item.id) ?? false}
           reduceMotion={reduceMotion}
           onSelect={onSelect}
         />
@@ -75,11 +78,13 @@ export function ClutchRail({ species, selectedId, onSelect }: ClutchRailProps) {
 function ClutchEgg({
   species,
   selected,
+  locked,
   reduceMotion,
   onSelect,
 }: {
   species: SpeciesConfig;
   selected: boolean;
+  locked: boolean;
   reduceMotion: boolean;
   onSelect: (id: SpeciesId) => void;
 }) {
@@ -111,7 +116,7 @@ function ClutchEgg({
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ selected }}
-      accessibilityLabel={species.commonName}
+      accessibilityLabel={locked ? `${species.commonName}, ${t('adoption.locked')}` : species.commonName}
       accessibilityHint={selected ? t('adoption.openDossier') : t('adoption.selectEgg')}
       onPress={() => {
         if (!selected) {
@@ -135,6 +140,11 @@ function ClutchEgg({
       <Animated.View pointerEvents="none" style={eggStyle}>
         <SpeciesEggArt species={species} width={EGG_WIDTH} height={EGG_HEIGHT} />
       </Animated.View>
+      {locked ? (
+        <View pointerEvents="none" style={styles.lock}>
+          <EggLockBadge size={16} />
+        </View>
+      ) : null}
     </Pressable>
   );
 }
@@ -159,5 +169,9 @@ const styles = StyleSheet.create({
     height: 78,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  lock: {
+    position: 'absolute',
+    top: 4,
   },
 });

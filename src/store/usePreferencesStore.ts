@@ -103,8 +103,11 @@ function refreshAlerts(): Promise<void> {
     return Promise.resolve();
   }
   return import('@/services/notificationLifecycle').then(async (lifecycle) => {
-    const pets = await import('@/store/usePetStore');
-    await lifecycle.syncNotificationsForStoredPet(pets.getActivePetFromStore());
+    const [{ selectCradlePets }, { usePetStore }] = await Promise.all([
+      import('@/store/createPetStore'),
+      import('@/store/usePetStore'),
+    ]);
+    await lifecycle.syncNotificationsForStoredPets(selectCradlePets(usePetStore.getState()));
   });
 }
 

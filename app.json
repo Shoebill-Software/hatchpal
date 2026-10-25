@@ -19,9 +19,15 @@
       "translucent": true
     },
     "ios": {
-      "icon": "./assets/expo.icon",
+      "icon": "./assets/images/icon-ios.png",
       "bundleIdentifier": "com.shoebillsoftware.hatchpal",
+      "buildNumber": "1",
       "appleTeamId": "Y6BQW63Q2S",
+      "entitlements": {
+        "com.apple.security.application-groups": [
+          "group.com.shoebillsoftware.hatchpal"
+        ]
+      },
       "config": {
         "usesNonExemptEncryption": false
       },
@@ -49,6 +55,7 @@
     },
     "plugins": [
       "expo-router",
+      "@bacons/apple-targets",
       "./plugins/withRemovePushEntitlement",
       [
         "expo-splash-screen",

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 
 import { usePetStore } from '@/store/usePetStore';
 import { usePreferencesStore } from '@/store/usePreferencesStore';
+import { usePurchasesStore } from '@/store/usePurchasesStore';
 
 export function usePreferencesHydrated(): boolean {
   const [preferencesReady, setPreferencesReady] = useState(() => usePreferencesStore.persist.hasHydrated());
@@ -26,5 +27,14 @@ export function usePreferencesHydrated(): boolean {
 export function useLaunchStoresReady(): boolean {
   const petReady = usePetStore((state) => state.hasHydrated);
   const preferencesReady = usePreferencesHydrated();
-  return petReady && preferencesReady;
+  const purchasesReady = usePurchasesStore((state) => state.hasHydrated);
+
+  useEffect(() => {
+    if (!purchasesReady) {
+      return;
+    }
+    void usePurchasesStore.getState().initialize();
+  }, [purchasesReady]);
+
+  return petReady && preferencesReady && purchasesReady;
 }
