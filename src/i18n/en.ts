@@ -441,6 +441,11 @@ export const en = {
   'settings.aboutTitle': 'About & Science',
   'settings.version': 'Version {{version}}',
   'settings.github': 'Shoebill Software on GitHub',
+  'settings.website': 'Shoebill Software website',
+  'settings.privacyPolicy': 'Privacy Policy',
+  'settings.support': 'Support',
+  'settings.privacyHint':
+    'Creature data stays on this device. Purchases go through Apple or Google and RevenueCat. Milestone alerts are local notifications only.',
   'settings.attribution':
     'Incubation timelines follow published developmental biology for every species in the roster, from galliforms and raptors to crocodilians and the platypus.',
   'settings.silhouettes':

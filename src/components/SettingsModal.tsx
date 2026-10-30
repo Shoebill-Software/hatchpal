@@ -33,6 +33,9 @@ import { usePreferencesStore, type AppearancePreference } from '@/store/usePrefe
 import { usePurchasesStore } from '@/store/usePurchasesStore';
 
 const REPOSITORY_URL = 'https://github.com/Shoebill-Software/hatchpal';
+const WEBSITE_URL = 'https://www.shoebill-software.de/de';
+const PRIVACY_POLICY_URL = 'https://www.shoebill-software.de/privacy';
+const SUPPORT_URL = 'mailto:hello@shoebill-software.de';
 const PYTHON_SILHOUETTE_URL =
   'https://www.phylopic.org/images/0376a292-2e17-4978-b859-6fbf9bea6c67';
 
@@ -75,6 +78,18 @@ async function openExternal(url: string): Promise<void> {
       // A missing browser must not trap the settings sheet.
     }
   }
+}
+
+async function openSupport(url: string): Promise<void> {
+  if (url.startsWith('mailto:')) {
+    try {
+      await Linking.openURL(url);
+    } catch {
+      // Missing mail clients must not trap the settings sheet.
+    }
+    return;
+  }
+  await openExternal(url);
 }
 
 export function SettingsModal({ visible, onClose }: SettingsModalProps) {
@@ -279,6 +294,42 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
                 style={({ pressed }) => [styles.linkButton, { opacity: pressed ? 0.7 : 1 }]}>
                 <Text style={[styles.linkLabel, { color: palette.action }]}>{t('settings.github')}</Text>
               </Pressable>
+              <Pressable
+                accessibilityRole="link"
+                accessibilityLabel={t('settings.website')}
+                onPress={() => {
+                  void openExternal(WEBSITE_URL);
+                }}
+                style={({ pressed }) => [styles.linkButton, { opacity: pressed ? 0.7 : 1 }]}>
+                <Text style={[styles.linkLabel, { color: palette.action }]}>{t('settings.website')}</Text>
+              </Pressable>
+              {PRIVACY_POLICY_URL.length > 0 ? (
+                <Pressable
+                  accessibilityRole="link"
+                  accessibilityLabel={t('settings.privacyPolicy')}
+                  onPress={() => {
+                    void openExternal(PRIVACY_POLICY_URL);
+                  }}
+                  style={({ pressed }) => [styles.linkButton, { opacity: pressed ? 0.7 : 1 }]}>
+                  <Text style={[styles.linkLabel, { color: palette.action }]}>
+                    {t('settings.privacyPolicy')}
+                  </Text>
+                </Pressable>
+              ) : null}
+              {SUPPORT_URL.length > 0 ? (
+                <Pressable
+                  accessibilityRole="link"
+                  accessibilityLabel={t('settings.support')}
+                  onPress={() => {
+                    void openSupport(SUPPORT_URL);
+                  }}
+                  style={({ pressed }) => [styles.linkButton, { opacity: pressed ? 0.7 : 1 }]}>
+                  <Text style={[styles.linkLabel, { color: palette.action }]}>{t('settings.support')}</Text>
+                </Pressable>
+              ) : null}
+              {PRIVACY_POLICY_URL.length > 0 || SUPPORT_URL.length > 0 ? (
+                <Text style={[styles.hint, { color: palette.textMuted }]}>{t('settings.privacyHint')}</Text>
+              ) : null}
               <Text selectable style={[styles.hint, { color: palette.textMuted }]}>
                 {t('settings.attribution')}
               </Text>

@@ -65,6 +65,12 @@ describe('English dictionary', () => {
     expect(translate('keeper.first_hatch.progress', { current: 0, goal: 1 })).toBe('Hatches 0 of 1');
     expect(translate('settings.appearance.light')).toBe('Light');
     expect(translate('settings.appearance.dark')).toBe('Dark');
+    expect(translate('settings.website')).toBe('Shoebill Software website');
+    expect(translate('settings.privacyPolicy')).toBe('Privacy Policy');
+    expect(translate('settings.support')).toBe('Support');
+    expect(translate('settings.privacyHint')).toContain('on this device');
+    expect(translate('settings.privacyHint')).toContain('RevenueCat');
+    expect(translate('settings.privacyHint')).toContain('local notifications');
     expect(translate('metric.ageDay', { day: 3 })).toBe('Day 3');
     expect(translate('tutorial.step', { current: 2, total: 5 })).toBe('Step 2 of 5');
     expect(translate('tutorial.heart.body')).toContain('Day 3');
