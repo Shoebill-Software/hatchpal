@@ -1,15 +1,19 @@
 import type { PetInstance, SpeciesConfig } from '@/domain/types';
 
+import { WEATHER_DRIFT, weatherAt } from './nestWeather';
+
 /**
  * Nest micro-climate is a pure function of care timestamps.
  * Nothing here advances on a timer. Callers pass `nowEpoch`.
  *
  * Temperature relaxes toward room air on a 21-hour half-life, the midpoint of
  * the 18–24 hour band. Humidity relaxes toward a dry substrate on a 24-hour
- * time constant. Vitality rewards time inside the species sweet spot and
+ * time constant. The weather on the day of the most recent care scales both.
+ * Vitality rewards time inside the species sweet spot and
  * eases toward a living floor during casual neglect. A climate strike
  * collapses displayed vitality to 0.0; more than twelve hours at zero
- * makes the embryo unviable.
+ * makes the embryo unviable. Species that incubate dry reach a strike
+ * from warmth alone. Everyone else needs warmth and moisture both off.
  */
 
 export const AMBIENT_ROOM_CELSIUS = 21;
@@ -25,6 +29,9 @@ export const FRESH_VITALITY = 0.78;
 export const UNVIABLE_AFTER_ZERO_MS = 12 * 60 * 60 * 1000;
 export const VITALITY_RISE_TAU_MS = 4 * 60 * 60 * 1000;
 export const VITALITY_FALL_TAU_MS = 18 * 60 * 60 * 1000;
+/** Brooding can push the nest this far past the species target before the lamp cuts out. */
+export const BROOD_MAX_OVERSHOOT_CELSIUS = 3;
+export const MAX_HUMIDITY_PCT = 100;
 
 const HEART_RATE_FLOOR_SCALE = 0.86;
 
@@ -39,6 +46,11 @@ export type VitalityMood = 'thriving' | 'steady' | 'sluggish' | 'chilled';
 export const SULK_AFTER_MS = 8 * 60 * 60 * 1000;
 /** Both readings have to be off this long before the egg goes on strike. */
 export const STRIKE_AFTER_MS = 24 * 60 * 60 * 1000;
+
+/** Dry-country eggs sit on the humidity floor, so moisture never leaves its band. */
+export function requiresMoistureCare(species: { humidityTargetPct: number }): boolean {
+  return species.humidityTargetPct > DRY_HUMIDITY_PCT + HUMIDITY_TOLERANCE_PCT;
+}
 
 export type NestTemper = 'content' | 'chilly' | 'parched' | 'fussy' | 'on_strike';
 
@@ -91,23 +103,39 @@ export function clampVitality(value: unknown, fallback = FRESH_VITALITY): number
 }
 
 /** Exponential half-life toward ambient room temperature. */
-export function decayTemperature(setpointCelsius: number, elapsedMs: number): number {
+export function decayTemperature(
+  setpointCelsius: number,
+  elapsedMs: number,
+  halfLifeMs = TEMPERATURE_HALF_LIFE_MS
+): number {
   return decayHalfLife(
     finiteNumber(setpointCelsius, AMBIENT_ROOM_CELSIUS),
     AMBIENT_ROOM_CELSIUS,
     elapsedMs,
-    TEMPERATURE_HALF_LIFE_MS
+    halfLifeMs
   );
 }
 
 /** Exponential relaxation toward the dry substrate baseline. */
-export function decayHumidity(setpointPct: number, elapsedMs: number): number {
+export function decayHumidity(
+  setpointPct: number,
+  elapsedMs: number,
+  timeConstantMs = HUMIDITY_TIME_CONSTANT_MS
+): number {
   return decayExponential(
     finiteNumber(setpointPct, DRY_HUMIDITY_PCT),
     DRY_HUMIDITY_PCT,
     elapsedMs,
-    HUMIDITY_TIME_CONSTANT_MS
+    timeConstantMs
   );
+}
+
+/** Drift constants in force since the most recent warming and misting. */
+export function driftConstants(pet: PetInstance): { temperatureHalfLifeMs: number; humidityTimeConstantMs: number } {
+  return {
+    temperatureHalfLifeMs: TEMPERATURE_HALF_LIFE_MS * WEATHER_DRIFT[weatherAt(pet, pet.lastWarmedEpoch)].warmth,
+    humidityTimeConstantMs: HUMIDITY_TIME_CONSTANT_MS * WEATHER_DRIFT[weatherAt(pet, pet.lastMistedEpoch)].moisture,
+  };
 }
 
 export function temperatureStatus(celsius: number, targetCelsius: number): TemperatureStatus {
@@ -130,8 +158,21 @@ export function humidityStatus(pct: number, targetPct: number): HumidityStatus {
   return 'optimal';
 }
 
-export function nestTemper(warmthOffMs: number, moistureOffMs: number): NestTemper {
+export function nestTemper(
+  warmthOffMs: number,
+  moistureOffMs: number,
+  moistureRequired = true
+): NestTemper {
   const warmth = Math.max(0, warmthOffMs);
+  if (!moistureRequired) {
+    if (warmth >= STRIKE_AFTER_MS) {
+      return 'on_strike';
+    }
+    if (warmth >= SULK_AFTER_MS) {
+      return 'chilly';
+    }
+    return 'content';
+  }
   const moisture = Math.max(0, moistureOffMs);
   const warmthSulk = warmth >= SULK_AFTER_MS;
   const moistureSulk = moisture >= SULK_AFTER_MS;
@@ -184,11 +225,17 @@ export function caredHeartRate(baseRate: number, vitalityScore: number): number 
 
 export function readClimate(pet: PetInstance, species: SpeciesConfig, nowEpoch: number): ClimateReading {
   const now = finiteEpoch(nowEpoch, pet.lastWarmedEpoch);
+  const drift = driftConstants(pet);
   const temperatureCelsius = decayTemperature(
     pet.currentTemperatureCelsius,
-    elapsedMs(pet.lastWarmedEpoch, now)
+    elapsedMs(pet.lastWarmedEpoch, now),
+    drift.temperatureHalfLifeMs
   );
-  const humidityPct = decayHumidity(pet.currentHumidityPct, elapsedMs(pet.lastMistedEpoch, now));
+  const humidityPct = decayHumidity(
+    pet.currentHumidityPct,
+    elapsedMs(pet.lastMistedEpoch, now),
+    drift.humidityTimeConstantMs
+  );
   const temperature = temperatureStatus(temperatureCelsius, species.temperatureTargetCelsius);
   const humidity = humidityStatus(humidityPct, species.humidityTargetPct);
   const inSweetSpot = temperature === 'optimal' && humidity === 'optimal';
@@ -208,32 +255,60 @@ export function readClimate(pet: PetInstance, species: SpeciesConfig, nowEpoch: 
     mood: vitalityMood(vitalityScore, inSweetSpot, temperature),
     warmthOffMs,
     moistureOffMs,
-    temper: nestTemper(warmthOffMs, moistureOffMs),
+    temper: nestTemper(warmthOffMs, moistureOffMs, requiresMoistureCare(species)),
   };
 }
 
-export function warmNest(pet: PetInstance, species: SpeciesConfig, nowEpoch: number): PetInstance {
+/**
+ * Sets the nest temperature from this moment. Without `celsius` the nest lands
+ * exactly on the species target. A brooded reading is clamped between room air
+ * and {@link BROOD_MAX_OVERSHOOT_CELSIUS} past the target.
+ */
+export function warmNest(
+  pet: PetInstance,
+  species: SpeciesConfig,
+  nowEpoch: number,
+  celsius?: number
+): PetInstance {
   if (pet.isHatched || pet.status === 'unviable' || !Number.isFinite(nowEpoch)) {
     return pet;
   }
   const now = finiteEpoch(nowEpoch, pet.lastWarmedEpoch);
+  const target = species.temperatureTargetCelsius;
+  const reading =
+    celsius == null || !Number.isFinite(celsius)
+      ? target
+      : Math.min(target + BROOD_MAX_OVERSHOOT_CELSIUS, Math.max(AMBIENT_ROOM_CELSIUS, celsius));
   return {
     ...pet,
-    currentTemperatureCelsius: species.temperatureTargetCelsius,
+    currentTemperatureCelsius: reading,
     lastWarmedEpoch: now,
     vitalityScore: projectVitality(pet, species, now),
     lastInteractedEpoch: now,
   };
 }
 
-export function mistSubstrate(pet: PetInstance, species: SpeciesConfig, nowEpoch: number): PetInstance {
+/**
+ * Adds `addPct` points of humidity on top of the current reading. Without it the
+ * substrate lands exactly on the species target.
+ */
+export function mistSubstrate(
+  pet: PetInstance,
+  species: SpeciesConfig,
+  nowEpoch: number,
+  addPct?: number
+): PetInstance {
   if (pet.isHatched || pet.status === 'unviable' || !Number.isFinite(nowEpoch)) {
     return pet;
   }
   const now = finiteEpoch(nowEpoch, pet.lastMistedEpoch);
+  const reading =
+    addPct == null || !Number.isFinite(addPct)
+      ? species.humidityTargetPct
+      : Math.min(MAX_HUMIDITY_PCT, readClimate(pet, species, now).humidityPct + Math.max(0, addPct));
   return {
     ...pet,
-    currentHumidityPct: species.humidityTargetPct,
+    currentHumidityPct: reading,
     lastMistedEpoch: now,
     vitalityScore: projectVitality(pet, species, now),
     lastInteractedEpoch: now,
@@ -257,6 +332,7 @@ function climateBands(
   species: SpeciesConfig
 ): { temperature: InsideWindow; humidity: InsideWindow } {
   const anchor = Math.max(finiteEpoch(pet.lastWarmedEpoch, 0), finiteEpoch(pet.lastMistedEpoch, 0));
+  const drift = driftConstants(pet);
   return {
     temperature: coolingWindow(
       finiteEpoch(pet.lastWarmedEpoch, anchor),
@@ -269,7 +345,7 @@ function climateBands(
           finiteNumber(pet.currentTemperatureCelsius, species.temperatureTargetCelsius),
           AMBIENT_ROOM_CELSIUS,
           bound,
-          TEMPERATURE_HALF_LIFE_MS
+          drift.temperatureHalfLifeMs
         )
     ),
     humidity: coolingWindow(
@@ -283,7 +359,7 @@ function climateBands(
           finiteNumber(pet.currentHumidityPct, species.humidityTargetPct),
           DRY_HUMIDITY_PCT,
           bound,
-          HUMIDITY_TIME_CONSTANT_MS
+          drift.humidityTimeConstantMs
         )
     ),
   };
@@ -464,14 +540,18 @@ function finiteNumber(value: number, fallback: number): number {
 }
 
 /**
- * How long the nest has been on strike. Zero unless both climate readings have
- * been outside the sweet spot for at least {@link STRIKE_AFTER_MS}.
+ * How long the nest has been on strike. Zero until the failing climate has been
+ * outside the sweet spot for at least {@link STRIKE_AFTER_MS}. Dry-country eggs
+ * count warmth alone.
  */
-export function strikeDurationMs(reading: ClimateReading): number {
+export function strikeDurationMs(reading: ClimateReading, moistureRequired = true): number {
   if (reading.temper !== 'on_strike') {
     return 0;
   }
-  return Math.max(0, Math.min(reading.warmthOffMs, reading.moistureOffMs) - STRIKE_AFTER_MS);
+  const elapsed = moistureRequired
+    ? Math.min(reading.warmthOffMs, reading.moistureOffMs)
+    : reading.warmthOffMs;
+  return Math.max(0, elapsed - STRIKE_AFTER_MS);
 }
 
 /**
@@ -493,7 +573,8 @@ export function isEmbryoUnviable(pet: PetInstance, species: SpeciesConfig, nowEp
   if (pet.status === 'unviable') {
     return true;
   }
-  return strikeDurationMs(readClimate(pet, species, nowEpoch)) > UNVIABLE_AFTER_ZERO_MS;
+  const reading = readClimate(pet, species, nowEpoch);
+  return strikeDurationMs(reading, requiresMoistureCare(species)) > UNVIABLE_AFTER_ZERO_MS;
 }
 
 /**

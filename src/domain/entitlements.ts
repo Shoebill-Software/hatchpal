@@ -1,7 +1,7 @@
 import { isSpeciesId } from '@/domain/petIntegrity';
 import { SPECIES_IDS, type SpeciesId } from '@/domain/types';
 
-import { FREE_CRADLE_LIMIT, SANCTUARY_CRADLE_LIMIT } from './cradleCapacity';
+import { cradleAllowance } from './cradleCapacity';
 
 export const ENTITLEMENT_SANCTUARY_PRO = 'sanctuary_pro';
 export const SANCTUARY_PASS_PRODUCT_ID = 'sanctuary_pass_lifetime';
@@ -186,7 +186,11 @@ export function resolveEntitlements(snapshot: CustomerSnapshot): EntitlementReso
 
 export function isSpeciesAvailable(
   speciesId: string,
-  state: { isProUnlocked: boolean; unlockedSpeciesIds: readonly string[] }
+  state: {
+    isProUnlocked: boolean;
+    unlockedSpeciesIds: readonly string[];
+    earnedSpeciesIds?: readonly string[];
+  }
 ): boolean {
   if (!isSpeciesId(speciesId)) {
     return false;
@@ -194,11 +198,14 @@ export function isSpeciesAvailable(
   if (state.isProUnlocked) {
     return true;
   }
-  return state.unlockedSpeciesIds.includes(speciesId);
+  if (state.unlockedSpeciesIds.includes(speciesId)) {
+    return true;
+  }
+  return state.earnedSpeciesIds?.includes(speciesId) ?? false;
 }
 
-export function maxCradlesFor(isProUnlocked: boolean): number {
-  return isProUnlocked ? SANCTUARY_CRADLE_LIMIT : FREE_CRADLE_LIMIT;
+export function maxCradlesFor(isProUnlocked: boolean, hatchCount = 0): number {
+  return cradleAllowance(isProUnlocked, hatchCount);
 }
 
 export function canExportJournal(isProUnlocked: boolean, exportsUsed: number): boolean {

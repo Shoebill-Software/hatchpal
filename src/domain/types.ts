@@ -208,7 +208,30 @@ export interface PetInstance {
   status?: PetStatus;
   isHatched: boolean;
   hatchedAtEpoch?: number;
+  /** Seeds daily nest weather and egg wishes. Absent on eggs laid before weather existed. */
+  weatherSeed?: number;
+  /** Hearts, granted wishes, and the care habits that shape the hatchling's temperament. */
+  care?: NestCareLog;
 }
+
+export const AFFINITY_KINDS = ['warmth', 'moisture', 'song', 'curiosity'] as const;
+
+export type AffinityKind = (typeof AFFINITY_KINDS)[number];
+
+export interface NestCareLog {
+  /** Wishes granted over the whole incubation. */
+  hearts: number;
+  /** Wish windows already granted, newest first. Capped so the save stays small. */
+  grantedWindows: number[];
+  /** Care habits. Each kind earns at most one point per wish window, plus one per matching wish. */
+  affinity: Record<AffinityKind, number>;
+  /** Last wish window that credited each habit, or -1. */
+  creditedWindows: Record<AffinityKind, number>;
+  /** Lifetime spritz count. Drives the deterministic spritz strength sequence. */
+  spritzes: number;
+}
+
+export type Temperament = 'sunny' | 'dewy' | 'songful' | 'curious' | 'easygoing';
 
 export type ClockAnomaly = 'none' | 'rollback' | 'forward_jump';
 
@@ -260,3 +283,27 @@ export interface PetSnapshot {
 }
 
 export type PetInteractionKind = 'warm_nest' | 'mist_nest';
+
+export type BroodOutcome = 'perfect' | 'cozy' | 'toasty' | 'chilly';
+
+export type MistOutcome = 'perfect' | 'dewy' | 'soggy' | 'dry';
+
+export type WishKind = 'perfect_brood' | 'perfect_mist' | 'lullaby' | 'peek' | 'sweet_spot';
+
+export type CareEvent =
+  | { kind: 'brood'; startCelsius: number; celsius: number }
+  | { kind: 'spritz' }
+  | { kind: 'mist_settled'; startPct: number }
+  | { kind: 'lullaby' }
+  | { kind: 'peek' };
+
+export interface CareResult {
+  /** Wish granted by this event, if any. */
+  granted: WishKind | null;
+  /** Habit that earned a temperament point from this event. */
+  credited?: AffinityKind;
+  brood?: BroodOutcome;
+  mist?: MistOutcome;
+  /** Humidity added by a spritz, in percentage points. */
+  addedPct?: number;
+}

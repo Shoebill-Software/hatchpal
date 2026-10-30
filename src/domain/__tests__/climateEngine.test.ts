@@ -1,4 +1,5 @@
 import { silkieChickenConfig } from '@/data/species/chicken';
+import { emuConfig } from '@/data/species/emu';
 import type { PetInstance } from '@/domain/types';
 
 import {
@@ -162,6 +163,9 @@ describe('Nest climate engine', () => {
     expect(nestTemper(SULK_AFTER_MS, SULK_AFTER_MS)).toBe('fussy');
     expect(nestTemper(STRIKE_AFTER_MS, SULK_AFTER_MS)).toBe('fussy');
     expect(nestTemper(STRIKE_AFTER_MS, STRIKE_AFTER_MS)).toBe('on_strike');
+    expect(nestTemper(STRIKE_AFTER_MS, 0, false)).toBe('on_strike');
+    expect(nestTemper(SULK_AFTER_MS, 0, false)).toBe('chilly');
+    expect(nestTemper(SULK_AFTER_MS - 1, 0, false)).toBe('content');
 
     const fresh = readClimate(nest(), species, baseEpoch);
     expect(fresh.temper).toBe('content');
@@ -216,5 +220,23 @@ describe('Nest climate engine', () => {
     const tended = mistSubstrate(warmNest(nest(), species, tendedEpoch), species, tendedEpoch);
     expect(isEmbryoUnviable(tended, species, tendedEpoch)).toBe(false);
     expect(applyClimateMortality(tended, species, tendedEpoch)).toBe(tended);
+  });
+
+  it('loses a dry-country egg from warmth alone', () => {
+    const emu = {
+      ...nest(),
+      speciesId: 'emu' as const,
+      ...freshNestClimate(baseEpoch, emuConfig.temperatureTargetCelsius, emuConfig.humidityTargetPct),
+    };
+    const strikingEpoch = baseEpoch + 30 * HOUR_MS;
+    const neglected = readClimate(emu, emuConfig, strikingEpoch);
+    expect(neglected.humidityStatus).toBe('optimal');
+    expect(neglected.temper).toBe('on_strike');
+    expect(displayedVitality(neglected)).toBe(0);
+    expect(isEmbryoUnviable(emu, emuConfig, strikingEpoch)).toBe(false);
+
+    const lostEpoch = baseEpoch + 50 * HOUR_MS;
+    expect(isEmbryoUnviable(emu, emuConfig, lostEpoch)).toBe(true);
+    expect(applyClimateMortality(emu, emuConfig, lostEpoch).status).toBe('unviable');
   });
 });

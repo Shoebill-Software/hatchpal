@@ -2,7 +2,10 @@ import { create } from 'zustand';
 import { createStore, type StateCreator, type StoreApi } from 'zustand/vanilla';
 import { persist, type StateStorage } from 'zustand/middleware';
 
-import type { SpeciesId } from '@/domain/types';
+import { getSpeciesConfig } from '@/data/species';
+import { registerHatchReader } from '@/domain/cradleCapacity';
+import { toHatchCredits } from '@/domain/keeperRewards';
+import type { SpeciesId, Temperament } from '@/domain/types';
 import { resolveSpeciesId } from '@/domain/petIntegrity';
 import {
   createMemoryStateStorage,
@@ -27,6 +30,33 @@ export interface HatchedSpecimen {
   hatchDateEpoch: number;
   incubationDurationDays: number;
   adultSilhouette: SpeciesId;
+  /** Shaped by care habits during incubation. Absent on specimens archived before temperaments. */
+  temperament?: Temperament;
+  /** Wishes granted while it was still an egg. */
+  hearts?: number;
+}
+
+const TEMPERAMENTS: readonly Temperament[] = ['sunny', 'dewy', 'songful', 'curious', 'easygoing'];
+
+function resolveTemperamentField(value: unknown): Temperament | undefined {
+  return TEMPERAMENTS.find((entry) => entry === value);
+}
+
+function optionalCount(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : undefined;
+}
+
+function withCareFields(
+  specimen: HatchedSpecimen,
+  source: { temperament?: unknown; hearts?: unknown }
+): HatchedSpecimen {
+  const temperament = resolveTemperamentField(source.temperament);
+  const hearts = optionalCount(source.hearts);
+  return {
+    ...specimen,
+    ...(temperament ? { temperament } : {}),
+    ...(hearts !== undefined ? { hearts } : {}),
+  };
 }
 
 export type NewSpecimenInput = Omit<HatchedSpecimen, 'id'> & { id?: string };
@@ -72,7 +102,7 @@ export function sanitizeSpecimen(value: unknown): HatchedSpecimen | null {
       : commonName;
   const adultSilhouette = resolveSpeciesId(raw.adultSilhouette ?? speciesId);
 
-  return {
+  return withCareFields({
     id: raw.id,
     speciesId,
     nickname,
@@ -84,7 +114,7 @@ export function sanitizeSpecimen(value: unknown): HatchedSpecimen | null {
     hatchDateEpoch: finiteNumber(raw.hatchDateEpoch, 0),
     incubationDurationDays: Math.max(0, finiteNumber(raw.incubationDurationDays, 0)),
     adultSilhouette,
-  };
+  }, raw);
 }
 
 export function sanitizeCollectionState(value: unknown): CollectionPersistedState {
@@ -122,7 +152,7 @@ export function createCollectionSlice(
           ? input.commonName.trim()
           : 'Hatchling';
       const speciesId = resolveSpeciesId(input.speciesId);
-      const specimen: HatchedSpecimen = {
+      const specimen: HatchedSpecimen = withCareFields({
         id: input.id && input.id.length > 0 ? input.id : deps.createId(),
         speciesId,
         nickname:
@@ -134,7 +164,7 @@ export function createCollectionSlice(
         hatchDateEpoch: finiteNumber(input.hatchDateEpoch, 0),
         incubationDurationDays: Math.max(0, finiteNumber(input.incubationDurationDays, 0)),
         adultSilhouette: resolveSpeciesId(input.adultSilhouette ?? speciesId),
-      };
+      }, input);
       set({ hatchedArchive: [specimen, ...get().hatchedArchive] });
       return specimen;
     },
@@ -172,6 +202,10 @@ export function createCollectionStoreApi(
 
 export const useCollectionStore = create<CollectionStore>()(
   persistCollection(collectionMmkvStateStorage, defaultDeps)
+);
+
+registerHatchReader(() =>
+  toHatchCredits(useCollectionStore.getState().hatchedArchive, (speciesId) => getSpeciesConfig(speciesId).taxon)
 );
 
 export function countArchivedSpecies(archive: readonly HatchedSpecimen[]): number {

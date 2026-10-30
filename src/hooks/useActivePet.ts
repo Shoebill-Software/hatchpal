@@ -5,13 +5,15 @@ import { AppState, type AppStateStatus } from 'react-native';
 import { getSpeciesConfig } from '@/data/species';
 import { resolvePetSnapshot } from '@/domain/timeEngine';
 import type {
+  CareEvent,
+  CareResult,
   PetInstance,
   PetInteractionKind,
   PetSnapshot,
   SpeciesConfig,
   SpeciesId,
 } from '@/domain/types';
-import { publishWidgetForPet } from '@/services/widgetBridge';
+import { publishWidgetSnapshot } from '@/services/widgetBridge';
 import { getActivePetFromStore, usePetStore } from '@/store/usePetStore';
 import { PET_CLOCK_TICK_INTERVAL_MS, subscribePetClockLifecycle } from './petClockLifecycle';
 
@@ -33,6 +35,7 @@ export type ActivePetView = {
   switchCradle: (index: number) => void;
   abandonActivePet: () => void;
   recordInteraction: (kind: PetInteractionKind, nowEpoch?: number) => void;
+  performCare: (event: CareEvent, nowEpoch?: number) => CareResult | null;
   markHatched: (nowEpoch?: number) => void;
 };
 
@@ -57,6 +60,7 @@ export function useActivePet(): ActivePetView {
     [cradleOrder, petMap]
   );
   const recordInteraction = usePetStore((state) => state.recordInteraction);
+  const performCare = usePetStore((state) => state.performCare);
   const markHatched = usePetStore((state) => state.markHatched);
 
   const [nowEpoch, setNowEpoch] = useState(() => Date.now());
@@ -111,7 +115,7 @@ export function useActivePet(): ActivePetView {
       if (!state.hasHydrated) {
         return;
       }
-      publishWidgetForPet(getActivePetFromStore(), Date.now(), { reload: true });
+      publishWidgetSnapshot(usePetStore.getState(), Date.now(), { reload: true });
     });
     return () => {
       subscription.remove();
@@ -146,6 +150,7 @@ export function useActivePet(): ActivePetView {
     switchCradle,
     abandonActivePet,
     recordInteraction,
+    performCare,
     markHatched,
   };
 }

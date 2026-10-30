@@ -1,6 +1,8 @@
 import { climateSetpoint } from '@/data/species/climateSetpoints';
 
 import { clampVitality, freshNestClimate } from './climateEngine';
+import { emptyCareLog, sanitizeCareLog } from './nestCare';
+import { hashString } from './seed';
 import { SPECIES_IDS, PetInstance, PetStatus, SpeciesId } from './types';
 
 const FALLBACK_SPECIES_ID: SpeciesId = 'silkie_chicken';
@@ -56,6 +58,8 @@ export function createPetInstance(input: {
     ...freshNestClimate(nowEpoch, setpoints.temperatureTargetCelsius, setpoints.humidityTargetPct),
     status: 'incubating',
     isHatched: false,
+    weatherSeed: hashString(input.id),
+    care: emptyCareLog(),
   };
 }
 
@@ -104,6 +108,15 @@ export function sanitizePetInstance(value: unknown, nowEpoch = 0): PetInstance |
 
   if (raw.hatchedAtEpoch !== undefined) {
     pet.hatchedAtEpoch = toFiniteEpoch(raw.hatchedAtEpoch, laidAtEpoch);
+  }
+
+  if (typeof raw.weatherSeed === 'number' && Number.isFinite(raw.weatherSeed)) {
+    pet.weatherSeed = Math.abs(Math.floor(raw.weatherSeed)) >>> 0;
+  }
+
+  const care = sanitizeCareLog(raw.care);
+  if (care) {
+    pet.care = care;
   }
 
   return pet;

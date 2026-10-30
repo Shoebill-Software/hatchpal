@@ -15,9 +15,11 @@ import {
   resolveHatchedAtEpoch,
   resolvePetSnapshot,
 } from '@/domain/timeEngine';
-import { PetInstance, PetInteractionKind, SpeciesId } from '@/domain/types';
+import type { CareEvent, CareResult, PetInstance, PetInteractionKind, SpeciesId } from '@/domain/types';
 import { syncNotificationsForStoredPets } from '@/services/notificationLifecycle';
 import { applyClimateMortality, mistSubstrate, warmNest } from '@/domain/climateEngine';
+import { applyCareEvent } from '@/domain/nestCare';
+import { hashString } from '@/domain/seed';
 
 export const PET_STORE_PERSIST_KEY = 'hatchpal.pet-store';
 export const PET_STORE_PERSIST_VERSION = 3;
@@ -49,6 +51,8 @@ export type PetStoreActions = {
   switchCradle: (index: number) => void;
   abandonActivePet: () => void;
   recordInteraction: (kind: PetInteractionKind, nowEpoch?: number) => void;
+  /** Applies hands-on care to the focused egg. Null when there is no egg to care for. */
+  performCare: (event: CareEvent, nowEpoch?: number) => CareResult | null;
   refreshClock: (mode: ClockRefreshMode, nowEpoch?: number) => void;
   /** Commits the hatching ceremony. Stamps the biological hatch epoch once incubation is complete. */
   markHatched: (nowEpoch?: number) => void;
@@ -446,11 +450,23 @@ export function createPetStoreSlice(deps: PetStoreDeps = defaultDeps): StateCrea
         return pet;
       }, nowEpoch);
     },
+    performCare: (event, nowEpoch) => {
+      let outcome: CareResult | null = null;
+      replaceActivePet(set, get, (pet, now) => {
+        const species = getSpeciesConfig(pet.speciesId);
+        const seeded = pet.weatherSeed == null ? { ...pet, weatherSeed: hashString(pet.id) } : pet;
+        const applied = applyCareEvent(seeded, species, event, now);
+        outcome = applied.result;
+        return applied.pet === seeded ? pet : applied.pet;
+      }, nowEpoch);
+      return outcome;
+    },
     refreshClock: (mode, nowEpoch) => {
       const now = resolveNow(nowEpoch);
       const state = get();
       const pets = { ...state.pets };
       let changed = false;
+      let lostEmbryo = false;
       for (const [id, pet] of Object.entries(pets)) {
         const nextVerified = nextVerifiedEpoch(now, pet.lastVerifiedEpoch, {
           maxForwardAdvanceMs: mode === 'tick' ? LIVE_TICK_MAX_FORWARD_MS : undefined,
@@ -462,6 +478,9 @@ export function createPetStoreSlice(deps: PetStoreDeps = defaultDeps): StateCrea
         if (resolved === pet) {
           continue;
         }
+        if (resolved.status === 'unviable' && pet.status !== 'unviable') {
+          lostEmbryo = true;
+        }
         pets[id] = resolved;
         changed = true;
       }
@@ -471,6 +490,9 @@ export function createPetStoreSlice(deps: PetStoreDeps = defaultDeps): StateCrea
       const active =
         state.activePetId && pets[state.activePetId] ? pets[state.activePetId] : null;
       set({ pets, activePet: active });
+      if (lostEmbryo) {
+        syncCradleAlerts(get());
+      }
     },
     markHatched: (nowEpoch) => {
       let didHatch = false;

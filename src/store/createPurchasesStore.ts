@@ -1,6 +1,7 @@
 import { createStore, type StateCreator, type StoreApi } from 'zustand/vanilla';
 import { persist, type StateStorage } from 'zustand/middleware';
 
+import { readHatchCredits } from '@/domain/cradleCapacity';
 import {
   canExportJournal,
   catalogPackages,
@@ -11,6 +12,7 @@ import {
   type CustomerSnapshot,
   type PurchasesPackage,
 } from '@/domain/entitlements';
+import { earnedSpeciesIds } from '@/domain/keeperRewards';
 import { isSpeciesId } from '@/domain/petIntegrity';
 import { SPECIES_IDS, type SpeciesId } from '@/domain/types';
 import { createMemoryStateStorage, createSafeJsonStorage } from '@/store/createPetStore';
@@ -122,8 +124,13 @@ export function createPurchasesStoreSlice(
     ...EMPTY_PERSISTED,
     hasHydrated: false,
     isLoadingPurchases: false,
-    isSpeciesAvailable: (speciesId) => speciesIsAvailable(speciesId, get()),
-    getMaxCradleCount: () => maxCradlesFor(get().isProUnlocked),
+    isSpeciesAvailable: (speciesId) =>
+      speciesIsAvailable(speciesId, {
+        isProUnlocked: get().isProUnlocked,
+        unlockedSpeciesIds: get().unlockedSpeciesIds,
+        earnedSpeciesIds: earnedSpeciesIds(readHatchCredits()),
+      }),
+    getMaxCradleCount: () => maxCradlesFor(get().isProUnlocked, readHatchCredits().length),
     canExportFieldJournal: () => canExportJournal(get().isProUnlocked, get().journalExportsUsed),
     initialize: async () => {
       set({ isLoadingPurchases: true });

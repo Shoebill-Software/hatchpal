@@ -14,7 +14,7 @@ import {
 } from './createPetStore';
 import { PetInstance } from '@/domain/types';
 import { syncNotificationsForStoredPets } from '@/services/notificationLifecycle';
-import { publishWidgetForPet, widgetSyncReason } from '@/services/widgetBridge';
+import { publishWidgetSnapshot, widgetSyncReason } from '@/services/widgetBridge';
 
 export type { PetStore, PetPersistedState, ClockRefreshMode } from './createPetStore';
 export { createPetStoreApi, createMemoryStateStorage } from './createPetStore';
@@ -69,9 +69,9 @@ usePetStore.subscribe((state, previous) => {
   if (!widgetSyncReason(previous, state)) {
     return;
   }
-  publishWidgetForPet(state.activePet, Date.now(), { reload: true });
+  publishWidgetSnapshot(state, Date.now(), { reload: true });
 });
 
 if (usePetStore.getState().hasHydrated) {
-  publishWidgetForPet(getActivePetFromStore(), Date.now(), { reload: true });
+  publishWidgetSnapshot(usePetStore.getState(), Date.now(), { reload: true });
 }

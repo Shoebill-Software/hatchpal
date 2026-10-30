@@ -1,4 +1,4 @@
-import { registerProReader } from '@/domain/cradleCapacity';
+import { registerHatchReader, registerProReader } from '@/domain/cradleCapacity';
 import {
   SANCTUARY_PASS_PRODUCT_ID,
   snapshotFromProductIds,
@@ -29,6 +29,7 @@ describe('Purchases and entitlements', () => {
 
   afterEach(() => {
     registerProReader(() => false);
+    registerHatchReader(() => []);
   });
 
   it('unlocks the free starters and keeps every other species locked', async () => {
@@ -148,5 +149,35 @@ describe('Purchases and entitlements', () => {
     expect(reloaded.getState().getMaxCradleCount()).toBe(3);
     expect(reloaded.getState().isSpeciesAvailable('green_sea_turtle')).toBe(true);
     expect(reloaded.getState().isSpeciesAvailable('emu')).toBe(true);
+  });
+
+  it('opens a second cradle and the mandarin duck after one hatch, and keeps the reserve locked', () => {
+    registerHatchReader(() => [{ speciesId: 'silkie_chicken', taxon: 'aves' }]);
+    const store = createPurchasesStoreApi({
+      storage: createMemoryStateStorage(),
+      client: memoryClient(),
+    });
+
+    expect(store.getState().getMaxCradleCount()).toBe(2);
+    expect(store.getState().isSpeciesAvailable('mandarin_duck')).toBe(true);
+    expect(store.getState().isSpeciesAvailable('barn_owl')).toBe(false);
+    expect(store.getState().isSpeciesAvailable('emperor_penguin')).toBe(false);
+    expect(store.getState().isSpeciesAvailable('platypus')).toBe(false);
+
+    registerProReader(() => false);
+    let nextId = 0;
+    const pets = createPetStoreApi({
+      storage: createMemoryStateStorage(),
+      now: () => baseEpoch,
+      createId: () => {
+        nextId += 1;
+        return `egg-${nextId}`;
+      },
+    });
+
+    expect(pets.getState().adoptEggInNewCradle('silkie_chicken', 'A', baseEpoch)).not.toBeNull();
+    expect(pets.getState().adoptEggInNewCradle('leopard_gecko', 'B', baseEpoch)).not.toBeNull();
+    expect(pets.getState().adoptEggInNewCradle('american_robin', 'C', baseEpoch)).toBeNull();
+    expect(pets.getState().cradleOrder).toEqual(['egg-1', 'egg-2']);
   });
 });
