@@ -14,6 +14,7 @@ jest.mock('react-native-mmkv', () => ({
   },
 }));
 
+import { resolveFirstRun, type FirstRunInput } from '@/components/tutorial/cradleWelcome';
 import { NEST_TUTORIAL_STEP_COUNT } from '@/constants/tutorial';
 import { createMemoryStateStorage } from '@/store/createPetStore';
 import {
@@ -24,6 +25,29 @@ import {
   migratePreferences,
   sanitizePreferences,
 } from '@/store/usePreferencesStore';
+
+const openNest: FirstRunInput = {
+  hasSeenWelcome: false,
+  hasCompletedNestTutorial: false,
+  hasSeenAdoptionTip: false,
+  hasPet: true,
+  incubating: true,
+  surface: 'nest',
+  blocked: false,
+  landed: true,
+};
+
+function beat(
+  flags: Pick<FirstRunInput, 'hasSeenWelcome' | 'hasCompletedNestTutorial' | 'hasSeenAdoptionTip'>,
+  scene: FirstRunInput
+) {
+  return resolveFirstRun({
+    ...scene,
+    hasSeenWelcome: flags.hasSeenWelcome,
+    hasCompletedNestTutorial: flags.hasCompletedNestTutorial,
+    hasSeenAdoptionTip: flags.hasSeenAdoptionTip,
+  });
+}
 
 describe('Preferences store', () => {
   it('starts from the sensory and notification defaults', () => {
@@ -226,13 +250,59 @@ describe('Preferences store', () => {
     expect(store.getState().soundEnabled).toBe(false);
     expect(store.getState().hasCompletedNestTutorial).toBe(false);
     expect(store.getState().hasSeenWelcome).toBe(false);
+    expect(store.getState().hasSeenAdoptionTip).toBe(false);
+    expect(
+      resolveFirstRun({
+        ...openNest,
+        hasSeenWelcome: store.getState().hasSeenWelcome,
+        hasCompletedNestTutorial: store.getState().hasCompletedNestTutorial,
+        hasSeenAdoptionTip: store.getState().hasSeenAdoptionTip,
+      })
+    ).toBe('welcome');
 
     const current = migratePreferences(
-      { hasSeenWelcome: true, hasCompletedNestTutorial: true },
+      { hasSeenWelcome: true, hasCompletedNestTutorial: true, hasSeenAdoptionTip: true },
       PREFERENCES_STORE_PERSIST_VERSION
     );
     expect(current.hasSeenWelcome).toBe(true);
     expect(current.hasCompletedNestTutorial).toBe(true);
+    expect(current.hasSeenAdoptionTip).toBe(true);
+  });
+
+  it('keeps skip, finish, and replay across a relaunch', () => {
+    const storage = createMemoryStateStorage();
+    const cold = createPreferencesStoreApi({ storage });
+    expect(beat(cold.getState(), { ...openNest, hasPet: false, incubating: false })).toBe('quiet');
+    expect(beat(cold.getState(), { ...openNest, surface: 'hatchery', hasPet: false, incubating: false })).toBe('welcome');
+
+    cold.getState().completeWelcome();
+    const welcomed = createPreferencesStoreApi({ storage });
+    expect(welcomed.getState().hasSeenWelcome).toBe(true);
+    expect(welcomed.getState().hasCompletedNestTutorial).toBe(false);
+    expect(beat(welcomed.getState(), { ...openNest, surface: 'hatchery' })).toBe('adoption-tip');
+    expect(beat(welcomed.getState(), openNest)).toBe('coach-marks');
+
+    welcomed.getState().markAdoptionTipSeen();
+    welcomed.getState().startNestTutorial();
+    welcomed.getState().skipTutorial();
+    const skipped = createPreferencesStoreApi({ storage });
+    expect(skipped.getState().isTutorialActive).toBe(false);
+    expect(skipped.getState().hasSeenWelcome).toBe(true);
+    expect(skipped.getState().hasCompletedNestTutorial).toBe(true);
+    expect(beat(skipped.getState(), openNest)).toBe('quiet');
+
+    skipped.getState().replayTutorial();
+    const replayed = createPreferencesStoreApi({ storage });
+    expect(replayed.getState().hasSeenWelcome).toBe(false);
+    expect(replayed.getState().hasSeenAdoptionTip).toBe(false);
+    expect(replayed.getState().hasCompletedNestTutorial).toBe(false);
+    expect(replayed.getState().isTutorialActive).toBe(false);
+    expect(beat(replayed.getState(), openNest)).toBe('welcome');
+
+    replayed.getState().skipAllTutorials();
+    const dismissed = createPreferencesStoreApi({ storage });
+    expect(beat(dismissed.getState(), openNest)).toBe('quiet');
+    expect(beat(dismissed.getState(), { ...openNest, surface: 'hatchery' })).toBe('quiet');
   });
 
   it('only records tutorial signals while the tour is running, and clears them between steps', () => {

@@ -7,6 +7,7 @@ import { translate } from '@/i18n';
 
 import {
   APP_GROUP_ID,
+  LEGACY_WIDGET_KEYS,
   WIDGET_PAYLOAD_KEY,
   buildWidgetPayload,
   clutchContext,
@@ -111,7 +112,7 @@ describe('Widget bridge', () => {
       atEpoch: baseEpoch,
       phase: 'incubating',
       headline: 'Day 0 of 21',
-      detail: translate('weather.mild'),
+      detail: `${translate('weather.mild')} · ${translate('weather.effect.mild')}`,
       warmthLabel: translate('climate.optimal'),
       warmthOptimal: true,
       humidityLabel: translate('climate.optimal'),
@@ -121,7 +122,7 @@ describe('Widget bridge', () => {
       pipped: false,
       temperatureText: '37.5°',
       humidityText: '55%',
-      footer: translate('widget.wish.lullaby'),
+      footer: `${translate('widget.wish.lullaby')} · ${translate('wish.hoursCompact', { count: 6 })}`,
     });
     expect(payload?.frames.length).toBeGreaterThan(8);
     expect(payload?.frames.some((entry) => entry.warmthLabel === translate('climate.tooCold'))).toBe(true);
@@ -148,16 +149,41 @@ describe('Widget bridge', () => {
 
   it('tells the truth when neglect has already ended the incubation', () => {
     const now = baseEpoch + 8 * dayMs;
-    const payload = buildWidgetPayload(petAt(baseEpoch), now);
+    const payload = buildWidgetPayload(
+      petAt(baseEpoch, { care: { ...emptyCareLog(), hearts: 4 } }),
+      now
+    );
     expect(payload?.phase).toBe('unviable');
+    expect(payload?.hearts).toBe(4);
     expect(payload?.frames).toHaveLength(1);
     expect(payload?.frames[0]).toMatchObject({
       phase: 'unviable',
-      headline: translate('widget.goneCold'),
+      headline: translate('sanctuary.nestCold'),
       detail: translate('nest.unviableBody'),
+      footer: null,
     });
+    expect(payload?.frames[0]?.progressPct).toBeLessThan(8 / 21);
+    expect(payload?.frames[0]?.progressPct).toBeGreaterThan(0);
+    const later = buildWidgetPayload(petAt(baseEpoch), now + 5 * dayMs);
+    expect(later?.frames[0]?.progressPct).toBe(payload?.frames[0]?.progressPct);
+    expect(payload?.incubationDayDisplay).toBe(translate('sanctuary.nestCold'));
+    expect(payload?.isReadyToHatch).toBe(false);
     expect(payload?.unviableTitle).toBe(translate('nest.unviableTitle'));
     expect(payload?.frames[0]?.accessibilityLabel).toContain(translate('nest.unviableTitle'));
+  });
+
+  it('shows a strike now and freezes progress once the embryo is lost', () => {
+    const now = baseEpoch + 36 * hourMs;
+    const payload = buildWidgetPayload(petAt(baseEpoch), now);
+    expect(payload?.phase).toBe('incubating');
+    expect(payload?.frames[0]?.footer).toContain(translate('widget.temper.strike'));
+    expect(payload?.frames.filter((frame) => frame.phase === 'unviable')).toHaveLength(1);
+    expect(payload?.frames.at(-1)?.phase).toBe('unviable');
+    const frozen = payload?.frames.at(-1)?.progressPct;
+    const muchLater = buildWidgetPayload(petAt(baseEpoch), baseEpoch + 10 * dayMs);
+    expect(muchLater?.frames).toHaveLength(1);
+    expect(muchLater?.frames[0]?.progressPct).toBe(frozen);
+    expect(frozen).toBeLessThan(10 / 21);
   });
 
   it('marks a tended egg ready at the hatch boundary', () => {
@@ -172,6 +198,9 @@ describe('Widget bridge', () => {
       now
     );
     expect(tended?.phase).toBe('ready');
+    expect(tended?.isReadyToHatch).toBe(true);
+    expect(tended?.incubationDayDisplay).toBe(translate('widget.ready'));
+    expect(tended?.temperatureStatus).toBe('optimal');
     expect(tended?.frames[0]).toMatchObject({
       phase: 'ready',
       headline: translate('widget.ready'),
@@ -184,8 +213,11 @@ describe('Widget bridge', () => {
     const payload = buildWidgetPayload(petAt(baseEpoch, { isHatched: true, hatchedAtEpoch: baseEpoch }), baseEpoch + hourMs);
     expect(payload?.phase).toBe('hatched');
     expect(payload?.frames).toHaveLength(1);
+    expect(payload?.isReadyToHatch).toBe(false);
+    expect(payload?.incubationDayDisplay).toBe(translate('widget.hatched'));
     expect(payload?.frames[0]?.headline).toBe(translate('widget.hatched'));
-    expect(payload?.frames[0]?.detail).toBe(translate('widget.hatchedDetail'));
+    expect(payload?.frames[0]?.detail).toBe(translate('nest.placeHatched'));
+    expect(payload?.frames[0]?.footer).toBeNull();
   });
 
   it('says a dry-country egg likes it dry instead of asking for mist', () => {
@@ -218,7 +250,7 @@ describe('Widget bridge', () => {
   it('labels a second nest when the clutch is passed in', () => {
     const payload = buildWidgetPayload(petAt(baseEpoch), baseEpoch, { index: 1, count: 2 });
     expect(payload?.clutchLabel).toBe('Nest 2 of 2');
-    expect(payload?.frames[0]?.footer).toContain('Wants a lullaby');
+    expect(payload?.frames[0]?.footer).toContain('Sing to me');
   });
 
   it('writes the shared JSON payload and asks WidgetKit to reload every timeline', () => {
@@ -238,17 +270,32 @@ describe('Widget bridge', () => {
         'frames',
         'hatchedDetail',
         'hearts',
+        'humidityPct',
+        'humidityStatus',
         'humidityTitle',
+        'incubationDayDisplay',
+        'isReadyToHatch',
+        'lastUpdatedEpoch',
         'nickname',
         'petId',
         'phase',
+        'progressPct',
         'shell',
         'speciesId',
+        'temperatureCelsius',
+        'temperatureStatus',
         'unviableBody',
         'unviableTitle',
         'warmthTitle',
       ].sort()
     );
+    expect(LEGACY_WIDGET_KEYS.every((key) => key in parsed)).toBe(true);
+    expect(parsed.temperatureStatus).toBe('optimal');
+    expect(parsed.humidityStatus).toBe('optimal');
+    expect(parsed.incubationDayDisplay).toBe('Day 0 of 21');
+    expect(parsed.temperatureCelsius).toBe(37.5);
+    expect(parsed.humidityPct).toBe(55);
+    expect(parsed.isReadyToHatch).toBe(false);
     expect(WIDGET_PAYLOAD_KEY).toBe('hatchpal.widget.payload');
     expect(parsed.frames[0]?.temperatureText).toBe('37.5°');
   });
@@ -260,6 +307,9 @@ describe('Widget bridge', () => {
     expect(payload).toEqual(emptyWidgetPayload());
     expect(payload.phase).toBe('empty');
     expect(payload.frames).toEqual([]);
+    expect(payload.emptyTitle).toBe(translate('nest.emptyTitle'));
+    expect(JSON.parse(client.snapshot().value ?? '{}').incubationDayDisplay).toBeUndefined();
+    expect(JSON.parse(client.snapshot().value ?? '{}').isReadyToHatch).toBeUndefined();
     expect(client.snapshot().reloads).toBe(1);
     expect(JSON.parse(client.snapshot().value ?? '{}')).toMatchObject({ phase: 'empty' });
   });

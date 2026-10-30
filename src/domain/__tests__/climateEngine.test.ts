@@ -20,6 +20,7 @@ import {
   freshNestClimate,
   isEmbryoUnviable,
   mistSubstrate,
+  projectedClimateLossEpoch,
   nestTemper,
   readClimate,
   SULK_AFTER_MS,
@@ -203,6 +204,20 @@ describe('Nest climate engine', () => {
     expect(restored.inSweetSpot).toBe(true);
   });
 
+  it('names the moment neglect becomes unviable, and stays quiet while the nest can still be saved', () => {
+    expect(projectedClimateLossEpoch(nest(), species, baseEpoch)).toBeNull();
+
+    const strikingEpoch = baseEpoch + 36 * HOUR_MS;
+    const ahead = projectedClimateLossEpoch(nest(), species, strikingEpoch);
+    expect(ahead).not.toBeNull();
+    expect(ahead!).toBeGreaterThan(strikingEpoch);
+    expect(isEmbryoUnviable(nest(), species, ahead! - 1)).toBe(false);
+    expect(isEmbryoUnviable(nest(), species, ahead!)).toBe(true);
+
+    const later = projectedClimateLossEpoch(nest(), species, baseEpoch + 8 * 24 * HOUR_MS);
+    expect(later).toBe(ahead);
+  });
+
   it('collapses displayed vitality to zero on strike and loses the embryo after 12 more hours', () => {
     const strikingEpoch = baseEpoch + 36 * HOUR_MS;
     const striking = readClimate(nest(), species, strikingEpoch);
@@ -238,5 +253,20 @@ describe('Nest climate engine', () => {
     const lostEpoch = baseEpoch + 50 * HOUR_MS;
     expect(isEmbryoUnviable(emu, emuConfig, lostEpoch)).toBe(true);
     expect(applyClimateMortality(emu, emuConfig, lostEpoch).status).toBe('unviable');
+  });
+
+  it('lets last-chance care restore climate before the unviable flag is committed', () => {
+    const lostEpoch = baseEpoch + 36 * HOUR_MS + UNVIABLE_AFTER_ZERO_MS + HOUR_MS;
+    expect(isEmbryoUnviable(nest(), species, lostEpoch)).toBe(true);
+
+    const rescued = mistSubstrate(warmNest(nest(), species, lostEpoch), species, lostEpoch);
+    expect(rescued.status).toBeUndefined();
+    expect(isEmbryoUnviable(rescued, species, lostEpoch)).toBe(false);
+    expect(applyClimateMortality(rescued, species, lostEpoch)).toBe(rescued);
+
+    const flagged = applyClimateMortality(nest(), species, lostEpoch);
+    expect(flagged.status).toBe('unviable');
+    expect(warmNest(flagged, species, lostEpoch + HOUR_MS)).toBe(flagged);
+    expect(mistSubstrate(flagged, species, lostEpoch + HOUR_MS)).toBe(flagged);
   });
 });

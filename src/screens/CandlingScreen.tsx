@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CandlingVisualizer } from '@/components/candling/CandlingVisualizer';
 import {
   candlingStageLabelKey,
-  resolveCandlingStage,
+  resolveCandlingStageFromMilestones,
 } from '@/components/candling/candlingStages';
 import { NestStatusBar } from '@/components/NestStatusBar';
 import { SettingsButton } from '@/components/SettingsMenu';
@@ -98,7 +98,11 @@ export default function CandlingScreen() {
   const heartLabel = bpm > 0 ? `${bpm} ${t('common.bpm')}` : t('metric.undetected');
   const milestoneTitle = snapshot.currentMilestone.title;
   const summary = snapshot.currentMilestone.scientificSummary;
-  const stage = resolveCandlingStage(snapshot.incubationProgress);
+  const stage = resolveCandlingStageFromMilestones(
+    snapshot.incubationProgress,
+    species.incubationDays,
+    species.milestones,
+  );
   const incubationDay = Math.min(snapshot.ageDays + 1, species.incubationDays);
   const stageCaption = t('candling.stageCaption', {
     stage: t(candlingStageLabelKey(stage.id)),

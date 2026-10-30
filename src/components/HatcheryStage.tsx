@@ -197,6 +197,9 @@ export function HatcheryStage({
       .maxDuration(450)
       .maxDistance(16)
       .onBegin(() => {
+        if (reduceMotionSV.value) {
+          return;
+        }
         pressed.value = withTiming(0.975, { duration: 90 });
       })
       .onEnd((_event, success) => {
@@ -205,7 +208,7 @@ export function HatcheryStage({
         }
       })
       .onFinalize(() => {
-        pressed.value = withTiming(1, { duration: 160 });
+        pressed.value = withTiming(1, { duration: reduceMotionSV.value ? 0 : 160 });
       });
 
     return Gesture.Exclusive(pan, tap);

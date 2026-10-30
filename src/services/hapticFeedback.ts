@@ -2,6 +2,8 @@ import * as Haptics from 'expo-haptics';
 
 import { usePreferencesStore } from '@/store/usePreferencesStore';
 
+import type { CareReleaseFeel } from './careFeedback';
+
 export const ImpactFeedbackStyle = Haptics.ImpactFeedbackStyle;
 export const NotificationFeedbackType = Haptics.NotificationFeedbackType;
 
@@ -40,4 +42,15 @@ export function triggerNotification(type: Haptics.NotificationFeedbackType): Pro
     () => undefined,
     () => undefined
   );
+}
+
+/** Confirms a brood or mist landing. Wish grants call success on their own. */
+export function triggerCareRelease(feel: CareReleaseFeel): Promise<void> {
+  if (feel === 'success') {
+    return triggerNotification(NotificationFeedbackType.Success);
+  }
+  if (feel === 'warning') {
+    return triggerNotification(NotificationFeedbackType.Warning);
+  }
+  return triggerImpact(ImpactFeedbackStyle.Light);
 }

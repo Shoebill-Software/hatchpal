@@ -35,7 +35,7 @@ export function milestoneAlertCopy(
   if (title.length === 0) {
     return null;
   }
-  const kept = sentences(milestone.scientificSummary).filter((sentence) => !isTurningInstruction(sentence));
+  const kept = sentences(milestone.scientificSummary);
   const cueKey = CUE_KEY[milestone.audioTrigger];
   const cue = cueKey ? translate(cueKey) : '';
   const body = composeBody(kept, cue);
@@ -69,17 +69,32 @@ function isAlertMilestone(milestone: BiologicalMilestone): boolean {
   );
 }
 
+/** Keeper orders to turn the egg. The embryo turning along its axis stays. */
+const TURNING_ORDER = /\bturning\b|\bturned\b|\bturn (?:it|the)\b/i;
+
 function sentences(summary: string): string[] {
   return summary
     .replace(/\s+/g, ' ')
     .trim()
     .split(/(?<=[.!?])\s+/)
-    .map((sentence) => sentence.trim())
-    .filter((sentence) => sentence.length > 0);
+    .map((sentence) => withoutTurningOrders(sentence.trim()))
+    .filter((sentence): sentence is string => sentence != null && sentence.length > 0);
 }
 
-function isTurningInstruction(sentence: string): boolean {
-  return /\bturn(?:ing|ed|s)?\b/i.test(sentence);
+function withoutTurningOrders(sentence: string): string | null {
+  const kept = sentence
+    .split(/;\s*/)
+    .map((clause) => clause.trim())
+    .filter((clause) => clause.length > 0 && !TURNING_ORDER.test(clause));
+  if (kept.length === 0) {
+    return null;
+  }
+  let joined = kept.join('; ');
+  joined = joined.charAt(0).toUpperCase() + joined.slice(1);
+  if (!/[.!?]$/.test(joined)) {
+    joined = `${joined}.`;
+  }
+  return joined;
 }
 
 function composeBody(kept: readonly string[], cue: string): string {

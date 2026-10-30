@@ -12,8 +12,8 @@ import Animated, {
 import Svg, { Circle, Path } from 'react-native-svg';
 
 import { TutorialAnchor } from '@/components/tutorial/TutorialAnchor';
-
 import { hexToRgba, useNestPalette } from '@/constants/nest';
+import { NEST_ANCHOR } from '@/constants/tutorial';
 import {
   HUMIDITY_TOLERANCE_PCT,
   requiresMoistureCare,
@@ -208,6 +208,14 @@ export function ClimateControls({
 
   useEffect(() => stopFrames, [stopFrames]);
 
+  useEffect(() => {
+    setLiveCelsius(null);
+    return () => {
+      stopFrames();
+      hold.current = null;
+    };
+  }, [species.id, stopFrames]);
+
   const tick = useCallback(
     (now: number) => {
       const current = hold.current;
@@ -286,7 +294,7 @@ export function ClimateControls({
   return (
     <View style={styles.stack}>
       <View style={styles.row}>
-        <TutorialAnchor targetId="warm_control" style={styles.anchor}>
+        <TutorialAnchor targetId={NEST_ANCHOR.warmControl} style={styles.anchor}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t('climate.a11y.temperature', {
@@ -328,7 +336,7 @@ export function ClimateControls({
           </Pressable>
         </TutorialAnchor>
 
-        <TutorialAnchor targetId="mist_control" style={styles.anchor}>
+        <TutorialAnchor targetId={NEST_ANCHOR.mistControl} style={styles.anchor}>
           <Pressable
             accessibilityRole="button"
             accessibilityState={{ disabled: dryNest }}

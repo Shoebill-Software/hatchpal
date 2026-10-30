@@ -78,6 +78,11 @@ export interface JournalTimelineInput {
    * Juvenile and adult dates are measured from this instant.
    */
   hatchEpoch: number;
+  /**
+   * The embryo can no longer develop. Stages already reached stay on the record
+   * as completed. Nothing remains in progress, and later phases stay unreached.
+   */
+  closed?: boolean;
 }
 
 export interface WeightSample {
@@ -248,6 +253,7 @@ export function getAchievedPostHatchMilestones(
 export function buildJournalTimeline(input: JournalTimelineInput): JournalMilestone[] {
   const incubation = incubationMilestones(input.species);
   const incubationDays = incubationLength(input.species);
+  const closed = input.closed === true && !input.isHatched;
   const progress = input.isHatched ? 1 : clampProgress(input.progress);
   const age = input.isHatched && Number.isFinite(input.postHatchAgeDays) ? Math.max(0, input.postHatchAgeDays) : -1;
   const unlocked = incubation.filter((milestone) => milestoneReached(milestone.day, progress, incubationDays));
@@ -261,7 +267,7 @@ export function buildJournalTimeline(input: JournalTimelineInput): JournalMilest
   const rows: JournalMilestone[] = incubation.map((milestone) => {
     let status: JournalMilestoneStatus;
     if (!input.isHatched) {
-      if (milestone === activeIncubation) {
+      if (!closed && milestone === activeIncubation) {
         status = 'active';
       } else if (unlocked.includes(milestone)) {
         status = 'completed';

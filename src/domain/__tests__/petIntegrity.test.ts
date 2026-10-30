@@ -48,6 +48,14 @@ describe('Pet integrity', () => {
     expect(recovered?.vitalityScore).toBeGreaterThanOrEqual(0.3);
     expect(recovered?.lastWarmedEpoch).toBe(now);
     expect(recovered?.laidAtEpoch).toBe(now);
+    expect(recovered?.care).toEqual({
+      hearts: 0,
+      grantedWindows: [],
+      affinity: { warmth: 0, moisture: 0, song: 0, curiosity: 0 },
+      creditedWindows: { warmth: -1, moisture: -1, song: -1, curiosity: -1 },
+      spritzes: 0,
+    });
+    expect(recovered?.status).toBe('incubating');
   });
 
   it('drops invalid records from a persisted pet map', () => {

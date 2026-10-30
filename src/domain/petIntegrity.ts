@@ -114,10 +114,8 @@ export function sanitizePetInstance(value: unknown, nowEpoch = 0): PetInstance |
     pet.weatherSeed = Math.abs(Math.floor(raw.weatherSeed)) >>> 0;
   }
 
-  const care = sanitizeCareLog(raw.care);
-  if (care) {
-    pet.care = care;
-  }
+  // Legacy eggs may omit care; always materialize a clean log so reloads stay shaped.
+  pet.care = sanitizeCareLog(raw.care) ?? emptyCareLog();
 
   return pet;
 }

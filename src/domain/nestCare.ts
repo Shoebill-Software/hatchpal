@@ -385,12 +385,22 @@ export function sanitizeCareLog(value: unknown): NestCareLog | undefined {
   const affinity = record(raw.affinity);
   const credited = record(raw.creditedWindows);
   const granted = Array.isArray(raw.grantedWindows) ? raw.grantedWindows : [];
+  const grantedWindows: number[] = [];
+  for (const entry of granted) {
+    if (typeof entry !== 'number' || !Number.isFinite(entry) || entry < 0) {
+      continue;
+    }
+    const index = Math.floor(entry);
+    if (!grantedWindows.includes(index)) {
+      grantedWindows.push(index);
+    }
+    if (grantedWindows.length >= GRANTED_WINDOW_CAP) {
+      break;
+    }
+  }
   return {
     hearts: count(raw.hearts),
-    grantedWindows: granted
-      .filter((entry): entry is number => typeof entry === 'number' && Number.isFinite(entry) && entry >= 0)
-      .map((entry) => Math.floor(entry))
-      .slice(0, GRANTED_WINDOW_CAP),
+    grantedWindows,
     affinity: {
       warmth: count(affinity.warmth),
       moisture: count(affinity.moisture),

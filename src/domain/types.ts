@@ -178,7 +178,7 @@ export interface SpeciesConfig {
   tag: RosterTag;
   egg: EggProfile;
   growth: GrowthProfile;
-  /** Post-hatch plumage or pattern, shown in the journal and growth preview. */
+  /** Post-hatch plumage or pattern, shown in the field journal. */
   juvenile: GrowthStageCopy;
   adult: GrowthStageCopy;
   showcase: SpeciesShowcase;

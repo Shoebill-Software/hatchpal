@@ -1,8 +1,11 @@
+import { getSpeciesConfig } from '@/data/species';
 import {
+  candlingStageIdForDevelopment,
   candlingStageLabelKey,
   clamp01,
   ramp,
   resolveCandlingStage,
+  resolveCandlingStageFromMilestones,
   resolveCandlingStageId,
 } from '@/components/candling/candlingStages';
 
@@ -16,6 +19,15 @@ describe('Progressive candling stages', () => {
     expect(resolveCandlingStageId(0.74)).toBe('embryo');
     expect(resolveCandlingStageId(0.75)).toBe('prehatch');
     expect(resolveCandlingStageId(1)).toBe('prehatch');
+  });
+
+  it('maps biological development stages onto candling captions', () => {
+    expect(candlingStageIdForDevelopment('cleavage')).toBe('early');
+    expect(candlingStageIdForDevelopment('vascular')).toBe('vascular');
+    expect(candlingStageIdForDevelopment('organogenesis')).toBe('embryo');
+    expect(candlingStageIdForDevelopment('internal_pip')).toBe('prehatch');
+    expect(candlingStageIdForDevelopment('external_pip')).toBe('prehatch');
+    expect(candlingStageIdForDevelopment('hatchling')).toBe('prehatch');
   });
 
   it('clamps non-finite and out-of-range progress before classifying', () => {
@@ -63,5 +75,91 @@ describe('Progressive candling stages', () => {
     expect(candlingStageLabelKey('vascular')).toBe('candling.stage.vascular');
     expect(candlingStageLabelKey('embryo')).toBe('candling.stage.embryo');
     expect(candlingStageLabelKey('prehatch')).toBe('candling.stage.prehatch');
+  });
+});
+
+describe('Milestone-driven candling stages', () => {
+  const chicken = getSpeciesConfig('silkie_chicken');
+
+  it('follows species milestone candling features instead of a global progress timer', () => {
+    // Day 3 of 21 is only ~14% progress; the generic curve still hides vessels.
+    const day3 = 3 / chicken.incubationDays;
+    const milestone = resolveCandlingStageFromMilestones(day3, chicken.incubationDays, chicken.milestones);
+    const generic = resolveCandlingStage(day3);
+
+    expect(milestone.id).toBe('vascular');
+    expect(milestone.vessels).toBe(1);
+    expect(milestone.eye).toBe(0);
+    expect(milestone.movement).toBe(0);
+    expect(generic.vessels).toBeLessThan(0.05);
+
+    const day8 = 8 / chicken.incubationDays;
+    const organogenesis = resolveCandlingStageFromMilestones(
+      day8,
+      chicken.incubationDays,
+      chicken.milestones,
+    );
+    expect(organogenesis.id).toBe('embryo');
+    expect(organogenesis.eye).toBe(1);
+    expect(organogenesis.movement).toBe(1);
+    expect(organogenesis.embryo).toBeCloseTo(0.25, 5);
+    expect(organogenesis.airCell).toBeCloseTo(0.1, 5);
+  });
+
+  it('lerps silhouette and air cell between neighboring milestones', () => {
+    const mid = resolveCandlingStageFromMilestones(
+      5.5 / chicken.incubationDays,
+      chicken.incubationDays,
+      chicken.milestones,
+    );
+    // Halfway from day-3 (0.08 / 0.07) toward day-8 (0.25 / 0.10).
+    expect(mid.embryo).toBeCloseTo((0.08 + 0.25) / 2, 5);
+    expect(mid.airCell).toBeCloseTo((0.07 + 0.1) / 2, 5);
+    expect(mid.eye).toBeCloseTo(0.5, 5);
+    expect(mid.vessels).toBe(1);
+  });
+
+  it('fades vessels once late milestones mark them covered', () => {
+    const internalPip = resolveCandlingStageFromMilestones(
+      19 / chicken.incubationDays,
+      chicken.incubationDays,
+      chicken.milestones,
+    );
+    expect(internalPip.id).toBe('prehatch');
+    expect(internalPip.vessels).toBe(0);
+    expect(internalPip.eye).toBe(0);
+    expect(internalPip.embryo).toBeCloseTo(0.82, 5);
+    expect(internalPip.movement).toBe(1);
+    expect(internalPip.crowding).toBeGreaterThan(0.7);
+  });
+
+  it('falls back to the generic curve when milestones are missing', () => {
+    const stage = resolveCandlingStageFromMilestones(0.55, 21, []);
+    expect(stage).toEqual(resolveCandlingStage(0.55));
+  });
+
+  it('keeps every roster species finite across incubation', () => {
+    const roster = [
+      'silkie_chicken',
+      'ball_python',
+      'green_sea_turtle',
+      'platypus',
+      'emu',
+    ] as const;
+    for (const id of roster) {
+      const species = getSpeciesConfig(id);
+      for (const progress of [0, 0.15, 0.4, 0.7, 0.95, 1]) {
+        const stage = resolveCandlingStageFromMilestones(
+          progress,
+          species.incubationDays,
+          species.milestones,
+        );
+        for (const key of ['yolk', 'vessels', 'embryo', 'eye', 'airCell', 'crowding', 'movement'] as const) {
+          expect(Number.isFinite(stage[key])).toBe(true);
+          expect(stage[key]).toBeGreaterThanOrEqual(0);
+          expect(stage[key]).toBeLessThanOrEqual(1);
+        }
+      }
+    }
   });
 });

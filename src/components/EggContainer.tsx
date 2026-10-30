@@ -28,6 +28,8 @@ import {
 import { resolveShellTapEffect } from '@/services/soundCues';
 
 export const EGG_FRAME = { width: 220, height: 278 } as const;
+/** Short phones shrink the hero so the care HUD and dials stay on the first screen. */
+export const MIN_EGG_SCALE = 0.5;
 
 const EGG_VIEWBOX = { width: 196, height: 248 };
 const EGG_POLE_Y = 204;
@@ -113,6 +115,8 @@ export function EggContainer({
     );
   }, [scale, wiggle]);
 
+  const shellAcceptsCare = !snapshot.isHatched && !snapshot.isUnviable;
+
   const handleTap = useCallback(() => {
     if (candleGate.current) {
       return;
@@ -134,8 +138,10 @@ export function EggContainer({
       play('internal_peep');
     }
     playTapMotion();
-    onTap?.();
-  }, [clearHoldTimer, onTap, play, playTapMotion, snapshot]);
+    if (shellAcceptsCare) {
+      onTap?.();
+    }
+  }, [clearHoldTimer, onTap, play, playTapMotion, shellAcceptsCare, snapshot]);
 
   useEffect(() => {
     if (cheerPulse <= 0) {
@@ -170,7 +176,7 @@ export function EggContainer({
   }, [clearHoldTimer]);
 
   const activateCandle = useCallback(() => {
-    if (candleGate.current) {
+    if (candleGate.current || !shellAcceptsCare) {
       return;
     }
     candleGate.current = true;
@@ -181,7 +187,7 @@ export function EggContainer({
     setTimeout(() => {
       candleGate.current = false;
     }, 700);
-  }, [clearHoldTimer, onCandle]);
+  }, [clearHoldTimer, onCandle, shellAcceptsCare]);
 
   const disarmHold = useCallback(() => {
     clearHoldTimer();
@@ -795,7 +801,7 @@ function resolveScale(value: number): number {
   if (!Number.isFinite(value)) {
     return 1;
   }
-  return Math.min(1, Math.max(0.82, value));
+  return Math.min(1, Math.max(MIN_EGG_SCALE, value));
 }
 
 function useReduceMotion(): boolean {

@@ -32,6 +32,8 @@ export function NestPresence({
   const reduceMotion = useReduceMotion();
   const allowMotion = useRef(false);
   const occupiedNow = token !== 'empty';
+  // Cradle switches keep this view mounted so care state and tutorial anchors stay with the active egg.
+  const presence = occupiedNow ? 'occupied' : 'empty';
 
   useEffect(() => {
     allowMotion.current = true;
@@ -49,7 +51,7 @@ export function NestPresence({
     <View style={styles.host} collapsable={false}>
       {occupiedNow ? (
         <Animated.View
-          key={token}
+          key={presence}
           entering={entering}
           exiting={FadeOut.duration(reduceMotion ? 160 : 300)}
           style={styles.layer}>
@@ -57,7 +59,7 @@ export function NestPresence({
         </Animated.View>
       ) : (
         <Animated.View
-          key="empty"
+          key={presence}
           entering={entering}
           exiting={FadeOut.duration(reduceMotion ? 180 : 440)}
           style={styles.layer}>

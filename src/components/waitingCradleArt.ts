@@ -48,6 +48,9 @@ export type CradlePalette = {
   halo: string;
   haloStrength: number;
   rim: readonly [string, string, string];
+  /** Fallback shell when the runtime shader is unavailable. Lit, mid, deep. */
+  shell: readonly [string, string, string];
+  freckle: string;
 };
 
 const LIGHT: CradlePalette = {
@@ -60,6 +63,8 @@ const LIGHT: CradlePalette = {
   halo: '#FFB15A',
   haloStrength: 0.28,
   rim: ['#FFF8EE', '#E7C090', '#8A5432'],
+  shell: ['#FFF6EA', '#E7C096', '#8E5A3A'],
+  freckle: '#C48A62',
 };
 
 const DARK: CradlePalette = {
@@ -72,6 +77,8 @@ const DARK: CradlePalette = {
   halo: '#FFB15A',
   haloStrength: 0.5,
   rim: ['#FFF4E4', '#D7A878', '#6A3C24'],
+  shell: ['#F0E0CC', '#C4926A', '#6A3C24'],
+  freckle: '#A87456',
 };
 
 export function cradlePalette(scheme: 'light' | 'dark'): CradlePalette {
@@ -107,6 +114,7 @@ export const SHELL_SHADER = `
 uniform float2 center;
 uniform float2 radii;
 uniform float warmth;
+uniform float room;
 uniform float3 lit;
 uniform float3 mid;
 uniform float3 shade;
@@ -198,7 +206,7 @@ half4 main(float2 p) {
 
   float2 yolk = (q - float2(-0.02, 0.18)) / float2(0.62, 0.7);
   float coal = smoothstep(1.05, 0.05, length(yolk)) * z;
-  col = mix(col, ember, coal * 0.34 * warmth);
+  col = mix(col, ember, coal * 0.34 * warmth * (1.0 + room * 0.35));
 
   float limb = smoothstep(0.55, 1.02, e);
   col = mix(col, deep, limb * 0.62);
@@ -209,6 +217,7 @@ half4 main(float2 p) {
 
   float crown = smoothstep(0.05, -0.85, q.y) * (1.0 - limb);
   col = mix(col, lit, crown * 0.08);
+  col = mix(col, col * float3(0.86, 0.78, 0.68), room);
 
   return half4(half3(col), 1.0);
 }

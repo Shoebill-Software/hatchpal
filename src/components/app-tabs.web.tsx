@@ -29,7 +29,7 @@ export default function AppTabs() {
           <TabTrigger name="home" href="/" asChild>
             <TabButton>{t('nav.nest')}</TabButton>
           </TabTrigger>
-          <TabTrigger name="explore" href="/explore" asChild>
+          <TabTrigger name="journal" href="/journal" asChild>
             <TabButton symbol={{ ios: 'book.fill', android: 'menu_book', web: 'menu_book' }}>
               {t('nav.journal')}
             </TabButton>

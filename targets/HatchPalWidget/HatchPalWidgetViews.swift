@@ -301,11 +301,11 @@ private struct EmptyNestWidget: View {
     let payload: WidgetPayload?
 
     private var title: String {
-        payload?.emptyTitle ?? "The nest is empty"
+        payload?.emptyTitle ?? "The Cradle is Waiting"
     }
 
     private var detail: String {
-        payload?.emptyBody ?? "Choose an egg in HatchPal"
+        payload?.emptyBody ?? "Choose an egg to nurture."
     }
 
     var body: some View {
@@ -317,6 +317,8 @@ private struct EmptyNestWidget: View {
                 .font(compact ? .caption.weight(.semibold) : .subheadline.weight(.semibold))
                 .foregroundStyle(NestInk.text)
                 .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .minimumScaleFactor(0.7)
             if !compact {
                 Text(detail)
                     .font(.caption2)

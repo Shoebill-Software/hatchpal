@@ -1,12 +1,27 @@
 import type { TranslationKey } from '@/i18n/en';
 
+/**
+ * Controls the nest still mounts after the care HUD.
+ * Coach marks may only name these. `egg` and `telemetryHeart` sit on the nest
+ * stage; warmth and mist sit on the climate dials; weather and hearts sit on
+ * `NestAlmanac`.
+ */
+export const NEST_ANCHOR = {
+  egg: 'egg',
+  telemetryHeart: 'telemetry_heart',
+  warmControl: 'warm_control',
+  mistControl: 'mist_control',
+  almanacWeather: 'almanac_weather',
+  almanacHearts: 'almanac_hearts',
+} as const;
+
 export const TUTORIAL_TARGET_IDS = [
-  'egg',
-  'telemetry_heart',
-  'warm_control',
-  'mist_control',
-  'almanac_weather',
-  'almanac_hearts',
+  NEST_ANCHOR.egg,
+  NEST_ANCHOR.telemetryHeart,
+  NEST_ANCHOR.warmControl,
+  NEST_ANCHOR.mistControl,
+  NEST_ANCHOR.almanacWeather,
+  NEST_ANCHOR.almanacHearts,
 ] as const;
 
 export type TutorialTargetId = (typeof TUTORIAL_TARGET_IDS)[number];
@@ -130,6 +145,17 @@ export const TUTORIAL_ENTRANCE_DELAY_MS = 1100;
 export const TUTORIAL_REPLAY_DELAY_MS = 720;
 
 export const TUTORIAL_REDUCED_DELAY_MS = 280;
+
+/**
+ * How long a coach mark waits for `measureInWindow` before it stops covering the nest.
+ * Longer than the overlay's late remeasure, so a slow layout can still land a hole.
+ */
+export const TUTORIAL_MEASURE_GRACE_MS = 480;
+
+/** A dry nest cannot mist, so that step must not wait on a control that does nothing. */
+export function tutorialActionAvailable(action: TutorialAction, nest: { canMist: boolean }): boolean {
+  return action !== 'mist' || nest.canMist;
+}
 
 /** Glide between spotlight holes. */
 export const SPOTLIGHT_MOVE_MS = 520;

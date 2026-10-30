@@ -6,6 +6,18 @@ import {
   type TutorialTargetId,
 } from '@/constants/tutorial';
 
+/** How a coach mark treats the nest for one step. */
+export type SpotlightChrome = {
+  /** Draw the dimming veil. False leaves the nest fully visible. */
+  showVeil: boolean;
+  /** Eat touches outside the hole so only the highlighted control works. */
+  passThroughHole: boolean;
+  /** Eat every touch except the coach card. */
+  blockScreen: boolean;
+  /** Stop waiting on an action so Next is available. */
+  releaseWait: boolean;
+};
+
 /** Layout captured from `measureInWindow`, in window coordinates. */
 export type TutorialRect = {
   x: number;
@@ -151,6 +163,41 @@ export function placeTutorialCard(input: {
     placement,
     caretLeft: clamp(rawCaret, 16, Math.max(16, width - CARET_WIDTH - 16)),
     showCaret: true,
+  };
+}
+
+/**
+ * A missing anchor must not cover the nest. Until the grace expires the card
+ * can show, but the veil and the touch blockers stay down. After that, Next
+ * replaces a wait the player cannot complete.
+ */
+export function spotlightChrome(input: {
+  hasTarget: boolean;
+  holeReady: boolean;
+  measureFailed: boolean;
+  waitingOnAction: boolean;
+}): SpotlightChrome {
+  if (input.measureFailed || (input.hasTarget && !input.holeReady)) {
+    return {
+      showVeil: false,
+      passThroughHole: false,
+      blockScreen: false,
+      releaseWait: input.measureFailed && input.waitingOnAction,
+    };
+  }
+  if (input.waitingOnAction) {
+    return {
+      showVeil: true,
+      passThroughHole: input.holeReady,
+      blockScreen: false,
+      releaseWait: false,
+    };
+  }
+  return {
+    showVeil: true,
+    passThroughHole: false,
+    blockScreen: true,
+    releaseWait: false,
   };
 }
 

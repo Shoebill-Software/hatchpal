@@ -135,6 +135,7 @@ export async function requestNotificationPermissions(): Promise<boolean> {
 /**
  * Schedules one local notification per upcoming milestone.
  * Triggers use `laidAtEpoch + day * 86400 * 1000` and skip anything not strictly in the future.
+ * These are on-device date alerts. HatchPal does not register a push token.
  */
 export async function scheduleMilestoneNotifications(
   pet: PetInstance,

@@ -1,10 +1,11 @@
 import { listSpeciesConfigs } from '@/data/species';
+import { americanRobinConfig } from '@/data/species/robin';
 import { silkieChickenConfig } from '@/data/species/chicken';
 import type { BiologicalMilestone } from '@/domain/types';
 
 import { ALERT_BODY_LIMIT, milestoneAlertCopy, milestoneAlertSubtitle } from '../notificationCopy';
 
-const TURNING = /\bturn(?:ing|ed|s)?\b/i;
+const TURNING_ORDER = /\bturning\b|\bturned\b|\bturn (?:it|the)\b/i;
 
 describe('milestone alert copy', () => {
   it('names the keeper and the incubation day', () => {
@@ -19,7 +20,17 @@ describe('milestone alert copy', () => {
       title: 'External Pip',
       body: 'Egg tooth fractures the outer calcified shell. Keep the nest still and warm.',
     });
-    expect(copy?.body).not.toMatch(TURNING);
+    expect(copy?.body).not.toMatch(TURNING_ORDER);
+  });
+
+  it('keeps the embryo turning along its axis and drops the order to stop', () => {
+    const growth = milestoneAlertCopy(milestone(silkieChickenConfig.milestones, 14), silkieChickenConfig);
+    expect(growth?.body).toContain('Embryo turns along the long axis.');
+    expect(growth?.body).not.toMatch(TURNING_ORDER);
+
+    const robin = milestoneAlertCopy(milestone(americanRobinConfig.milestones, 12), americanRobinConfig);
+    expect(robin?.body).toContain('Pulmonary breathing begins.');
+    expect(robin?.body).not.toMatch(TURNING_ORDER);
   });
 
   it('stays quiet for the moment of laying', () => {
@@ -47,7 +58,7 @@ describe('milestone alert copy', () => {
         expect(copy?.title).toBe(entry.title.trim());
         expect(copy?.body.length).toBeGreaterThan(12);
         expect(copy?.body.length).toBeLessThanOrEqual(ALERT_BODY_LIMIT);
-        expect(copy?.body).not.toMatch(TURNING);
+        expect(copy?.body).not.toMatch(TURNING_ORDER);
       }
     }
   });

@@ -8,6 +8,7 @@ import { useTranslation } from '@/i18n';
 import { ImpactFeedbackStyle, triggerImpact } from '@/services/hapticFeedback';
 import { usePreferencesStore } from '@/store/usePreferencesStore';
 
+import { shouldShowAdoptionTip } from './cradleWelcome';
 import { Pip } from './Pip';
 import { useTypewriter } from './useTypewriter';
 
@@ -17,7 +18,7 @@ const RIM = '#E2A72E';
 export function PipTip() {
   const hasSeenWelcome = usePreferencesStore((state) => state.hasSeenWelcome);
   const hasSeenTip = usePreferencesStore((state) => state.hasSeenAdoptionTip);
-  if (!hasSeenWelcome || hasSeenTip) {
+  if (!shouldShowAdoptionTip({ hasSeenWelcome, hasSeenAdoptionTip: hasSeenTip, blocked: false })) {
     return null;
   }
   return <PipTipCard />;

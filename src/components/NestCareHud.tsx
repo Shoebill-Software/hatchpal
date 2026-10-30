@@ -13,13 +13,17 @@ import Animated, {
 
 import { useTutorialAnchor } from '@/components/tutorial/TutorialAnchor';
 import { hexToRgba, useNestPalette } from '@/constants/nest';
+import { NEST_ANCHOR } from '@/constants/tutorial';
 import { LULLABY_TAPS, type ActiveWish } from '@/domain/nestCare';
 import type { NestWeather } from '@/domain/nestWeather';
 import type { SpeciesConfig } from '@/domain/types';
 import { useReduceMotion } from '@/hooks/useReduceMotion';
 import { formatDuration, getElapsedSpan, useTranslation } from '@/i18n';
+import type { TranslateFn } from '@/i18n/translate';
 
 const HEART = '#E07A8D';
+/** Reserved above the egg so a wish never shoves the shell down. */
+export const WISH_SLOT_HEIGHT = 38;
 
 const WEATHER_LOOK: Record<NestWeather, { symbol: SymbolViewProps['name']; glyph: string; color: string }> = {
   mild: { symbol: { ios: 'cloud.sun.fill', android: 'partly_cloudy_day', web: 'partly_cloudy_day' }, glyph: '⛅', color: '#C9A15A' },
@@ -34,8 +38,8 @@ export function NestAlmanac({ weather, hearts, heartPulse }: { weather: NestWeat
   const palette = useNestPalette();
   const { t } = useTranslation();
   const reduceMotion = useReduceMotion();
-  const weatherAnchor = useTutorialAnchor('almanac_weather');
-  const heartsAnchor = useTutorialAnchor('almanac_hearts');
+  const weatherAnchor = useTutorialAnchor(NEST_ANCHOR.almanacWeather);
+  const heartsAnchor = useTutorialAnchor(NEST_ANCHOR.almanacHearts);
   const bump = useSharedValue(1);
   const look = WEATHER_LOOK[weather];
   const name = t(`weather.${weather}`);
@@ -58,16 +62,18 @@ export function NestAlmanac({ weather, hearts, heartPulse }: { weather: NestWeat
         onLayout={weatherAnchor.onLayout}
         accessible
         accessibilityLabel={t('weather.a11y', { weather: name, effect })}
-        style={[styles.chip, { borderColor: palette.border, backgroundColor: hexToRgba(look.color, 0.1) }]}>
-        <SymbolView
-          name={look.symbol}
-          size={14}
-          tintColor={look.color}
-          fallback={<Text style={[styles.glyph, { color: look.color }]}>{look.glyph}</Text>}
-        />
-        <Text numberOfLines={1} maxFontSizeMultiplier={1.15} style={[styles.chipLabel, { color: palette.text }]}>
-          {name}
-        </Text>
+        style={[styles.chip, styles.weatherChip, { borderColor: palette.border, backgroundColor: hexToRgba(look.color, 0.1) }]}>
+        <View style={styles.weatherLead}>
+          <SymbolView
+            name={look.symbol}
+            size={14}
+            tintColor={look.color}
+            fallback={<Text style={[styles.glyph, { color: look.color }]}>{look.glyph}</Text>}
+          />
+          <Text numberOfLines={1} maxFontSizeMultiplier={1.15} style={[styles.chipLabel, { color: palette.text }]}>
+            {name}
+          </Text>
+        </View>
         <Text numberOfLines={1} maxFontSizeMultiplier={1.15} style={[styles.chipDetail, { color: palette.textMuted }]}>
           {effect}
         </Text>
@@ -78,7 +84,7 @@ export function NestAlmanac({ weather, hearts, heartPulse }: { weather: NestWeat
         onLayout={heartsAnchor.onLayout}
         accessible
         accessibilityLabel={t('hearts.a11y', { count: hearts })}
-        style={[styles.chip, { borderColor: palette.border, backgroundColor: hexToRgba(HEART, 0.1) }]}>
+        style={[styles.chip, styles.heartChip, { borderColor: palette.border, backgroundColor: hexToRgba(HEART, 0.1) }]}>
         <Animated.View style={bumpStyle}>
           <SymbolView
             name={{ ios: 'heart.fill', android: 'favorite', web: 'favorite' }}
@@ -101,20 +107,23 @@ export function WishBubble({
   species,
   nowEpoch,
   lullabyTaps,
+  cradleId,
 }: {
   wish: ActiveWish | null;
   species: SpeciesConfig;
   nowEpoch: number;
   lullabyTaps: number;
+  cradleId: string;
 }) {
   const palette = useNestPalette();
   const { t } = useTranslation();
   const reduceMotion = useReduceMotion();
   const float = useSharedValue(0);
 
-  const wishKey = wish ? `${wish.index}-${wish.kind}` : null;
+  const wishKey = wish ? `${cradleId}-${wish.index}-${wish.kind}` : null;
   useEffect(() => {
     if (!wishKey || reduceMotion) {
+      float.value = 0;
       return;
     }
     float.value = withSequence(withTiming(-4, { duration: 220 }), withSpring(0, { damping: 8, stiffness: 180 }));
@@ -129,19 +138,25 @@ export function WishBubble({
     temp: species.temperatureTargetCelsius.toFixed(1),
     humidity: Math.round(species.humidityTargetPct),
   });
-  const time = formatDuration(getElapsedSpan(nowEpoch, wish.endsAt), t);
+  const remaining = formatDuration(getElapsedSpan(nowEpoch, wish.endsAt), t);
+  const compact = compactWishTime(nowEpoch, wish.endsAt, t);
 
   return (
     <View style={styles.wishSlot}>
       <Animated.View
-        key={`${wish.index}-${wish.kind}`}
+        key={`${cradleId}-${wish.index}-${wish.kind}`}
         entering={reduceMotion ? undefined : FadeIn.duration(320)}
         exiting={reduceMotion ? undefined : FadeOut.duration(220)}
         accessible
-        accessibilityLabel={t('wish.a11y', { wish: text, time })}
+        accessibilityLabel={t('wish.a11y', { wish: text, time: remaining })}
         style={[styles.wish, { backgroundColor: palette.surface, borderColor: hexToRgba(HEART, 0.45) }, floatStyle]}>
         <Text style={[styles.wishHeart, { color: HEART }]}>♥</Text>
-        <Text numberOfLines={2} maxFontSizeMultiplier={1.2} style={[styles.wishText, { color: palette.text }]}>
+        <Text
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.8}
+          maxFontSizeMultiplier={1.15}
+          style={[styles.wishText, { color: palette.text }]}>
           {text}
         </Text>
         {wish.kind === 'lullaby' ? (
@@ -155,7 +170,7 @@ export function WishBubble({
           </View>
         ) : (
           <Text maxFontSizeMultiplier={1.1} style={[styles.wishTime, { color: palette.textMuted }]}>
-            {t('wish.timeLeft', { time })}
+            {compact}
           </Text>
         )}
         <View style={[styles.wishTail, { backgroundColor: palette.surface, borderColor: hexToRgba(HEART, 0.45) }]} />
@@ -214,6 +229,20 @@ function FloatingHeart({ flight, reduceMotion }: { flight: (typeof HEART_FLIGHTS
   return <Animated.Text style={[styles.flyingHeart, { fontSize: flight.size, color: HEART }, style]}>♥</Animated.Text>;
 }
 
+function compactWishTime(nowEpoch: number, endsAt: number, t: TranslateFn): string {
+  const span = getElapsedSpan(nowEpoch, endsAt);
+  if (span.unit === 'now') {
+    return t('wish.timeNow');
+  }
+  if (span.unit === 'minute') {
+    return t('wish.minutesCompact', { count: span.count });
+  }
+  if (span.unit === 'hour') {
+    return t('wish.hoursCompact', { count: span.count });
+  }
+  return t('wish.daysCompact', { count: span.count });
+}
+
 const styles = StyleSheet.create({
   almanac: {
     flexDirection: 'row',
@@ -221,7 +250,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     paddingHorizontal: 16,
-    minHeight: 30,
+    minHeight: 36,
   },
   chip: {
     flexDirection: 'row',
@@ -232,6 +261,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
     paddingVertical: 5,
     flexShrink: 1,
+  },
+  weatherChip: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 1,
+    borderRadius: 16,
+    paddingVertical: 5,
+    maxWidth: '78%',
+  },
+  weatherLead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  heartChip: {
+    flexShrink: 0,
+    alignSelf: 'center',
   },
   glyph: {
     fontSize: 12,
@@ -250,10 +296,11 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   wishSlot: {
-    height: 50,
+    height: WISH_SLOT_HEIGHT,
     alignItems: 'center',
     justifyContent: 'flex-end',
-    paddingHorizontal: 24,
+    paddingHorizontal: 16,
+    paddingBottom: 6,
   },
   wish: {
     flexDirection: 'row',
@@ -261,9 +308,9 @@ const styles = StyleSheet.create({
     gap: 8,
     borderWidth: 1,
     borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    maxWidth: 340,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    maxWidth: '100%',
   },
   wishHeart: {
     fontSize: 13,

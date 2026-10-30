@@ -10,6 +10,7 @@ import {
   type PlaySoundOptions,
 } from '@/services/audio';
 import {
+  LOOPING_EFFECT_IDS,
   nestPipIntervalMs,
   resolveNestPipEffect,
   type SoundEffectId,
@@ -25,6 +26,16 @@ export type SoundEffectsApi = {
 /** Preloads the biological cue registry and releases it when this screen unmounts. */
 export function useSoundEffects(): SoundEffectsApi {
   useEffect(() => retainSoundEffects(), []);
+
+  const soundEnabled = usePreferencesStore((state) => state.soundEnabled);
+  useEffect(() => {
+    if (soundEnabled) {
+      return;
+    }
+    for (const id of LOOPING_EFFECT_IDS) {
+      stopLoop(id, 80);
+    }
+  }, [soundEnabled]);
 
   const play = useCallback((id: SoundEffectId, options?: PlaySoundOptions) => {
     if (!usePreferencesStore.getState().soundEnabled) {

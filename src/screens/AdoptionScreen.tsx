@@ -16,6 +16,7 @@ import { WelcomeIntro } from '@/components/tutorial/WelcomeIntro';
 import { Fonts } from '@/constants/theme';
 import { listSpeciesConfigs } from '@/data/species';
 import { speciesMatchingFilter, type RosterFilter } from '@/data/species/roster';
+import { adoptionIntent, type AdoptionIntent } from '@/domain/cradleCapacity';
 import { isReserveSpecies, type KeeperMilestone } from '@/domain/keeperRewards';
 import type { DifficultyTag, RosterTag, SpeciesConfig, SpeciesId } from '@/domain/types';
 import { useActivePet } from '@/hooks/useActivePet';
@@ -55,7 +56,6 @@ export default function AdoptionScreen() {
   const { height } = useWindowDimensions();
   const { t } = useTranslation();
   const params = useLocalSearchParams<{
-    replacing?: string | string[];
     adding?: string | string[];
     speciesId?: string | string[];
   }>();
@@ -66,11 +66,10 @@ export default function AdoptionScreen() {
   const completeWelcome = usePreferencesStore((state) => state.completeWelcome);
   const skipAllTutorials = usePreferencesStore((state) => state.skipAllTutorials);
   const { isAvailable, gateFor } = useKeeperAccess();
-  const replacingParam = Array.isArray(params.replacing) ? params.replacing[0] : params.replacing;
   const addingParam = Array.isArray(params.adding) ? params.adding[0] : params.adding;
   const speciesParam = Array.isArray(params.speciesId) ? params.speciesId[0] : params.speciesId;
   const adding = addingParam === '1';
-  const replacing = !adding && (replacingParam === '1' || pet != null);
+  const intent = adoptionIntent({ adding, hasPet: pet != null });
   const requested = SPECIES.find((species) => species.id === speciesParam);
   const [selectedId, setSelectedId] = useState<SpeciesId>(requested?.id ?? SPECIES[0]?.id ?? 'silkie_chicken');
   const [filter, setFilter] = useState<RosterFilter>('all');
@@ -116,7 +115,7 @@ export default function AdoptionScreen() {
     void triggerImpact(ImpactFeedbackStyle.Medium);
     router.push({
       pathname: '/showcase',
-      params: { speciesId: id, replacing: replacing ? '1' : '0', adding: adding ? '1' : '0' },
+      params: { speciesId: id, replacing: intent === 'replace' ? '1' : '0', adding: intent === 'add' ? '1' : '0' },
     });
   };
 
@@ -162,7 +161,7 @@ export default function AdoptionScreen() {
               numberOfLines={1}
               maxFontSizeMultiplier={1.15}
               style={[styles.headerTitle, { fontFamily: Fonts?.serif, color: palette.ink }]}>
-              {replacing ? t('adoption.replaceTitle') : t('adoption.title')}
+              {t(adoptionTitleKey(intent))}
             </Text>
             <View style={styles.sideEnd}>
               {selected && roster.length > 0 ? (
@@ -223,7 +222,7 @@ export default function AdoptionScreen() {
             </Text>
           </Pressable>
           <Text maxFontSizeMultiplier={1.15} style={[styles.caption, { color: palette.quiet }]}>
-            {adoptionCaption(selected, isAvailable, gateFor, replacing, t)}
+            {adoptionCaption(selected, isAvailable, gateFor, intent, t)}
           </Text>
         </View>
       </View>
@@ -234,11 +233,21 @@ export default function AdoptionScreen() {
   );
 }
 
+function adoptionTitleKey(intent: AdoptionIntent): 'adoption.addTitle' | 'adoption.replaceTitle' | 'adoption.title' {
+  if (intent === 'add') {
+    return 'adoption.addTitle';
+  }
+  if (intent === 'replace') {
+    return 'adoption.replaceTitle';
+  }
+  return 'adoption.title';
+}
+
 function adoptionCaption(
   selected: SpeciesConfig | null,
   isAvailable: (speciesId: string) => boolean,
   gateFor: (speciesId: string) => KeeperMilestone | null,
-  replacing: boolean,
+  intent: AdoptionIntent,
   t: TranslateFn
 ): string {
   if (selected && !isAvailable(selected.id)) {
@@ -252,7 +261,13 @@ function adoptionCaption(
       return t('adoption.reserveHint');
     }
   }
-  return replacing ? t('adoption.replaceBody') : t('adoption.body');
+  if (intent === 'add') {
+    return t('adoption.addBody');
+  }
+  if (intent === 'replace') {
+    return t('adoption.replaceBody');
+  }
+  return t('adoption.body');
 }
 
 function SpeciesPlate({ species, compact }: { species: SpeciesConfig; compact: boolean }) {

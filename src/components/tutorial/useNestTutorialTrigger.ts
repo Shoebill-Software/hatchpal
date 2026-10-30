@@ -5,6 +5,8 @@ import { useReduceMotion } from '@/hooks/useReduceMotion';
 import { usePreferencesHydrated } from '@/hooks/useLaunchStoresReady';
 import { usePreferencesStore } from '@/store/usePreferencesStore';
 
+import { shouldStartNestCoachMarks } from './cradleWelcome';
+
 /**
  * Opens the nest tour once Pip's welcome is done and an egg is incubating, and again after Replay.
  * An already-settled nest waits only long enough for the settings sheet to dismiss.
@@ -44,7 +46,13 @@ export function useNestTutorialTrigger(input: {
   }, [isActive, shouldSuspend, suspendNestTutorial]);
 
   useEffect(() => {
-    if (!preferencesReady || !incubating || blocked || !hasSeenWelcome || hasCompleted || isActive) {
+    const eligible = shouldStartNestCoachMarks({
+      hasSeenWelcome,
+      hasCompletedNestTutorial: hasCompleted,
+      incubating,
+      blocked,
+    });
+    if (!preferencesReady || !eligible || isActive) {
       return;
     }
     const delay = tutorialStartDelay(settled.current, reduceMotion);

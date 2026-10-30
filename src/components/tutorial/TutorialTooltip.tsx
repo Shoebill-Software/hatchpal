@@ -32,6 +32,8 @@ export type TutorialTooltipProps = {
   mood: PipMood;
   /** The step is waiting for the player to try the highlighted control. */
   waiting: boolean;
+  /** Nest touches pass through the card. Skip and Next still take their own taps. */
+  passThrough?: boolean;
   /** Taps so far toward a counted action, such as the hello lullaby. */
   progress?: { done: number; total: number };
   hole: SpotlightHole | null;
@@ -52,6 +54,7 @@ export function TutorialTooltip({
   body,
   mood,
   waiting,
+  passThrough = false,
   progress,
   hole,
   screenWidth,
@@ -114,9 +117,11 @@ export function TutorialTooltip({
     onNext();
   };
 
+  const passTouches = waiting || passThrough;
+
   return (
     <Animated.View
-      pointerEvents={waiting ? 'box-none' : 'auto'}
+      pointerEvents={passTouches ? 'box-none' : 'auto'}
       onLayout={(event) => {
         const height = event.nativeEvent.layout.height;
         if (height > 1) {
@@ -129,7 +134,7 @@ export function TutorialTooltip({
       ) : null}
       <Pressable
         accessible={false}
-        pointerEvents={waiting ? 'none' : 'auto'}
+        pointerEvents={passTouches ? 'none' : 'auto'}
         onPress={typed.done ? undefined : typed.finish}
         style={styles.content}>
         <View style={styles.speaker}>

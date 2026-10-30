@@ -87,7 +87,17 @@ describe('milestone notification scheduling', () => {
 
   it('skips milestones that are in the past or exactly now', () => {
     const now = laidAt + 20 * INCUBATION_DAY_MS;
-    const alerts = selectUpcomingMilestoneAlerts(pet({ laidAtEpoch: laidAt }), silkieChickenConfig, now);
+    const alerts = selectUpcomingMilestoneAlerts(
+      pet({
+        laidAtEpoch: laidAt,
+        lastWarmedEpoch: now,
+        lastMistedEpoch: now,
+        currentTemperatureCelsius: silkieChickenConfig.temperatureTargetCelsius,
+        currentHumidityPct: silkieChickenConfig.humidityTargetPct,
+      }),
+      silkieChickenConfig,
+      now
+    );
 
     expect(alerts.map((alert) => alert.day)).toEqual([21]);
     expect(milestoneTriggerEpoch(laidAt, 20)).toBe(now);
@@ -152,19 +162,25 @@ describe('milestone notification scheduling', () => {
       'Chick completes rotation around the blunt pole, pushes the cap open, and emerges wet and exhausted. Be there for the hatch.'
     );
     expect(byDay.has(0)).toBe(false);
+    expect(calls.every((call) => call.trigger.type === 'date')).toBe(true);
   });
 
   it('uses English biological copy and species-specific gecko timestamps', async () => {
     const geckoLaid = 1_800_000_000_000;
+    const geckoNow = geckoLaid + 10 * INCUBATION_DAY_MS;
     const ids = await scheduleMilestoneNotifications(
       pet({
         id: 'gecko-1',
         speciesId: 'leopard_gecko',
         nickname: 'Nova',
         laidAtEpoch: geckoLaid,
+        lastWarmedEpoch: geckoNow,
+        lastMistedEpoch: geckoNow,
+        currentTemperatureCelsius: leopardGeckoConfig.temperatureTargetCelsius,
+        currentHumidityPct: leopardGeckoConfig.humidityTargetPct,
       }),
       leopardGeckoConfig,
-      geckoLaid + 10 * INCUBATION_DAY_MS
+      geckoNow
     );
 
     const calls = notifications.scheduleNotificationAsync.mock.calls.map(
@@ -212,12 +228,41 @@ describe('milestone notification scheduling', () => {
     notifications.requestPermissionsAsync.mockRejectedValue(new Error('native unavailable'));
 
     await expect(requestNotificationPermissions()).resolves.toBe(false);
-    expect(notifications.requestPermissionsAsync).toHaveBeenCalled();
+    expect(notifications.requestPermissionsAsync).toHaveBeenCalledWith({
+      ios: {
+        allowAlert: true,
+        allowBadge: false,
+        allowSound: true,
+      },
+    });
   });
 
   it('cancels every pending alert', async () => {
     await cancelAllPetNotifications();
     expect(notifications.cancelAllScheduledNotificationsAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a chilly egg on the timeline and skips a strike the embryo will not survive', () => {
+    const chilly = selectUpcomingMilestoneAlerts(
+      pet({ laidAtEpoch: laidAt }),
+      silkieChickenConfig,
+      laidAt + 12 * 60 * 60 * 1000
+    );
+    expect(chilly.map((alert) => alert.day)).toEqual([3, 8, 14, 19, 20, 21]);
+
+    const striking = selectUpcomingMilestoneAlerts(
+      pet({ laidAtEpoch: laidAt }),
+      silkieChickenConfig,
+      laidAt + 36 * 60 * 60 * 1000
+    );
+    expect(striking).toEqual([]);
+
+    const collapsed = selectUpcomingMilestoneAlerts(
+      pet({ laidAtEpoch: laidAt }),
+      silkieChickenConfig,
+      laidAt + 49 * 60 * 60 * 1000
+    );
+    expect(collapsed).toEqual([]);
   });
 
   it('does not schedule a hatched creature or an embryo already lost', async () => {

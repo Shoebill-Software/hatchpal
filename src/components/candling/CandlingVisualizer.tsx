@@ -14,7 +14,7 @@ import {
 import { candlingShellPalette, createPipStar, layoutEgg, type EggLayout } from '@/components/candlingGeometry';
 import { buildCandlingAnatomy } from '@/components/candling/candlingAnatomy';
 import { CandlingBackdrop, CandlingSubject } from '@/components/candling/CandlingScene';
-import { resolveCandlingStage } from '@/components/candling/candlingStages';
+import { resolveCandlingStageFromMilestones } from '@/components/candling/candlingStages';
 import { useReduceMotion } from '@/hooks/useReduceMotion';
 import { useTranslation } from '@/i18n';
 import type { PetSnapshot, SpeciesConfig } from '@/domain/types';
@@ -40,8 +40,13 @@ export function CandlingVisualizer({ snapshot, species, bpm = 0 }: CandlingVisua
   const [layout, setLayout] = useState<EggLayout | null>(null);
   const palette = useMemo(() => candlingShellPalette(species.id), [species.id]);
   const stage = useMemo(
-    () => resolveCandlingStage(snapshot.incubationProgress),
-    [snapshot.incubationProgress],
+    () =>
+      resolveCandlingStageFromMilestones(
+        snapshot.incubationProgress,
+        species.incubationDays,
+        species.milestones,
+      ),
+    [snapshot.incubationProgress, species.incubationDays, species.milestones],
   );
   const eggAspect = species.egg.widthMm / Math.max(species.egg.lengthMm, 1);
   const eggShape = species.egg.shape;

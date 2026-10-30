@@ -1,6 +1,13 @@
-import { NEST_TUTORIAL_STEPS, NEST_TUTORIAL_STEP_COUNT, tutorialStartDelay } from '@/constants/tutorial';
+import {
+  NEST_ANCHOR,
+  NEST_TUTORIAL_STEPS,
+  NEST_TUTORIAL_STEP_COUNT,
+  TUTORIAL_TARGET_IDS,
+  tutorialActionAvailable,
+  tutorialStartDelay,
+} from '@/constants/tutorial';
 
-import { placeTutorialCard, spotlightHole, sameTutorialRect } from '../spotlightGeometry';
+import { placeTutorialCard, sameTutorialRect, spotlightChrome, spotlightHole } from '../spotlightGeometry';
 
 describe('nest tutorial geometry', () => {
   it('walks hello, heart, warmth, moisture, weather, hearts, the stakes, candling, then a centered finale', () => {
@@ -114,5 +121,57 @@ describe('nest tutorial geometry', () => {
   it('uses a shorter delay once the nest entrance has settled', () => {
     expect(tutorialStartDelay(false, false)).toBeGreaterThan(tutorialStartDelay(true, false));
     expect(tutorialStartDelay(false, true)).toBe(tutorialStartDelay(true, true));
+  });
+
+  it('spotlights only the anchors the nest HUD still mounts', () => {
+    expect(new Set(Object.values(NEST_ANCHOR))).toEqual(new Set(TUTORIAL_TARGET_IDS));
+    for (const step of NEST_TUTORIAL_STEPS) {
+      if (step.target != null) {
+        expect(TUTORIAL_TARGET_IDS).toContain(step.target);
+      }
+    }
+  });
+
+  it('leaves the nest uncovered when an anchor never measures', () => {
+    expect(
+      spotlightChrome({ hasTarget: true, holeReady: false, measureFailed: false, waitingOnAction: true })
+    ).toEqual({
+      showVeil: false,
+      passThroughHole: false,
+      blockScreen: false,
+      releaseWait: false,
+    });
+    expect(
+      spotlightChrome({ hasTarget: true, holeReady: false, measureFailed: true, waitingOnAction: true })
+    ).toEqual({
+      showVeil: false,
+      passThroughHole: false,
+      blockScreen: false,
+      releaseWait: true,
+    });
+    expect(
+      spotlightChrome({ hasTarget: true, holeReady: false, measureFailed: true, waitingOnAction: false })
+    ).toMatchObject({ showVeil: false, blockScreen: false, releaseWait: false });
+  });
+
+  it('keeps a measured hole, and still blocks a centered finale', () => {
+    expect(
+      spotlightChrome({ hasTarget: true, holeReady: true, measureFailed: false, waitingOnAction: true })
+    ).toEqual({
+      showVeil: true,
+      passThroughHole: true,
+      blockScreen: false,
+      releaseWait: false,
+    });
+    expect(
+      spotlightChrome({ hasTarget: false, holeReady: false, measureFailed: false, waitingOnAction: false })
+    ).toMatchObject({ showVeil: true, blockScreen: true, releaseWait: false });
+  });
+
+  it('does not wait on mist for a dry nest', () => {
+    expect(tutorialActionAvailable('mist', { canMist: false })).toBe(false);
+    expect(tutorialActionAvailable('mist', { canMist: true })).toBe(true);
+    expect(tutorialActionAvailable('brood', { canMist: false })).toBe(true);
+    expect(tutorialActionAvailable('egg_taps', { canMist: false })).toBe(true);
   });
 });

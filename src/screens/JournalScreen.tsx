@@ -13,7 +13,7 @@ import { SpeciesPortrait } from '@/components/portraits/SpeciesPortrait';
 import { SettingsCorner } from '@/components/SettingsMenu';
 import { hexToRgba, useNestPalette, type NestPaletteTokens } from '@/constants/nest';
 import { BottomTabInset, Fonts, MaxContentWidth, Spacing } from '@/constants/theme';
-import { buildFieldJournalExport } from '@/domain/journalExport';
+import { buildFieldJournalExport, journalExportMilestone } from '@/domain/journalExport';
 import {
   buildJournalTimeline,
   generateWeightHistory,
@@ -74,6 +74,7 @@ export default function JournalScreen() {
       isHatched: snapshot.isHatched,
       postHatchAgeDays: snapshot.postHatchAgeDays,
       hatchEpoch,
+      closed: snapshot.isUnviable,
     });
   }, [hatchEpoch, pet, species, snapshot]);
 
@@ -102,7 +103,7 @@ export default function JournalScreen() {
       Alert.alert(t('journal.export'), t('journal.exportLimited'));
       return;
     }
-    const current = snapshot.currentMilestone;
+    const current = journalExportMilestone(timeline, snapshot.currentMilestone, snapshot.isUnviable);
     const message = buildFieldJournalExport({
       nickname: pet.nickname,
       commonName: species.commonName,
@@ -112,6 +113,7 @@ export default function JournalScreen() {
       lifeStage: t(lifeStageLabelKey(snapshot.lifeStage)),
       milestoneTitle: current.title,
       milestoneSummary: current.scientificSummary,
+      closedNote: snapshot.isUnviable ? t('nest.unviableBody') : undefined,
     });
     void Share.share({ message }).then(
       (result) => {
@@ -182,17 +184,25 @@ export default function JournalScreen() {
           </View>
         ) : null}
 
+        {snapshot.isUnviable ? (
+          <View style={[styles.banner, { backgroundColor: palette.banner, borderColor: palette.bannerBorder }]}>
+            <Text style={[styles.bannerTitle, { color: palette.bannerText }]}>{t('nest.unviableTitle')}</Text>
+            <Text style={[styles.bannerText, { color: palette.bannerText }]}>{t('nest.unviableBody')}</Text>
+          </View>
+        ) : null}
+
         <SpecimenPlate
           pet={pet}
           species={species}
           snapshot={snapshot}
           active={active}
+          closed={snapshot.isUnviable}
           palette={palette}
           onOpenActive={openEntry}
           onExport={exportJournal}
         />
 
-        <MilestoneTimeline milestones={timeline} onSelect={openEntry} />
+        <MilestoneTimeline milestones={timeline} closed={snapshot.isUnviable} onSelect={openEntry} />
 
         <GrowthLog
           species={species}
@@ -219,6 +229,7 @@ function SpecimenPlate({
   species,
   snapshot,
   active,
+  closed,
   palette,
   onOpenActive,
   onExport,
@@ -227,6 +238,7 @@ function SpecimenPlate({
   species: SpeciesConfig;
   snapshot: PetSnapshot;
   active: JournalMilestone | null;
+  closed: boolean;
   palette: NestPaletteTokens;
   onOpenActive: (entry: JournalMilestone) => void;
   onExport: () => void;
@@ -283,25 +295,31 @@ function SpecimenPlate({
         />
       </View>
 
-      <View
-        accessible
-        accessibilityRole="progressbar"
-        accessibilityLabel={`${caption}, ${percent}`}
-        accessibilityValue={{ min: 0, max: 100, now: Math.round(progress * 100) }}
-        style={styles.progressBlock}>
-        <View style={styles.progressHead}>
-          <Text style={[styles.progressCaption, { color: palette.text }]}>{caption}</Text>
-          <Text style={[styles.progressPercent, { color: palette.textMuted }]}>{percent}</Text>
+      {closed ? (
+        <View style={styles.progressBlock}>
+          <Text style={[styles.progressCaption, { color: palette.text }]}>{t('journal.closedProgress')}</Text>
         </View>
-        <View style={[styles.track, { backgroundColor: palette.progressTrack }]}>
-          <View
-            style={[
-              styles.fill,
-              { width: `${Math.round(progress * 100)}%`, backgroundColor: palette.progressFill },
-            ]}
-          />
+      ) : (
+        <View
+          accessible
+          accessibilityRole="progressbar"
+          accessibilityLabel={`${caption}, ${percent}`}
+          accessibilityValue={{ min: 0, max: 100, now: Math.round(progress * 100) }}
+          style={styles.progressBlock}>
+          <View style={styles.progressHead}>
+            <Text style={[styles.progressCaption, { color: palette.text }]}>{caption}</Text>
+            <Text style={[styles.progressPercent, { color: palette.textMuted }]}>{percent}</Text>
+          </View>
+          <View style={[styles.track, { backgroundColor: palette.progressTrack }]}>
+            <View
+              style={[
+                styles.fill,
+                { width: `${Math.round(progress * 100)}%`, backgroundColor: palette.progressFill },
+              ]}
+            />
+          </View>
         </View>
-      </View>
+      )}
 
       {active ? (
         <Pressable
@@ -479,6 +497,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 18,
     padding: Spacing.three,
+  },
+  bannerTitle: {
+    fontSize: 16,
+    lineHeight: 21,
+    fontWeight: '700',
+    marginBottom: 4,
   },
   bannerText: {
     fontSize: 14,

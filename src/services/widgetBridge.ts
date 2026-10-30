@@ -1,5 +1,6 @@
 import { getSpeciesConfig } from '@/data/species';
 import {
+  projectedClimateLossEpoch,
   readClimate,
   type HumidityStatus,
   type NestTemper,
@@ -8,13 +9,45 @@ import {
 } from '@/domain/climateEngine';
 import { activeWish, careLogOf, prefersDryNest, WISH_WINDOW_MS } from '@/domain/nestCare';
 import { DAY_MS, weatherAt, type NestWeather } from '@/domain/nestWeather';
-import { resolveEffectiveEpoch, resolvePetSnapshot } from '@/domain/timeEngine';
+import { calculateIncubationProgress, resolveEffectiveEpoch, resolvePetSnapshot } from '@/domain/timeEngine';
 import type { EggShape, PetInstance, SpeckleStyle, WishKind } from '@/domain/types';
-import { translate, type TranslationKey } from '@/i18n';
+import { getElapsedSpan, translate, type TranslationKey } from '@/i18n';
 
 export const APP_GROUP_ID = 'group.com.shoebillsoftware.hatchpal';
 export const WIDGET_PAYLOAD_KEY = 'hatchpal.widget.payload';
 export const WIDGET_KIND = 'HatchPalWidget';
+
+/**
+ * Flat keys from the first home-screen release. Still written beside the
+ * timeline so an older widget extension can decode the current frame.
+ * `temperatureStatus` and `humidityStatus` stay `optimal` | `warning`.
+ */
+export const LEGACY_WIDGET_KEYS = [
+  'petId',
+  'speciesId',
+  'nickname',
+  'incubationDayDisplay',
+  'progressPct',
+  'temperatureCelsius',
+  'temperatureStatus',
+  'humidityPct',
+  'humidityStatus',
+  'isReadyToHatch',
+  'lastUpdatedEpoch',
+] as const;
+
+export type LegacyWidgetBand = 'optimal' | 'warning';
+
+export type LegacyWidgetSnapshot = {
+  incubationDayDisplay: string;
+  progressPct: number;
+  temperatureCelsius: number;
+  temperatureStatus: LegacyWidgetBand;
+  humidityPct: number;
+  humidityStatus: LegacyWidgetBand;
+  isReadyToHatch: boolean;
+  lastUpdatedEpoch: number;
+};
 
 /** How far ahead the home screen can render without opening the app. */
 export const WIDGET_HORIZON_MS = 18 * 60 * 60 * 1000;
@@ -71,7 +104,7 @@ export type WidgetPayload = {
   unviableBody: string;
   hatchedDetail: string;
   frames: WidgetFrame[];
-};
+} & Partial<LegacyWidgetSnapshot>;
 
 export type WidgetSyncReason =
   | 'hydrate'
@@ -134,9 +167,7 @@ const HUMIDITY_KEY: Record<HumidityStatus, TranslationKey> = {
   humid: 'climate.humid',
 };
 
-const TEMPER_KEY: Record<Exclude<NestTemper, 'content'>, TranslationKey> = {
-  chilly: 'widget.temper.chilly',
-  parched: 'widget.temper.parched',
+const TEMPER_KEY: Record<Exclude<NestTemper, 'content' | 'chilly' | 'parched'>, TranslationKey> = {
   fussy: 'widget.temper.fussy',
   on_strike: 'widget.temper.strike',
 };
@@ -242,11 +273,11 @@ export function emptyWidgetPayload(): WidgetPayload {
     shell: FALLBACK_SHELL,
     warmthTitle: translate('widget.warmth'),
     humidityTitle: translate('widget.humidity'),
-    emptyTitle: translate('widget.emptyTitle'),
+    emptyTitle: translate('nest.emptyTitle'),
     emptyBody: translate('widget.emptyBody'),
     unviableTitle: translate('nest.unviableTitle'),
     unviableBody: translate('nest.unviableBody'),
-    hatchedDetail: translate('widget.hatchedDetail'),
+    hatchedDetail: translate('nest.placeHatched'),
     frames: [],
   };
 }
@@ -278,17 +309,17 @@ export function buildWidgetPayload(
     shell,
     warmthTitle: translate('widget.warmth'),
     humidityTitle: translate('widget.humidity'),
-    emptyTitle: translate('widget.emptyTitle'),
+    emptyTitle: translate('nest.emptyTitle'),
     emptyBody: translate('widget.emptyBody'),
     unviableTitle: translate('nest.unviableTitle'),
     unviableBody: translate('nest.unviableBody'),
-    hatchedDetail: translate('widget.hatchedDetail'),
+    hatchedDetail: translate('nest.placeHatched'),
   };
 
   const snapshot = resolvePetSnapshot(pet, species, now);
   if (snapshot.isHatched || snapshot.isUnviable || snapshot.isClockTampered) {
     const frame = makeFrame(pet, species, now, shared);
-    return { phase: frame.phase, ...shared, frames: [frame] };
+    return attachLegacy({ phase: frame.phase, ...shared, frames: [frame] });
   }
 
   const frames: WidgetFrame[] = [];
@@ -305,11 +336,11 @@ export function buildWidgetPayload(
     }
   }
   const safeFrames = frames.length > 0 ? frames : [makeFrame(pet, species, now, shared)];
-  return {
+  return attachLegacy({
     phase: safeFrames[0]?.phase ?? 'incubating',
     ...shared,
     frames: safeFrames,
-  };
+  });
 }
 
 export function widgetSyncReason(
@@ -475,12 +506,11 @@ function makeFrame(pet: PetInstance, species: ReturnType<typeof getSpeciesConfig
         : 'incubating';
   const weather = weatherAt(pet, epoch);
   const weatherLabel = translate(WEATHER_KEY[weather]);
-  const weatherDetail =
-    weather === 'mild' ? weatherLabel : `${weatherLabel} · ${translate(WEATHER_EFFECT_KEY[weather])}`;
+  const weatherDetail = `${weatherLabel} · ${translate(WEATHER_EFFECT_KEY[weather])}`;
   const wish = phase === 'incubating' || phase === 'ready' ? activeWish(pet, species, epoch) : null;
   const headline =
     phase === 'unviable'
-      ? translate('widget.goneCold')
+      ? translate('sanctuary.nestCold')
       : phase === 'hatched'
         ? translate('widget.hatched')
         : phase === 'ready'
@@ -491,14 +521,20 @@ function makeFrame(pet: PetInstance, species: ReturnType<typeof getSpeciesConfig
   if (snapshot.isClockTampered && phase !== 'unviable' && phase !== 'hatched') {
     detail = translate('widget.clockPaused');
   }
+  const prefersDry = prefersDryNest(species);
   const footer = frameFooter({
-    temper: climate.temper,
-    wish: wish?.kind ?? null,
+    phase,
+    temperLine: temperPhrase(climate.temper, climate.temperatureStatus, climate.humidityStatus, prefersDry),
+    wishLine: wish ? wishPhrase(wish.kind, wish.endsAt, epoch) : null,
     hearts: shared.hearts,
     clutchLabel: shared.clutchLabel,
-    prefersDry: prefersDryNest(species),
-    quiet: phase === 'incubating' || phase === 'ready',
+    prefersDry,
   });
+  const lossEpoch = phase === 'unviable' ? projectedClimateLossEpoch(pet, species, clock.effectiveEpoch) : null;
+  const progressPct =
+    lossEpoch != null
+      ? clampUnit(calculateIncubationProgress(pet.laidAtEpoch, lossEpoch, species.incubationDays))
+      : clampUnit(snapshot.incubationProgress);
   const temperatureText = formatTemperature(climate.temperatureCelsius);
   const humidityText = formatHumidity(climate.humidityPct);
   const warmthLabel = translate(WARMTH_KEY[climate.temperatureStatus]);
@@ -511,7 +547,7 @@ function makeFrame(pet: PetInstance, species: ReturnType<typeof getSpeciesConfig
     headline,
     detail,
     footer,
-    progressPct: clampUnit(snapshot.incubationProgress),
+    progressPct,
     temperatureText,
     warmthLabel,
     warmthOptimal: climate.temperatureStatus === 'optimal',
@@ -536,29 +572,83 @@ function makeFrame(pet: PetInstance, species: ReturnType<typeof getSpeciesConfig
       clutchLabel: shared.clutchLabel,
       unviableTitle: shared.unviableTitle,
       unviableBody: shared.unviableBody,
-      prefersDry: prefersDryNest(species),
+      prefersDry,
     }),
   };
 }
 
+function attachLegacy(payload: WidgetPayload): WidgetPayload {
+  const frame = payload.frames[0];
+  if (!frame || payload.phase === 'empty') {
+    return payload;
+  }
+  return { ...payload, ...legacySnapshot(frame) };
+}
+
+function legacySnapshot(frame: WidgetFrame): LegacyWidgetSnapshot {
+  return {
+    incubationDayDisplay: frame.headline,
+    progressPct: frame.progressPct,
+    temperatureCelsius: parseReading(frame.temperatureText),
+    temperatureStatus: frame.warmthOptimal ? 'optimal' : 'warning',
+    humidityPct: parseReading(frame.humidityText),
+    humidityStatus: frame.humidityOptimal ? 'optimal' : 'warning',
+    isReadyToHatch: frame.phase === 'ready',
+    lastUpdatedEpoch: frame.atEpoch,
+  };
+}
+
+function temperPhrase(
+  temper: NestTemper,
+  temperature: TemperatureStatus,
+  humidity: HumidityStatus,
+  prefersDry: boolean
+): string | null {
+  if (temper === 'content') {
+    return null;
+  }
+  if (temper === 'chilly') {
+    if (prefersDry) {
+      return translate('widget.temper.heatSlipping');
+    }
+    return translate(temperature === 'too_warm' ? 'widget.temper.flushed' : 'widget.temper.chilly');
+  }
+  if (temper === 'parched') {
+    return translate(humidity === 'humid' ? 'widget.temper.soggy' : 'widget.temper.parched');
+  }
+  return translate(TEMPER_KEY[temper]);
+}
+
+function wishPhrase(kind: WishKind, endsAt: number, epoch: number): string {
+  const label = translate(WISH_KEY[kind]);
+  const span = getElapsedSpan(epoch, endsAt);
+  if (span.unit === 'now') {
+    return `${label} · ${translate('wish.timeNow')}`;
+  }
+  if (span.unit === 'minute') {
+    return `${label} · ${translate('wish.minutesCompact', { count: span.count })}`;
+  }
+  if (span.unit === 'hour') {
+    return `${label} · ${translate('wish.hoursCompact', { count: span.count })}`;
+  }
+  return `${label} · ${translate('wish.daysCompact', { count: span.count })}`;
+}
+
 function frameFooter(input: {
-  temper: NestTemper;
-  wish: WishKind | null;
+  phase: WidgetFrame['phase'];
+  temperLine: string | null;
+  wishLine: string | null;
   hearts: number;
   clutchLabel: string | null;
   prefersDry: boolean;
-  quiet: boolean;
 }): string | null {
-  if (!input.quiet) {
+  if (input.phase === 'unviable') {
+    return null;
+  }
+  if (input.phase === 'hatched') {
     return input.hearts > 0 ? translate('widget.heartsLine', { count: input.hearts }) : null;
   }
-  const urgent: string[] = [];
-  if (input.temper !== 'content') {
-    urgent.push(translate(TEMPER_KEY[input.temper]));
-  }
-  if (input.wish) {
-    urgent.push(translate(WISH_KEY[input.wish]));
-  }
+  const urgent = [input.temperLine, input.wishLine].filter((line): line is string => line != null && line.length > 0);
   if (urgent.length > 0) {
     return urgent.join(' · ');
   }
@@ -654,6 +744,11 @@ function heartCount(pet: PetInstance): number {
     return 0;
   }
   return Math.min(999, Math.floor(hearts));
+}
+
+function parseReading(text: string): number {
+  const value = Number.parseFloat(text);
+  return Number.isFinite(value) ? value : 0;
 }
 
 function formatTemperature(celsius: number): string {

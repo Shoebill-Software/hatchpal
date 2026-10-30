@@ -92,4 +92,40 @@ describe('Sanctuary collection archive', () => {
     expect(recovered.getState().hatchedArchive).toEqual([]);
     expect(sanitizeCollectionState({ hatchedArchive: [{ id: '' }] }).hatchedArchive).toEqual([]);
   });
+
+  it('keeps temperament and hearts across archive sanitize and reload', () => {
+    const storage = createMemoryStateStorage();
+    const store = createCollectionStoreApi({
+      storage,
+      createId: () => 'specimen-1',
+    });
+    store.getState().archiveSpecimen({
+      ...specimen,
+      temperament: 'songful',
+      hearts: 4,
+    });
+    expect(store.getState().hatchedArchive[0]?.temperament).toBe('songful');
+    expect(store.getState().hatchedArchive[0]?.hearts).toBe(4);
+
+    const reloaded = createCollectionStoreApi({
+      storage,
+      createId: () => 'unused',
+    });
+    expect(reloaded.getState().hatchedArchive[0]?.temperament).toBe('songful');
+    expect(reloaded.getState().hatchedArchive[0]?.hearts).toBe(4);
+
+    const cleaned = sanitizeCollectionState({
+      hatchedArchive: [
+        { ...specimen, id: 'ok', temperament: 'curious', hearts: 0 },
+        { ...specimen, id: 'bad-temp', temperament: 'fiery', hearts: -2 },
+        { ...specimen, id: 'legacy' },
+      ],
+    });
+    expect(cleaned.hatchedArchive[0]).toMatchObject({ id: 'ok', temperament: 'curious', hearts: 0 });
+    expect(cleaned.hatchedArchive[1]).toMatchObject({ id: 'bad-temp', hearts: 0 });
+    expect(cleaned.hatchedArchive[1]).not.toHaveProperty('temperament');
+    expect(cleaned.hatchedArchive[2]).toMatchObject({ id: 'legacy' });
+    expect(cleaned.hatchedArchive[2]).not.toHaveProperty('temperament');
+    expect(cleaned.hatchedArchive[2]).not.toHaveProperty('hearts');
+  });
 });

@@ -141,6 +141,37 @@ describe('Journal growth calculations', () => {
     expect(shifted.find((entry) => entry.stage === 'hatchling')?.unlockEpoch).toBe(laidAtEpoch + 21 * MS_PER_DAY);
   });
 
+  it('closes an unviable incubation without leaving a phase in progress', () => {
+    const closed = buildJournalTimeline({
+      species: silkieChickenConfig,
+      laidAtEpoch,
+      progress: 8 / 21,
+      isHatched: false,
+      postHatchAgeDays: 0,
+      hatchEpoch,
+      closed: true,
+    });
+    expect(closed.find((entry) => entry.day === 8 && entry.postHatchDay == null)?.status).toBe('completed');
+    expect(closed.find((entry) => entry.day === 14 && entry.postHatchDay == null)?.status).toBe('upcoming');
+    expect(closed.find((entry) => entry.stage === 'juvenile')?.status).toBe('upcoming');
+    expect(closed.some((entry) => entry.status === 'active')).toBe(false);
+
+    const overdue = buildJournalTimeline({
+      species: silkieChickenConfig,
+      laidAtEpoch,
+      progress: 1,
+      isHatched: false,
+      postHatchAgeDays: 40,
+      hatchEpoch,
+      closed: true,
+    });
+    expect(overdue.find((entry) => entry.stage === 'hatchling' && entry.postHatchDay == null)?.status).toBe(
+      'completed'
+    );
+    expect(overdue.find((entry) => entry.stage === 'juvenile')?.status).toBe('upcoming');
+    expect(overdue.some((entry) => entry.status === 'active')).toBe(false);
+  });
+
   it('samples weight from hatch mass up to the adult plateau', () => {
     const adultEpoch = hatchEpoch + silkieChickenConfig.adultMaturationDays * MS_PER_DAY;
     const samples = generateWeightHistory(silkieChickenConfig, hatchEpoch, adultEpoch, 5);

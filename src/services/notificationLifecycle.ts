@@ -1,6 +1,6 @@
 import { getSpeciesConfig } from '@/data/species';
 import type { PetInstance } from '@/domain/types';
-import { selectUpcomingMilestoneAlerts } from '@/services/milestoneSchedule';
+import { incubationAlertsOpen, selectUpcomingMilestoneAlerts } from '@/services/milestoneSchedule';
 
 let tail: Promise<void> = Promise.resolve();
 
@@ -40,25 +40,26 @@ export function cancelScheduledPetNotifications(): Promise<void> {
 }
 
 /**
- * Restores alerts for a stored egg, or clears them when alerts are off, the nest is empty, or the egg has hatched.
+ * Restores alerts for a stored egg, or clears them when alerts are off, the nest is empty,
+ * the egg has hatched, or the embryo has already been lost.
  */
 export function syncNotificationsForStoredPet(pet: PetInstance | null): Promise<void> {
   return syncNotificationsForStoredPets(pet ? [pet] : []);
 }
 
-/** Restores milestone alerts for every incubating cradle and drops alerts for hatched or removed eggs. */
+/** Restores milestone alerts for every incubating cradle and drops alerts for hatched, lost, or removed eggs. */
 export function syncNotificationsForStoredPets(pets: readonly PetInstance[]): Promise<void> {
   return enqueue(async () => {
     const notifications = await import('./notifications');
     const allowed = await alertsAllowed();
+    const now = Date.now();
     const incubating = allowed
-      ? pets.filter((pet) => !pet.isHatched && pet.status !== 'unviable')
+      ? pets.filter((pet) => incubationAlertsOpen(pet, getSpeciesConfig(pet.speciesId), now))
       : [];
     if (incubating.length === 0) {
       await notifications.cancelAllPetNotifications();
       return;
     }
-    const now = Date.now();
     const alerts = incubating.flatMap((pet) =>
       selectUpcomingMilestoneAlerts(pet, getSpeciesConfig(pet.speciesId), now)
     );

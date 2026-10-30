@@ -1,6 +1,10 @@
 import { createEggPath, createPipStar, createVesselTree, layoutEgg } from '@/components/candlingGeometry';
 import { buildCandlingAnatomy, candlingBodyPlan } from '@/components/candling/candlingAnatomy';
-import { resolveCandlingStage } from '@/components/candling/candlingStages';
+import {
+  resolveCandlingStage,
+  resolveCandlingStageFromMilestones,
+} from '@/components/candling/candlingStages';
+import { getSpeciesConfig } from '@/data/species';
 import type { SpeciesId } from '@/domain/types';
 
 const SPECIES: SpeciesId[] = [
@@ -153,10 +157,13 @@ describe('Candling anatomy', () => {
 
   it('hands the yolk-sac vessels over to the shell membrane as the body grows', () => {
     const layout = chickenLayout();
-    const subject = { id: 'silkie_chicken', shape: 'oval', speckle: 'fine' } as const;
-    const spider = buildCandlingAnatomy(layout, resolveCandlingStage(0.3), subject);
-    const late = buildCandlingAnatomy(layout, resolveCandlingStage(0.72), subject);
-    const fresh = buildCandlingAnatomy(layout, resolveCandlingStage(0.05), subject);
+    const species = getSpeciesConfig('silkie_chicken');
+    const subject = { id: species.id, shape: species.egg.shape, speckle: species.egg.speckle } as const;
+    const stageAt = (day: number) =>
+      resolveCandlingStageFromMilestones(day / species.incubationDays, species.incubationDays, species.milestones);
+    const spider = buildCandlingAnatomy(layout, stageAt(3), subject);
+    const late = buildCandlingAnatomy(layout, stageAt(19), subject);
+    const fresh = buildCandlingAnatomy(layout, stageAt(0), subject);
 
     expect(spider.vessels.opacity).toBeGreaterThan(0.8);
     expect(spider.vessels.levels.length).toBeGreaterThan(2);
@@ -177,6 +184,48 @@ describe('Candling anatomy', () => {
     expect(anatomy.airCell.contents).toContain(membraneCurve);
     expect(anatomy.airCell.fill).toContain(membraneCurve.split(' ').slice(0, 3).join(' '));
     expect(anatomy.airCell.contents.endsWith('Z')).toBe(true);
+  });
+
+  it('lights vessels, eye, and movement from milestone features for a live chicken candle', () => {
+    const layout = chickenLayout();
+    const species = getSpeciesConfig('silkie_chicken');
+    const subject = { id: species.id, shape: species.egg.shape, speckle: species.egg.speckle } as const;
+
+    const early = buildCandlingAnatomy(
+      layout,
+      resolveCandlingStageFromMilestones(0, species.incubationDays, species.milestones),
+      subject,
+    );
+    expect(early.eye).toBeNull();
+    expect(early.vessels.opacity).toBe(0);
+    expect(early.germinalDisc).not.toBeNull();
+
+    const vascular = buildCandlingAnatomy(
+      layout,
+      resolveCandlingStageFromMilestones(3 / species.incubationDays, species.incubationDays, species.milestones),
+      subject,
+    );
+    expect(vascular.vessels.opacity).toBeGreaterThan(0.8);
+    expect(vascular.eye).toBeNull();
+
+    const eyed = buildCandlingAnatomy(
+      layout,
+      resolveCandlingStageFromMilestones(8 / species.incubationDays, species.incubationDays, species.milestones),
+      subject,
+    );
+    expect(eyed.eye).not.toBeNull();
+    expect(eyed.metrics.headRadius).toBeGreaterThan(early.metrics.headRadius);
+
+    const pip = buildCandlingAnatomy(
+      layout,
+      resolveCandlingStageFromMilestones(19 / species.incubationDays, species.incubationDays, species.milestones),
+      subject,
+      { beakInAirCell: true },
+    );
+    expect(pip.eye).toBeNull();
+    expect(pip.vessels.opacity).toBeLessThan(0.2);
+    expect(pip.beak).not.toBeNull();
+    expect(pip.airCell.depth).toBeGreaterThan(vascular.airCell.depth);
   });
 });
 

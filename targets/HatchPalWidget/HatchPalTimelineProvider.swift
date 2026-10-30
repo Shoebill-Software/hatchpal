@@ -75,18 +75,18 @@ struct WidgetPayload: Codable, Equatable {
         shell: .fallback,
         warmthTitle: "Warmth",
         humidityTitle: "Humidity",
-        emptyTitle: "The nest is empty",
-        emptyBody: "Choose an egg in HatchPal",
+        emptyTitle: "The Cradle is Waiting",
+        emptyBody: "Choose an egg to nurture.",
         unviableTitle: "The nest has gone cold",
         unviableBody: "The embryo did not survive the prolonged climate drop.",
-        hatchedDetail: "Ready for the sanctuary",
+        hatchedDetail: "Place in the Sanctuary",
         frames: [
             WidgetFrame(
                 atEpoch: 0,
                 phase: "incubating",
                 headline: "Day 8 of 21",
-                detail: "Mild day",
-                footer: "Wants a lullaby",
+                detail: "Mild day · Steady drift",
+                footer: "Sing to me · 6h",
                 progressPct: 8.0 / 21.0,
                 temperatureText: "37.5°",
                 warmthLabel: "Optimal",
@@ -97,7 +97,7 @@ struct WidgetPayload: Codable, Equatable {
                 inSweetSpot: true,
                 onStrike: false,
                 pipped: false,
-                accessibilityLabel: "Pip, Silkie Chicken, Day 8 of 21, Mild day, warmth 37.5 degrees optimal, humidity 55 percent optimal"
+                accessibilityLabel: "Pip, Silkie Chicken, Day 8 of 21, Mild day, steady drift, warmth 37.5 degrees optimal, humidity 55 percent optimal"
             ),
         ]
     )
@@ -156,14 +156,14 @@ enum WidgetPayloadStore {
             atEpoch: epoch,
             phase: ready ? "ready" : "incubating",
             headline: headline,
-            detail: "Mild day",
+            detail: "Mild day · Steady drift",
             footer: nil,
             progressPct: progress,
             temperatureText: String(format: "%.1f°", temperature),
-            warmthLabel: warmthOptimal ? "Optimal" : "Needs care",
+            warmthLabel: warmthOptimal ? "Optimal" : "Too Cold",
             warmthOptimal: warmthOptimal,
             humidityText: String(format: "%.0f%%", humidity),
-            humidityLabel: humidityOptimal ? "Optimal" : "Needs care",
+            humidityLabel: humidityOptimal ? "Optimal" : "Dry",
             humidityOptimal: humidityOptimal,
             inSweetSpot: warmthOptimal && humidityOptimal,
             onStrike: false,
@@ -181,11 +181,11 @@ enum WidgetPayloadStore {
             shell: .fallback,
             warmthTitle: "Warmth",
             humidityTitle: "Humidity",
-            emptyTitle: "The nest is empty",
-            emptyBody: "Choose an egg in HatchPal",
+            emptyTitle: "The Cradle is Waiting",
+            emptyBody: "Choose an egg to nurture.",
             unviableTitle: "The nest has gone cold",
             unviableBody: "The embryo did not survive the prolonged climate drop.",
-            hatchedDetail: "Ready for the sanctuary",
+            hatchedDetail: "Place in the Sanctuary",
             frames: [frame]
         )
     }

@@ -21,7 +21,9 @@ import {
   SPOTLIGHT_MOVE_MS,
   SPOTLIGHT_VEIL,
   TUTORIAL_HELLO_TAPS,
+  TUTORIAL_MEASURE_GRACE_MS,
   clampTutorialStep,
+  tutorialActionAvailable,
   type NestTutorialStep,
   type PipMood,
 } from '@/constants/tutorial';
@@ -30,7 +32,7 @@ import { useTranslation } from '@/i18n';
 import type { TranslationKey } from '@/i18n/en';
 import { usePreferencesStore, type TutorialSignal } from '@/store/usePreferencesStore';
 
-import { spotlightHole, type SpotlightHole } from './spotlightGeometry';
+import { spotlightChrome, spotlightHole, type SpotlightHole } from './spotlightGeometry';
 import { TutorialTooltip } from './TutorialTooltip';
 import { useTutorialAnchors, useTutorialRemeasure } from './TutorialAnchor';
 
@@ -74,17 +76,18 @@ function reactionFor(step: NestTutorialStep, signal: TutorialSignal, taps: numbe
 /**
  * In-screen coach mark. Unlike a modal it lets touches through the hole, so
  * hands-on steps can wait for the player to brood, mist, or tap the egg.
+ * If an anchor never measures, the veil stays down and the nest keeps working.
  */
-export function SpotlightOverlay({ nickname }: { nickname: string }) {
+export function SpotlightOverlay({ nickname, canMist = true }: { nickname: string; canMist?: boolean }) {
   const active = usePreferencesStore((state) => state.isTutorialActive);
   const focused = useIsFocused();
   if (!active || !focused) {
     return null;
   }
-  return <ActiveSpotlight nickname={nickname} />;
+  return <ActiveSpotlight nickname={nickname} canMist={canMist} />;
 }
 
-function ActiveSpotlight({ nickname }: { nickname: string }) {
+function ActiveSpotlight({ nickname, canMist }: { nickname: string; canMist: boolean }) {
   const { t } = useTranslation();
   const stepIndex = usePreferencesStore((state) => state.currentTutorialStep);
   const signal = usePreferencesStore((state) => state.tutorialSignal);
@@ -98,6 +101,7 @@ function ActiveSpotlight({ nickname }: { nickname: string }) {
   const [frame, setFrame] = useState<Frame>({ x: 0, y: 0, width: window.width, height: window.height });
   const [reaction, setReaction] = useState<Reaction | null>(null);
   const [taps, setTaps] = useState(0);
+  const [measureGaveUp, setMeasureGaveUp] = useState(false);
   const placed = useRef(false);
 
   const frameW = useSharedValue(window.width);
@@ -114,13 +118,31 @@ function ActiveSpotlight({ nickname }: { nickname: string }) {
   const anchor = step.target ? anchors[step.target] : undefined;
   const hole: SpotlightHole | null =
     step.target && anchor && frame.width > 0 ? spotlightHole(anchor, frame.x, frame.y, step.target) : null;
-  const waiting = step.waitFor != null && reaction == null;
-  const passThrough = waiting && hole != null;
+  const holeReady = hole != null && hole.width >= 1 && hole.height >= 1;
+  const waitingOnAction =
+    step.waitFor != null && reaction == null && tutorialActionAvailable(step.waitFor, { canMist });
+  const chrome = spotlightChrome({
+    hasTarget: step.target != null,
+    holeReady,
+    measureFailed: measureGaveUp && !holeReady,
+    waitingOnAction,
+  });
+  const waiting = waitingOnAction && !chrome.releaseWait;
+  const presentedHole = chrome.showVeil ? hole : null;
 
   useEffect(() => {
     setReaction(null);
     setTaps(0);
   }, [index]);
+
+  useEffect(() => {
+    setMeasureGaveUp(false);
+    if (!step.target) {
+      return;
+    }
+    const timer = setTimeout(() => setMeasureGaveUp(true), TUTORIAL_MEASURE_GRACE_MS);
+    return () => clearTimeout(timer);
+  }, [index, step.target]);
 
   useEffect(() => {
     if (!signal || reaction) {
@@ -203,8 +225,8 @@ function ActiveSpotlight({ nickname }: { nickname: string }) {
   useEffect(() => {
     const duration = reduceMotion || !placed.current ? 0 : MOVE.duration;
     const easing = MOVE.easing;
-    if (targetX == null || targetY == null || targetW == null || targetH == null || targetR == null) {
-      if (step.target == null) {
+    if (!chrome.showVeil || targetX == null || targetY == null || targetW == null || targetH == null || targetR == null) {
+      if (!chrome.showVeil || step.target == null) {
         holeX.value = withTiming(frame.width / 2, { duration, easing });
         holeY.value = withTiming(frame.height / 2, { duration, easing });
         holeW.value = withTiming(0, { duration, easing });
@@ -226,6 +248,7 @@ function ActiveSpotlight({ nickname }: { nickname: string }) {
     holeW,
     holeX,
     holeY,
+    chrome.showVeil,
     reduceMotion,
     step.target,
     targetH,
@@ -247,7 +270,8 @@ function ActiveSpotlight({ nickname }: { nickname: string }) {
   const glowOpacity = useDerivedValue(() => (holeW.value < 4 || holeH.value < 4 ? 0 : 0.16 + pulse.value * 0.28));
 
   const title = t(step.titleKey, { name: nickname });
-  const body = reaction ? t(reaction.key) : t(step.bodyKey, { name: nickname });
+  const dryMist = step.waitFor === 'mist' && !canMist;
+  const body = reaction ? t(reaction.key) : t(dryMist ? 'tutorial.mist.dryNest' : step.bodyKey, { name: nickname });
   const mood = reaction?.mood ?? step.mood;
 
   return (
@@ -257,9 +281,9 @@ function ActiveSpotlight({ nickname }: { nickname: string }) {
       exiting={reduceMotion ? undefined : FadeOut.duration(200)}
       style={[StyleSheet.absoluteFill, styles.host]}>
       <View ref={hostRef} collapsable={false} onLayout={syncFrame} pointerEvents="box-none" style={StyleSheet.absoluteFill}>
-      <NestStatusBar variant="light" />
+      {chrome.showVeil ? <NestStatusBar variant="light" /> : null}
       <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-        {frame.width > 0 ? (
+        {chrome.showVeil && frame.width > 0 ? (
           <Canvas style={[StyleSheet.absoluteFill, { width: frame.width, height: frame.height }]} pointerEvents="none">
             <DiffRect inner={inner} outer={outer} color={SPOTLIGHT_VEIL} />
             <RoundedRect x={holeX} y={holeY} width={holeW} height={holeH} r={holeR} style="stroke" strokeWidth={8} color={step.rim} opacity={glowOpacity} />
@@ -267,11 +291,11 @@ function ActiveSpotlight({ nickname }: { nickname: string }) {
           </Canvas>
         ) : null}
       </View>
-      {passThrough && hole ? (
+      {chrome.passThroughHole && hole ? (
         <HoleBlockers hole={hole} width={frame.width} height={frame.height} />
-      ) : waiting ? null : (
+      ) : chrome.blockScreen ? (
         <Blocker style={StyleSheet.absoluteFill} />
-      )}
+      ) : null}
       {frame.width > 0 ? (
         <TutorialTooltip
           step={step}
@@ -281,8 +305,9 @@ function ActiveSpotlight({ nickname }: { nickname: string }) {
           body={body}
           mood={mood}
           waiting={waiting}
+          passThrough={!chrome.showVeil && step.target != null}
           progress={step.waitFor === 'egg_taps' ? { done: Math.min(taps, TUTORIAL_HELLO_TAPS), total: TUTORIAL_HELLO_TAPS } : undefined}
-          hole={hole}
+          hole={presentedHole}
           screenWidth={frame.width}
           screenHeight={frame.height}
           bottomClearance={TAB_BAR_CLEARANCE}

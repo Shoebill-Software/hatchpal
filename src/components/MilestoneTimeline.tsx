@@ -20,10 +20,12 @@ import { ImpactFeedbackStyle, triggerImpact } from '@/services/hapticFeedback';
 
 export interface MilestoneTimelineProps {
   milestones: readonly JournalMilestone[];
+  /** Later phases will not be kept. Upcoming rows say so instead of naming an expected date. */
+  closed?: boolean;
   onSelect: (milestone: JournalMilestone) => void;
 }
 
-export function MilestoneTimeline({ milestones, onSelect }: MilestoneTimelineProps) {
+export function MilestoneTimeline({ milestones, closed = false, onSelect }: MilestoneTimelineProps) {
   const palette = useNestPalette();
   const { t } = useTranslation();
   const [hintId, setHintId] = useState<string | null>(null);
@@ -54,6 +56,7 @@ export function MilestoneTimeline({ milestones, onSelect }: MilestoneTimelinePro
                 index={index}
                 last={index === chapter.entries.length - 1}
                 hinted={hintId === entry.id}
+                closed={closed}
                 reduceMotion={reduceMotion}
                 onPress={() => {
                   if (entry.status === 'upcoming') {
@@ -78,6 +81,7 @@ function TimelineEntry({
   index,
   last,
   hinted,
+  closed,
   reduceMotion,
   onPress,
 }: {
@@ -85,6 +89,7 @@ function TimelineEntry({
   index: number;
   last: boolean;
   hinted: boolean;
+  closed: boolean;
   reduceMotion: boolean;
   onPress: () => void;
 }) {
@@ -93,9 +98,14 @@ function TimelineEntry({
   const openable = entry.status !== 'upcoming';
   const dayText = dayLabel(entry, t);
   const date = formatLocaleDate(entry.unlockEpoch);
-  const dateText = entry.status === 'upcoming' ? t('journal.expectedOn', { date }) : t('journal.unlockedOn', { date });
-  const statusLabel = t(statusKey(entry.status));
-  const meta = entry.status === 'active' ? `${statusLabel} · ${dateText}` : dateText;
+  const unreached = closed && entry.status === 'upcoming';
+  const dateText = unreached
+    ? ''
+    : entry.status === 'upcoming'
+      ? t('journal.expectedOn', { date })
+      : t('journal.unlockedOn', { date });
+  const statusLabel = unreached ? t('journal.notReached') : t(statusKey(entry.status));
+  const meta = entry.status === 'active' ? `${statusLabel} · ${dateText}` : dateText || statusLabel;
   const line = hexToRgba(palette.text, 0.18);
   const lineTop = index === 0 ? DOT_CENTER : 0;
   const lineHeight = last ? (index === 0 ? 0 : DOT_CENTER) : undefined;
@@ -109,8 +119,8 @@ function TimelineEntry({
       ]}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`${dayText}. ${entry.title}. ${statusLabel}. ${dateText}`}
-        accessibilityHint={openable ? undefined : tooltipFor(entry, t)}
+        accessibilityLabel={[dayText, entry.title, statusLabel, dateText].filter((part) => part.length > 0).join('. ')}
+        accessibilityHint={openable ? undefined : tooltipFor(entry, t, closed)}
         accessibilityState={{ selected: entry.status === 'active' }}
         onPress={onPress}
         style={({ pressed }) => [styles.hit, { opacity: pressed ? 0.72 : 1 }]}>
@@ -166,7 +176,7 @@ function TimelineEntry({
         <Text
           accessibilityLiveRegion="polite"
           style={[styles.hint, { color: palette.textMuted, fontFamily: Fonts?.serif }]}>
-          {tooltipFor(entry, t)}
+          {tooltipFor(entry, t, closed)}
         </Text>
       ) : null}
     </View>
@@ -235,7 +245,10 @@ function dayLabel(entry: JournalMilestone, t: TranslateFn): string {
   return t('journal.postHatchDay', { day: formatBiologicalDay(entry.postHatchDay) });
 }
 
-function tooltipFor(entry: JournalMilestone, t: TranslateFn): string {
+function tooltipFor(entry: JournalMilestone, t: TranslateFn, closed: boolean): string {
+  if (closed && entry.status === 'upcoming') {
+    return t('journal.closedHint');
+  }
   const date = formatLocaleDate(entry.unlockEpoch);
   if (entry.postHatchDay == null) {
     return t('journal.lockedTooltip', { day: formatBiologicalDay(entry.day), date });

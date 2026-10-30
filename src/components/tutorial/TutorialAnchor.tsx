@@ -26,7 +26,7 @@ type TutorialAnchorApi = {
   registerAnchor: (id: TutorialTargetId, rect: TutorialRect) => void;
   clearAnchor: (id: TutorialTargetId) => void;
   registerMeasurer: (id: TutorialTargetId, measure: () => void) => void;
-  unregisterMeasurer: (id: TutorialTargetId) => void;
+  unregisterMeasurer: (id: TutorialTargetId, measure: () => void) => void;
   remeasureAnchors: () => void;
 };
 
@@ -62,8 +62,19 @@ export function TutorialAnchorProvider({ children }: { children: ReactNode }) {
     measurers.current.set(id, measure);
   }, []);
 
-  const unregisterMeasurer = useCallback((id: TutorialTargetId) => {
+  const unregisterMeasurer = useCallback((id: TutorialTargetId, measure: () => void) => {
+    if (measurers.current.get(id) !== measure) {
+      return;
+    }
     measurers.current.delete(id);
+    setAnchors((current) => {
+      if (current[id] == null) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
   }, []);
 
   const remeasureAnchors = useCallback(() => {
@@ -138,8 +149,7 @@ export function useTutorialAnchor(targetId: TutorialTargetId | null): {
     const frame = requestAnimationFrame(publish);
     return () => {
       cancelAnimationFrame(frame);
-      api.unregisterMeasurer(targetId);
-      api.clearAnchor(targetId);
+      api.unregisterMeasurer(targetId, publish);
     };
   }, [api, publish, targetId]);
 

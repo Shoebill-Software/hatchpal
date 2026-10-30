@@ -562,6 +562,62 @@ export function displayedVitality(reading: ClimateReading): number {
   return reading.temper === 'on_strike' ? 0 : reading.vitalityScore;
 }
 
+function climateCollapsed(pet: PetInstance, species: SpeciesConfig, epoch: number): boolean {
+  if (!Number.isFinite(epoch)) {
+    return false;
+  }
+  const reading = readClimate(pet, species, epoch);
+  return strikeDurationMs(reading, requiresMoistureCare(species)) > UNVIABLE_AFTER_ZERO_MS;
+}
+
+/**
+ * When neglect, with no further care, makes the embryo unviable.
+ * Searches backward if the nest is already lost, or up to an hour past the
+ * twelve-hour strike window if a loss is still ahead. Returns null when the
+ * egg is hatched or still has time beyond that window.
+ */
+export function projectedClimateLossEpoch(
+  pet: PetInstance,
+  species: SpeciesConfig,
+  nowEpoch: number
+): number | null {
+  if (pet.isHatched || !Number.isFinite(nowEpoch)) {
+    return null;
+  }
+  const now = Math.round(nowEpoch);
+  if (climateCollapsed(pet, species, now)) {
+    const origin = Number.isFinite(pet.laidAtEpoch) ? Math.round(pet.laidAtEpoch) : now;
+    return earliestCollapsedEpoch(pet, species, Math.min(origin, now), now);
+  }
+  const horizon = now + UNVIABLE_AFTER_ZERO_MS + 60 * 60 * 1000;
+  if (!climateCollapsed(pet, species, horizon)) {
+    return null;
+  }
+  return earliestCollapsedEpoch(pet, species, now, horizon);
+}
+
+function earliestCollapsedEpoch(
+  pet: PetInstance,
+  species: SpeciesConfig,
+  low: number,
+  high: number
+): number {
+  let start = Math.min(low, high);
+  let end = Math.max(low, high);
+  if (climateCollapsed(pet, species, start)) {
+    return start;
+  }
+  while (end - start > 1) {
+    const mid = start + Math.floor((end - start) / 2);
+    if (climateCollapsed(pet, species, mid)) {
+      end = mid;
+    } else {
+      start = mid;
+    }
+  }
+  return end;
+}
+
 /**
  * Whether the embryo has become unviable from prolonged climate collapse.
  * An already-flagged egg stays unviable; later care cannot revive it.

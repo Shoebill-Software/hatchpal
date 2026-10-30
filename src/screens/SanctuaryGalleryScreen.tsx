@@ -10,6 +10,7 @@ import { SettingsCorner } from '@/components/SettingsMenu';
 import { hexToRgba, useNestPalette } from '@/constants/nest';
 import { BottomTabInset, Fonts, MaxContentWidth, Spacing } from '@/constants/theme';
 import { getSpeciesConfig } from '@/data/species';
+import { visibleArchiveCare } from '@/domain/archiveCare';
 import { cradleAllowance, SANCTUARY_CRADLE_LIMIT } from '@/domain/cradleCapacity';
 import { priceStringFor, productIdForSpecies, SANCTUARY_PASS_PRODUCT_ID } from '@/domain/entitlements';
 import {
@@ -19,6 +20,7 @@ import {
   type KeeperMilestone,
   type KeeperReward,
 } from '@/domain/keeperRewards';
+import { formatProseList } from '@/domain/proseList';
 import type { ShellPaint, SpeciesId, Temperament } from '@/domain/types';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import {
@@ -29,6 +31,7 @@ import {
   useKeeperAccess,
 } from '@/hooks/useKeeperMilestones';
 import { formatLocaleDate, useTranslation } from '@/i18n';
+import type { TranslationKey } from '@/i18n/en';
 import type { TranslateFn } from '@/i18n/translate';
 import { NotificationFeedbackType, triggerImpact, triggerNotification, ImpactFeedbackStyle } from '@/services/hapticFeedback';
 import { isPurchaseCancelled } from '@/services/purchaseErrors';
@@ -72,6 +75,14 @@ const LEDGER: Record<'light' | 'dark', LedgerPalette> = {
     clay: '#E0A15A',
     clayInk: '#1A1410',
   },
+};
+
+const TEMPERAMENT_LABEL: Record<Temperament, TranslationKey> = {
+  sunny: 'temperament.sunny',
+  dewy: 'temperament.dewy',
+  songful: 'temperament.songful',
+  curious: 'temperament.curious',
+  easygoing: 'temperament.easygoing',
 };
 
 const TEMPERAMENT_TINT: Record<Temperament, string> = {
@@ -169,7 +180,7 @@ export default function SanctuaryGalleryScreen() {
         {showReward ? (
           <View style={[styles.banner, { backgroundColor: palette.moss }]}>
             <Text style={[styles.bannerBody, { color: palette.mossInk }]}>
-              {t('sanctuary.rewardBanner', { rewards: englishList(rewardLabels) })}
+              {t('sanctuary.rewardBanner', { rewards: formatProseList(rewardLabels) })}
             </Text>
             <Pressable
               accessibilityRole="button"
@@ -183,16 +194,28 @@ export default function SanctuaryGalleryScreen() {
 
         <SectionLabel label={t('sanctuary.nests')} color={palette.muted} />
         <View style={styles.nestRow}>
-          {Array.from({ length: SANCTUARY_CRADLE_LIMIT }, (_, index) => (
-            <NestWell
-              key={index}
-              index={index}
-              palette={palette}
-              occupant={cradles[index] ?? null}
-              open={index < allowance}
-              onOpen={() => openNest(index)}
-            />
-          ))}
+          {Array.from({ length: SANCTUARY_CRADLE_LIMIT }, (_, index) => {
+            const occupant = cradles[index];
+            return (
+              <NestWell
+                key={index}
+                index={index}
+                palette={palette}
+                occupant={
+                  occupant
+                    ? {
+                        nickname: occupant.nickname,
+                        speciesId: occupant.speciesId,
+                        isHatched: occupant.isHatched,
+                        unviable: occupant.status === 'unviable',
+                      }
+                    : null
+                }
+                open={index < allowance}
+                onOpen={() => openNest(index)}
+              />
+            );
+          })}
         </View>
         {allowance < SANCTUARY_CRADLE_LIMIT ? (
           <View style={styles.passBlock}>
@@ -293,14 +316,16 @@ function NestWell({
 }: {
   index: number;
   palette: LedgerPalette;
-  occupant: { nickname: string; speciesId: SpeciesId; isHatched: boolean } | null;
+  occupant: { nickname: string; speciesId: SpeciesId; isHatched: boolean; unviable: boolean } | null;
   open: boolean;
   onOpen: () => void;
 }) {
   const { t } = useTranslation();
   const species = occupant ? getSpeciesConfig(occupant.speciesId) : null;
   const status = occupant
-    ? `${occupant.nickname}. ${t('sanctuary.nestInUse')}`
+    ? occupant.unviable
+      ? `${occupant.nickname}. ${species?.commonName ?? ''}. ${t('sanctuary.nestCold')}`
+      : `${occupant.nickname}. ${t('sanctuary.nestInUse')}`
     : open
       ? t('sanctuary.nestEmpty')
       : index === 1
@@ -324,8 +349,10 @@ function NestWell({
           <Text style={[styles.wellName, { color: palette.ink }]} numberOfLines={1}>
             {occupant.nickname}
           </Text>
-          <Text style={[styles.wellMeta, { color: palette.muted }]} numberOfLines={2}>
-            {species?.commonName}
+          <Text
+            style={[styles.wellMeta, { color: occupant.unviable ? palette.clay : palette.muted }]}
+            numberOfLines={2}>
+            {occupant.unviable ? t('sanctuary.nestCold') : species?.commonName}
           </Text>
         </>
       ) : open ? (
@@ -552,10 +579,9 @@ function RewardChip({
 function ResidentRow({ specimen, palette }: { specimen: HatchedSpecimen; palette: LedgerPalette }) {
   const { t } = useTranslation();
   const hatchedOn = formatLocaleDate(specimen.hatchDateEpoch);
-  const temperament = specimen.temperament;
-  const hearts = specimen.hearts ?? 0;
-  const temperamentLabel = temperament
-    ? t('sanctuary.temperament', { temperament: t(`temperament.${temperament}`) })
+  const care = visibleArchiveCare(specimen);
+  const temperamentLabel = care.temperament
+    ? t('sanctuary.temperament', { temperament: t(TEMPERAMENT_LABEL[care.temperament]) })
     : null;
 
   return (
@@ -568,7 +594,7 @@ function ResidentRow({ specimen, palette }: { specimen: HatchedSpecimen; palette
           date: hatchedOn,
         }),
         temperamentLabel,
-        hearts > 0 ? t('sanctuary.heartsA11y', { count: hearts }) : null,
+        care.hearts > 0 ? t('sanctuary.heartsA11y', { count: care.hearts }) : null,
       ]
         .filter(Boolean)
         .join('. ')}
@@ -598,23 +624,23 @@ function ResidentRow({ specimen, palette }: { specimen: HatchedSpecimen; palette
         <Text style={[styles.residentMeta, { color: palette.muted }]}>
           {t('sanctuary.incubation', { days: specimen.incubationDurationDays })}
         </Text>
-        {temperamentLabel || hearts > 0 ? (
+        {temperamentLabel || care.hearts > 0 ? (
           <View style={styles.traits}>
-            {temperamentLabel ? (
+            {temperamentLabel && care.temperament ? (
               <Text
                 style={[
                   styles.trait,
                   {
                     color: palette.ink,
-                    backgroundColor: hexToRgba(TEMPERAMENT_TINT[temperament ?? 'easygoing'], 0.18),
+                    backgroundColor: hexToRgba(TEMPERAMENT_TINT[care.temperament], 0.18),
                   },
                 ]}>
                 {temperamentLabel}
               </Text>
             ) : null}
-            {hearts > 0 ? (
+            {care.hearts > 0 ? (
               <Text style={[styles.trait, { color: palette.ink, backgroundColor: hexToRgba('#E07A8D', 0.16) }]}>
-                {t('sanctuary.hearts', { count: hearts })}
+                {t('sanctuary.hearts', { count: care.hearts })}
               </Text>
             ) : null}
           </View>
@@ -672,16 +698,6 @@ function rewardLabelsFor(rewardKeyValue: string, t: TranslateFn): string[] {
     }
     return rewardsForMilestone(trimmed).map((reward) => keeperRewardLabel(reward, t, 'sentence'));
   });
-}
-
-function englishList(items: readonly string[]): string {
-  if (items.length <= 1) {
-    return items[0] ?? '';
-  }
-  if (items.length === 2) {
-    return `${items[0]} and ${items[1]}`;
-  }
-  return `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`;
 }
 
 const styles = StyleSheet.create({

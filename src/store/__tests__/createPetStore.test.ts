@@ -1,4 +1,5 @@
 import { silkieChickenConfig } from '@/data/species/chicken';
+import { registerProReader } from '@/domain/cradleCapacity';
 import { LIVE_TICK_MAX_FORWARD_MS } from '@/domain/timeEngine';
 import {
   PET_STORE_PERSIST_KEY,
@@ -70,6 +71,47 @@ describe('Pet store', () => {
     store.getState().setActivePet(null);
     store.getState().recordInteraction('warm_nest', baseEpoch + 5000);
     expect(store.getState().pets['pet-1']?.lastWarmedEpoch).toBe(baseEpoch + 1000);
+  });
+
+  it('persists performCare hearts and reloads them with the care log', () => {
+    const storage = createMemoryStateStorage();
+    const store = createPetStoreApi({
+      storage,
+      now: () => baseEpoch,
+      createId: () => 'pet-1',
+    });
+    store.getState().adoptPet('silkie_chicken', 'Pip', baseEpoch);
+    expect(store.getState().pets['pet-1']?.care?.hearts).toBe(0);
+
+    const result = store.getState().performCare({ kind: 'lullaby' }, baseEpoch + 1000);
+    expect(result?.granted).toBe('lullaby');
+    expect(store.getState().pets['pet-1']?.care?.hearts).toBe(1);
+    expect(store.getState().pets['pet-1']?.weatherSeed).toEqual(expect.any(Number));
+
+    const reloaded = createPetStoreApi({
+      storage,
+      now: () => baseEpoch + 1000,
+      createId: () => 'unused',
+    });
+    expect(reloaded.getState().pets['pet-1']?.care?.hearts).toBe(1);
+    expect(reloaded.getState().pets['pet-1']?.care?.affinity.song).toBe(2);
+    expect(reloaded.getState().pets['pet-1']?.care?.grantedWindows).toEqual([0]);
+  });
+
+  it('marks the active egg unviable on resume and blocks further care', () => {
+    const store = createStore();
+    store.getState().adoptPet('silkie_chicken', 'Pip', baseEpoch);
+    const lostEpoch = baseEpoch + 48 * dayMs;
+    store.getState().refreshClock('resume', lostEpoch);
+    expect(store.getState().pets['pet-1']?.status).toBe('unviable');
+
+    const result = store.getState().performCare(
+      { kind: 'brood', startCelsius: 21, celsius: silkieChickenConfig.temperatureTargetCelsius },
+      lostEpoch + 1000
+    );
+    expect(result?.granted).toBeNull();
+    expect(store.getState().pets['pet-1']?.status).toBe('unviable');
+    expect(store.getState().pets['pet-1']?.lastWarmedEpoch).toBe(baseEpoch);
   });
 
   it('marks hatch at the deterministic incubation boundary once progress is complete', () => {
@@ -280,5 +322,34 @@ describe('Pet store', () => {
     expect(store.getState().activePetIndex).toBe(1);
     expect(store.getState().activePet?.nickname).toBe('Nova');
     expect(store.getState().pets['pet-a']?.speciesId).toBe('silkie_chicken');
+  });
+
+  it('replaces only the focused cradle and leaves the other egg incubating', () => {
+    registerProReader(() => true);
+    try {
+      let nextId = 0;
+      const store = createPetStoreApi({
+        storage: createMemoryStateStorage(),
+        now: () => baseEpoch,
+        createId: () => {
+          nextId += 1;
+          return `egg-${nextId}`;
+        },
+      });
+
+      store.getState().adoptEggInNewCradle('silkie_chicken', 'Pip', baseEpoch);
+      store.getState().adoptEggInNewCradle('leopard_gecko', 'Nova', baseEpoch);
+      store.getState().switchCradle(0);
+      const replaced = store.getState().adoptPet('american_robin', 'Rue', baseEpoch + 1000);
+
+      expect(store.getState().cradleOrder).toEqual([replaced.id, 'egg-2']);
+      expect(store.getState().activePetIndex).toBe(0);
+      expect(store.getState().activePet?.speciesId).toBe('american_robin');
+      expect(store.getState().activePet?.nickname).toBe('Rue');
+      expect(store.getState().pets['egg-2']?.nickname).toBe('Nova');
+      expect(store.getState().pets['egg-2']?.speciesId).toBe('leopard_gecko');
+    } finally {
+      registerProReader(() => false);
+    }
   });
 });

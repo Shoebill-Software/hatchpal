@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 
 import type { CareNotice, CareNoticeTone } from '@/components/ClimateControls';
 import { readClimate } from '@/domain/climateEngine';
@@ -13,10 +14,23 @@ import type { CareEvent, CareResult, PetInstance, SpeciesConfig } from '@/domain
 import { useSoundEffects } from '@/hooks/useSoundEffects';
 import { useTranslation } from '@/i18n';
 import {
+  WISH_GRANTED_CUE,
+  broodLanded,
+  careReleaseFeel,
+  mistLanded,
+  moistureReleaseCues,
+  nestAcceptsCare,
+  spritzLanded,
+  warmthReleaseCues,
+  type PlayableCue,
+} from '@/services/careFeedback';
+import {
   ImpactFeedbackStyle,
-  NotificationFeedbackType,
+  triggerCareRelease,
   triggerImpact,
   triggerNotification,
+  triggerSelection,
+  NotificationFeedbackType,
 } from '@/services/hapticFeedback';
 import { spritzEffect } from '@/services/soundCues';
 import { usePreferencesStore } from '@/store/usePreferencesStore';
@@ -41,18 +55,29 @@ export type NestCareApi = {
   onEggTap: () => void;
 };
 
+function clearTimer(timer: { current: ReturnType<typeof setTimeout> | null }) {
+  if (timer.current != null) {
+    clearTimeout(timer.current);
+    timer.current = null;
+  }
+}
+
 export function useNestCare({
   pet,
   species,
   performCare,
+  enabled = true,
 }: {
   pet: PetInstance;
   species: SpeciesConfig;
   performCare: (event: CareEvent) => CareResult | null;
+  /** False once the nest is hatched or the embryo is unviable, including before the status flag is saved. */
+  enabled?: boolean;
 }): NestCareApi {
   const { t } = useTranslation();
   const { play, loop, stop } = useSoundEffects();
   const signalTutorial = usePreferencesStore((state) => state.signalTutorial);
+  const soundEnabled = usePreferencesStore((state) => state.soundEnabled);
   const [notice, setNotice] = useState<CareNotice | null>(null);
   const [soaking, setSoaking] = useState(false);
   const [brooding, setBrooding] = useState(false);
@@ -64,6 +89,9 @@ export function useNestCare({
 
   const petRef = useRef(pet);
   petRef.current = pet;
+  const enabledRef = useRef(enabled);
+  enabledRef.current = enabled;
+  const broodingRef = useRef(false);
   const noticeId = useRef(0);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -73,28 +101,93 @@ export function useNestCare({
   const spritzCount = useRef(0);
   const taps = useRef<number[]>([]);
 
-  const clearTimer = (timer: { current: ReturnType<typeof setTimeout> | null }) => {
-    if (timer.current != null) {
-      clearTimeout(timer.current);
-      timer.current = null;
+  const careOpen = useCallback(() => {
+    return enabledRef.current && nestAcceptsCare(petRef.current);
+  }, []);
+
+  const playCue = useCallback(
+    (cue: PlayableCue) => {
+      play(cue.id, cue.volume != null ? { volume: cue.volume } : undefined);
+    },
+    [play]
+  );
+
+  const playCues = useCallback(
+    (cues: readonly PlayableCue[]) => {
+      for (const cue of cues) {
+        playCue(cue);
+      }
+    },
+    [playCue]
+  );
+
+  const silenceCare = useCallback(() => {
+    clearTimer(noticeTimer);
+    clearTimer(settleTimer);
+    clearTimer(tapTimer);
+    clearTimer(chimeTimer);
+    stop('ember_loop', 120);
+    mistStart.current = null;
+    taps.current = [];
+    spritzCount.current = 0;
+    broodingRef.current = false;
+  }, [stop]);
+
+  const releaseHeldCare = useCallback(() => {
+    silenceCare();
+    setSoaking(false);
+    setBrooding(false);
+    setLullabyTaps(0);
+    setNotice(null);
+  }, [silenceCare]);
+
+  useLayoutEffect(() => {
+    return () => {
+      silenceCare();
+    };
+  }, [pet.id, silenceCare]);
+
+  const [carePetId, setCarePetId] = useState(pet.id);
+  if (carePetId !== pet.id) {
+    setCarePetId(pet.id);
+    setSoaking(false);
+    setBrooding(false);
+    setLullabyTaps(0);
+    setNotice(null);
+    setWarmPulse(0);
+    setMistPulse(0);
+    setCheerPulse(0);
+    setHeartPulse(0);
+  }
+
+  const hatched = pet.isHatched;
+  const status = pet.status;
+  useEffect(() => {
+    if (enabled && nestAcceptsCare({ isHatched: hatched, status })) {
+      return;
     }
-  };
+    releaseHeldCare();
+  }, [enabled, hatched, releaseHeldCare, status]);
 
   useEffect(() => {
-    return () => {
-      clearTimer(noticeTimer);
-      clearTimer(settleTimer);
-      clearTimer(tapTimer);
-      clearTimer(chimeTimer);
-      stop('ember_loop', 120);
-      mistStart.current = null;
-      taps.current = [];
-      setSoaking(false);
-      setBrooding(false);
-      setLullabyTaps(0);
-      setNotice(null);
-    };
-  }, [pet.id, stop]);
+    if (!soundEnabled || !brooding || !enabled || !nestAcceptsCare({ isHatched: hatched, status })) {
+      return;
+    }
+    loop('ember_loop');
+  }, [brooding, enabled, hatched, loop, soundEnabled, status]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (next) => {
+      if (next !== 'active') {
+        stop('ember_loop', 80);
+        return;
+      }
+      if (broodingRef.current && enabledRef.current && usePreferencesStore.getState().soundEnabled) {
+        loop('ember_loop');
+      }
+    });
+    return () => subscription.remove();
+  }, [loop, stop]);
 
   const announce = useCallback((text: string, tone: CareNoticeTone) => {
     noticeId.current += 1;
@@ -117,51 +210,65 @@ export function useNestCare({
       clearTimer(chimeTimer);
       chimeTimer.current = setTimeout(() => {
         chimeTimer.current = null;
-        play('wish_granted');
+        if (!enabledRef.current || !nestAcceptsCare(petRef.current)) {
+          return;
+        }
+        playCue(WISH_GRANTED_CUE);
       }, WISH_CHIME_DELAY_MS);
       announce(t('care.wishGranted', { hearts: heartsBefore + 1 }), 'great');
       return true;
     },
-    [announce, play, t]
+    [announce, playCue, t]
   );
 
   const onBroodStart = useCallback(() => {
+    if (!careOpen()) {
+      return;
+    }
+    broodingRef.current = true;
     setBrooding(true);
     loop('ember_loop');
-  }, [loop]);
+  }, [careOpen, loop]);
 
   const onBroodTooShort = useCallback(() => {
+    broodingRef.current = false;
     setBrooding(false);
     stop('ember_loop', 120);
+    if (!careOpen()) {
+      return;
+    }
     announce(t('care.brood.hint'), 'info');
-  }, [announce, stop, t]);
+  }, [announce, careOpen, stop, t]);
 
   const onBroodEnd = useCallback(
     (startCelsius: number, endCelsius: number) => {
+      broodingRef.current = false;
       setBrooding(false);
       stop('ember_loop', 260);
-      const heartsBefore = careLogOf(petRef.current).hearts;
-      const result = performCare({ kind: 'brood', startCelsius, celsius: endCelsius });
-      if (!result?.brood) {
+      if (!careOpen()) {
         return;
       }
-      play('warm_settle');
+      const heartsBefore = careLogOf(petRef.current).hearts;
+      const result = performCare({ kind: 'brood', startCelsius, celsius: endCelsius });
+      if (!broodLanded(result)) {
+        return;
+      }
+      playCues(warmthReleaseCues(result.brood));
       setWarmPulse((pulse) => pulse + 1);
       const perfect = result.brood === 'perfect';
       if (perfect) {
-        play('perfect_chime', { volume: 0.5 });
-        void triggerNotification(NotificationFeedbackType.Success);
         setCheerPulse((pulse) => pulse + 1);
       }
       signalTutorial('brood', result.brood);
       if (celebrateWish(result, heartsBefore)) {
         return;
       }
+      void triggerCareRelease(careReleaseFeel(result.brood));
       const temp = species.temperatureTargetCelsius.toFixed(1);
       const tone: CareNoticeTone = perfect ? 'great' : result.brood === 'cozy' ? 'good' : 'warn';
       announce(t(`care.brood.${result.brood}`, { temp }), tone);
     },
-    [announce, celebrateWish, performCare, play, signalTutorial, species.temperatureTargetCelsius, stop, t]
+    [announce, careOpen, celebrateWish, performCare, playCues, signalTutorial, species.temperatureTargetCelsius, stop, t]
   );
 
   const settleMist = useCallback(() => {
@@ -169,40 +276,41 @@ export function useNestCare({
     const startPct = mistStart.current;
     mistStart.current = null;
     setSoaking(false);
-    if (startPct == null) {
+    if (startPct == null || !careOpen()) {
       return;
     }
     const heartsBefore = careLogOf(petRef.current).hearts;
     const result = performCare({ kind: 'mist_settled', startPct });
-    if (!result?.mist) {
+    if (!mistLanded(result)) {
       return;
     }
-    play('mist_settle');
+    playCues(moistureReleaseCues(result.mist));
     const perfect = result.mist === 'perfect';
     if (perfect) {
-      play('perfect_chime', { volume: 0.45 });
-      void triggerNotification(NotificationFeedbackType.Success);
       setCheerPulse((pulse) => pulse + 1);
     }
     signalTutorial('mist', result.mist);
     if (celebrateWish(result, heartsBefore)) {
       return;
     }
+    void triggerCareRelease(careReleaseFeel(result.mist));
     const humidity = String(Math.round(species.humidityTargetPct));
     const tone: CareNoticeTone = perfect ? 'great' : result.mist === 'dewy' ? 'good' : 'warn';
     announce(t(`care.mist.${result.mist}`, { humidity }), tone);
-  }, [announce, celebrateWish, performCare, play, signalTutorial, species.humidityTargetPct, t]);
+  }, [announce, careOpen, celebrateWish, performCare, playCues, signalTutorial, species.humidityTargetPct, t]);
 
   const onSpritz = useCallback(() => {
-    if (prefersDryNest(species)) {
+    if (!careOpen() || prefersDryNest(species)) {
       return;
     }
     if (mistStart.current == null) {
       mistStart.current = readClimate(petRef.current, species, Date.now()).humidityPct;
     }
     const result = performCare({ kind: 'spritz' });
-    if (!result) {
+    if (!spritzLanded(result)) {
       mistStart.current = null;
+      clearTimer(settleTimer);
+      setSoaking(false);
       return;
     }
     play(spritzEffect(spritzCount.current));
@@ -212,9 +320,12 @@ export function useNestCare({
     setSoaking(true);
     clearTimer(settleTimer);
     settleTimer.current = setTimeout(settleMist, MIST_SETTLE_MS);
-  }, [performCare, play, settleMist, species]);
+  }, [careOpen, performCare, play, settleMist, species]);
 
   const onEggTap = useCallback(() => {
+    if (!careOpen()) {
+      return;
+    }
     signalTutorial('egg_taps');
     const now = Date.now();
     taps.current = [...taps.current.filter((at) => now - at <= LULLABY_SPAN_MS), now];
@@ -243,10 +354,11 @@ export function useNestCare({
       return;
     }
     if (result.credited) {
+      void triggerSelection();
       setCheerPulse((pulse) => pulse + 1);
       announce(t('care.lullaby'), 'good');
     }
-  }, [announce, celebrateWish, performCare, signalTutorial, t]);
+  }, [announce, careOpen, celebrateWish, performCare, signalTutorial, t]);
 
   return {
     notice,

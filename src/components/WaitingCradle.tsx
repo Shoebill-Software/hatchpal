@@ -79,7 +79,13 @@ export function WaitingCradle() {
       }}>
       {size.width > 1 && size.height > 1 ? (
         <Canvas style={StyleSheet.absoluteFill}>
-          <CradlePaint width={size.width} height={size.height} palette={palette} motion={motion} />
+          <CradlePaint
+          width={size.width}
+          height={size.height}
+          palette={palette}
+          motion={motion}
+          reduceMotion={reduceMotion}
+        />
         </Canvas>
       ) : null}
     </View>
@@ -99,25 +105,25 @@ function useCradleMotion(reduceMotion: boolean) {
       breath.value = 0.5;
       glow.value = 0.62;
       clock.value = 0.2;
-      return;
+    } else {
+      breath.value = withRepeat(
+        withSequence(
+          withTiming(1, { duration: 3400, easing: Easing.inOut(Easing.sin) }),
+          withTiming(0, { duration: 3400, easing: Easing.inOut(Easing.sin) })
+        ),
+        -1,
+        false
+      );
+      glow.value = withRepeat(
+        withSequence(
+          withTiming(1, { duration: 2800, easing: Easing.inOut(Easing.sin) }),
+          withTiming(0, { duration: 2800, easing: Easing.inOut(Easing.sin) })
+        ),
+        -1,
+        false
+      );
+      clock.value = withRepeat(withTiming(1, { duration: 16000, easing: Easing.linear }), -1, false);
     }
-    breath.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 3400, easing: Easing.inOut(Easing.sin) }),
-        withTiming(0, { duration: 3400, easing: Easing.inOut(Easing.sin) })
-      ),
-      -1,
-      false
-    );
-    glow.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 2800, easing: Easing.inOut(Easing.sin) }),
-        withTiming(0, { duration: 2800, easing: Easing.inOut(Easing.sin) })
-      ),
-      -1,
-      false
-    );
-    clock.value = withRepeat(withTiming(1, { duration: 16000, easing: Easing.linear }), -1, false);
     return () => {
       cancelAnimation(breath);
       cancelAnimation(glow);
@@ -133,11 +139,13 @@ function CradlePaint({
   height,
   palette,
   motion,
+  reduceMotion,
 }: {
   width: number;
   height: number;
   palette: CradlePalette;
   motion: { breath: SharedValue<number>; glow: SharedValue<number>; clock: SharedValue<number> };
+  reduceMotion: boolean;
 }) {
   const scale = Math.min(width / CRADLE_FRAME.width, height / CRADLE_FRAME.height);
   const fit = [
@@ -162,6 +170,7 @@ function CradlePaint({
     center: [EGG.cx, EGG.cy],
     radii: [EGG.rx, EGG.ry],
     warmth: 0.4 + motion.glow.value * 0.6,
+    room,
     lit: [...SHELL_RGB.lit],
     mid: [...SHELL_RGB.mid],
     shade: [...SHELL_RGB.shade],
@@ -171,6 +180,7 @@ function CradlePaint({
     freckle: [...SHELL_RGB.freckle],
   }));
   const moteStrength = palette.scheme === 'dark' ? 0.9 : 0.5;
+  const room = palette.scheme === 'dark' ? 1 : 0;
 
   return (
     <Group transform={fit}>
@@ -183,7 +193,14 @@ function CradlePaint({
         />
       </Circle>
       {MOTES.filter((mote) => !mote.front).map((mote) => (
-        <DustMote key={`${mote.x}-${mote.y}`} mote={mote} clock={motion.clock} strength={moteStrength} palette={palette} />
+        <DustMote
+          key={`${mote.x}-${mote.y}`}
+          mote={mote}
+          clock={motion.clock}
+          strength={moteStrength}
+          palette={palette}
+          still={reduceMotion}
+        />
       ))}
       <Oval
         x={GROUND_SHADOW.cx - GROUND_SHADOW.rx}
@@ -211,7 +228,7 @@ function CradlePaint({
               <RadialGradient
                 c={{ x: EGG.cx - 16, y: EGG.cy - 28 }}
                 r={EGG.ry}
-                colors={['#FFF6EA', '#E7C096', '#8E5A3A']}
+                colors={[palette.shell[0], palette.shell[1], palette.shell[2]]}
               />
             )}
           </Fill>
@@ -222,7 +239,7 @@ function CradlePaint({
               y={mark.y - mark.ry}
               width={mark.rx * 2}
               height={mark.ry * 2}
-              color="#C48A62"
+              color={palette.freckle}
               opacity={mark.opacity}
             />
           ))}
@@ -237,7 +254,14 @@ function CradlePaint({
         </Path>
       </Group>
       {MOTES.filter((mote) => mote.front).map((mote) => (
-        <DustMote key={`${mote.x}-${mote.y}`} mote={mote} clock={motion.clock} strength={moteStrength} palette={palette} />
+        <DustMote
+          key={`${mote.x}-${mote.y}`}
+          mote={mote}
+          clock={motion.clock}
+          strength={moteStrength}
+          palette={palette}
+          still={reduceMotion}
+        />
       ))}
     </Group>
   );
@@ -248,13 +272,18 @@ function DustMote({
   clock,
   strength,
   palette,
+  still,
 }: {
   mote: CradleMote;
   clock: SharedValue<number>;
   strength: number;
   palette: CradlePalette;
+  still: boolean;
 }) {
   const transform = useDerivedValue(() => {
+    if (still) {
+      return [{ translateX: mote.x }, { translateY: mote.y }];
+    }
     const turn = (clock.value + mote.phase) * Math.PI * 2;
     return [
       { translateX: mote.x + Math.cos(turn) * mote.drift * 0.35 },
@@ -262,6 +291,9 @@ function DustMote({
     ];
   });
   const opacity = useDerivedValue(() => {
+    if (still) {
+      return 0.72 * strength;
+    }
     const twinkle = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin((clock.value * 2 + mote.phase) * Math.PI * 2));
     return twinkle * strength;
   });

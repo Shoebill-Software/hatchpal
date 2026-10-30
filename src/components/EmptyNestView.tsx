@@ -3,17 +3,16 @@ import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-na
 import { useFocusEffect, useRouter } from 'expo-router';
 
 import { WaitingCradle } from '@/components/WaitingCradle';
-import { CRADLE_FRAME } from '@/components/waitingCradleArt';
 import { useNestPalette } from '@/constants/nest';
 import { Fonts, Spacing } from '@/constants/theme';
+import { useReduceMotion } from '@/hooks/useReduceMotion';
 import { useTranslation } from '@/i18n';
 import { ImpactFeedbackStyle, triggerImpact } from '@/services/hapticFeedback';
-
-const MUTED = '#8E8E93';
 
 export function EmptyNestView() {
   const router = useRouter();
   const palette = useNestPalette();
+  const reduceMotion = useReduceMotion();
   const { t } = useTranslation();
   const { height } = useWindowDimensions();
   const compact = height < 760;
@@ -25,7 +24,7 @@ export function EmptyNestView() {
     }
     routed.current = true;
     void triggerImpact(ImpactFeedbackStyle.Medium);
-    router.push('/adopt');
+    router.push({ pathname: '/adopt', params: { adding: '0', replacing: '0' } });
   }, [router]);
 
   useFocusEffect(
@@ -42,13 +41,16 @@ export function EmptyNestView() {
           accessibilityLabel={t('nest.cradleLabel')}
           accessibilityHint={t('nest.cradleHint')}
           onPress={chooseEgg}
-          style={({ pressed }) => [styles.cradleHit, { transform: [{ scale: pressed ? 0.985 : 1 }] }]}>
+          style={({ pressed }) => [
+            styles.cradleHit,
+            { transform: [{ scale: pressed && !reduceMotion ? 0.985 : 1 }] },
+          ]}>
           <WaitingCradle />
         </Pressable>
       </View>
 
       <View style={styles.copy}>
-        <Text maxFontSizeMultiplier={1.15} style={[styles.eyebrow, { color: palette.warning }]}>
+        <Text maxFontSizeMultiplier={1.15} style={[styles.eyebrow, { color: palette.action }]}>
           {t('nest.emptyEyebrow')}
         </Text>
         <Text
@@ -59,7 +61,7 @@ export function EmptyNestView() {
           style={[styles.title, { color: palette.text, fontFamily: Fonts?.serif }]}>
           {t('nest.emptyTitle')}
         </Text>
-        <Text maxFontSizeMultiplier={1.15} style={styles.body}>
+        <Text maxFontSizeMultiplier={1.15} style={[styles.body, { color: palette.textMuted }]}>
           {t('nest.emptyBody')}
         </Text>
         <Pressable
@@ -70,11 +72,13 @@ export function EmptyNestView() {
           style={({ pressed }) => [
             styles.cta,
             {
+              backgroundColor: palette.action,
+              borderColor: palette.border,
               opacity: pressed ? 0.9 : 1,
-              transform: [{ scale: pressed ? 0.98 : 1 }],
+              transform: [{ scale: pressed && !reduceMotion ? 0.98 : 1 }],
             },
           ]}>
-          <Text maxFontSizeMultiplier={1.15} style={styles.ctaLabel}>
+          <Text maxFontSizeMultiplier={1.15} style={[styles.ctaLabel, { color: palette.actionText }]}>
             {t('nest.adoptEgg')}
           </Text>
         </Pressable>
@@ -89,16 +93,17 @@ const styles = StyleSheet.create({
     width: '100%',
     minHeight: 0,
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     paddingHorizontal: Spacing.four,
     paddingBottom: Spacing.two,
   },
   hero: {
     width: '100%',
     maxWidth: 420,
-    aspectRatio: CRADLE_FRAME.width / CRADLE_FRAME.height,
-    maxHeight: 440,
+    flexGrow: 1,
     flexShrink: 1,
+    minHeight: 0,
+    maxHeight: 420,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -134,7 +139,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   body: {
-    color: MUTED,
     fontSize: 15,
     lineHeight: 24,
     fontWeight: '400',
@@ -149,13 +153,9 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#2A241E',
     borderWidth: 1,
-    borderColor: 'rgba(212, 164, 92, 0.55)',
-    boxShadow: '0 0 22px rgba(231, 177, 90, 0.28)',
   },
   ctaLabel: {
-    color: '#F6EFE4',
     fontSize: 16,
     fontWeight: '600',
     letterSpacing: 0.3,

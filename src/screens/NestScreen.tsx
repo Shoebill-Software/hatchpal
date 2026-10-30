@@ -17,21 +17,21 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { ChangeEggDialog } from '@/components/ChangeEggDialog';
 import { CradlePager } from '@/components/CradlePager';
 import { ClimateControls, describeClimate } from '@/components/ClimateControls';
-import { EGG_FRAME, EggContainer } from '@/components/EggContainer';
+import { EGG_FRAME, EggContainer, MIN_EGG_SCALE } from '@/components/EggContainer';
 import { EmptyNestView } from '@/components/EmptyNestView';
 import { HatchingCeremony } from '@/components/HatchingCeremony';
-import { HeartBurst, NestAlmanac, WishBubble } from '@/components/NestCareHud';
+import { HeartBurst, NestAlmanac, WISH_SLOT_HEIGHT, WishBubble } from '@/components/NestCareHud';
 import { NestPresence } from '@/components/NestPresence';
 import { NestStatusBar } from '@/components/NestStatusBar';
 import { SettingsButton, useSettings } from '@/components/SettingsMenu';
 import { SpotlightOverlay } from '@/components/tutorial/SpotlightOverlay';
-import { TutorialAnchor, TutorialAnchorProvider, useTutorialAnchor } from '@/components/tutorial/TutorialAnchor';
+import { TutorialAnchor, TutorialAnchorProvider, useTutorialAnchor, useTutorialRemeasure } from '@/components/tutorial/TutorialAnchor';
 import { shouldStartWelcome } from '@/components/tutorial/cradleWelcome';
 import { useNestTutorialTrigger } from '@/components/tutorial/useNestTutorialTrigger';
 import { WelcomeIntro, type WelcomeMode } from '@/components/tutorial/WelcomeIntro';
-import type { TutorialTargetId } from '@/constants/tutorial';
+import { NEST_ANCHOR, type TutorialTargetId } from '@/constants/tutorial';
 import { useNestPalette } from '@/constants/nest';
-import { cradleAllowance, SANCTUARY_CRADLE_LIMIT } from '@/domain/cradleCapacity';
+import { adjacentCradle, chooseCradleSlot, cradleAllowance, cradleOffer } from '@/domain/cradleCapacity';
 import { priceStringFor, SANCTUARY_PASS_PRODUCT_ID } from '@/domain/entitlements';
 import { getSpeciesConfig } from '@/data/species';
 import {
@@ -41,7 +41,7 @@ import {
 } from '@/domain/keeperRewards';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { caredHeartRate, displayedVitality, readClimate } from '@/domain/climateEngine';
-import { activeWish, careLogOf, resolveTemperament } from '@/domain/nestCare';
+import { activeWish, careLogOf, prefersDryNest, resolveTemperament } from '@/domain/nestCare';
 import { weatherAt } from '@/domain/nestWeather';
 import { resolveHatchEpoch } from '@/domain/timeEngine';
 import type { PetInstance, PetSnapshot, SpeciesConfig } from '@/domain/types';
@@ -64,8 +64,10 @@ const HEART = '#C45B5B';
 const TAB_CLEARANCE = Platform.select({ ios: 136, android: 108, default: 108 }) ?? 108;
 /** Lets the settings sheet or a route transition finish before Pip appears. */
 const WELCOME_DELAY_MS = 700;
-/** Height of the wish slot above the egg, reserved even when the egg wishes for nothing. */
-const WISH_SLOT = 50;
+/** Specimen chrome subtracted from the stage so the shell, wish, and hint share one screen. */
+const SPECIMEN_GAP = 8;
+const HINT_BLOCK = 20;
+const WELL_EXTRA = 8;
 
 export default function NestScreen() {
   const router = useRouter();
@@ -96,14 +98,12 @@ export default function NestScreen() {
   const hatchCount = useCollectionStore((state) => state.hatchedArchive.length);
   const maxCradles = cradleAllowance(isPro, hatchCount);
   const passPrice = priceStringFor(packages, SANCTUARY_PASS_PRODUCT_ID);
+  const gate = { occupied: cradles.length, allowance: maxCradles, isPro };
+  const offer = cradleOffer(gate);
   const addHintKey: TranslationKey =
-    isPro || cradles.length < maxCradles
-      ? 'nest.addCradleHintPro'
-      : maxCradles <= 1
-        ? 'nest.addCradleHintEarn'
-        : 'nest.addCradleHintPass';
+    offer === 'earn' ? 'nest.addCradleHintEarn' : offer === 'pass' ? 'nest.addCradleHintPass' : 'nest.addCradleHintPro';
   const addOffer =
-    cradles.length >= SANCTUARY_CRADLE_LIMIT
+    offer === 'hidden'
       ? null
       : {
           label: t('nest.addCradle'),
@@ -141,41 +141,39 @@ export default function NestScreen() {
 
   useNestTutorialTrigger({
     incubating,
-    blocked: !nestFocused || settingsVisible || changeEggVisible || ceremony || welcomeVisible || !hasSeenWelcome,
+    blocked: !nestFocused || settingsVisible || changeEggVisible || ceremony || welcomeVisible,
     shouldSuspend: !incubating || ceremony,
   });
 
   const confirmChangeEgg = () => {
     setChangeEggVisible(false);
-    if (cradles.length <= 1) {
-      abandonActivePet();
-    }
-    router.push({ pathname: '/adopt', params: { replacing: '1' } });
+    router.push({ pathname: '/adopt', params: { replacing: '1', adding: '0' } });
   };
 
   const openCradle = (index: number) => {
-    if (index < 0) {
+    const choice = chooseCradleSlot(index, gate);
+    if (choice === 'switch') {
+      if (index !== activePetIndex) {
+        switchCradle(index);
+        void triggerImpact(ImpactFeedbackStyle.Light);
+      }
       return;
     }
-    if (index < cradles.length) {
-      switchCradle(index);
-      void triggerImpact(ImpactFeedbackStyle.Light);
+    if (choice === 'adopt') {
+      router.push({ pathname: '/adopt', params: { adding: '1', replacing: '0' } });
       return;
     }
-    if (index >= SANCTUARY_CRADLE_LIMIT) {
-      return;
-    }
-    if (cradles.length < maxCradles) {
-      router.push({ pathname: '/adopt', params: { adding: '1' } });
-      return;
-    }
-    if (!isPro) {
+    if (choice === 'paywall') {
       setPassInvite(true);
     }
   };
 
   const stepCradle = (direction: -1 | 1) => {
-    openCradle(activePetIndex + direction);
+    const next = adjacentCradle(activePetIndex, direction, cradles.length);
+    if (next == null) {
+      return;
+    }
+    openCradle(next);
   };
 
   const buyPass = () => {
@@ -248,7 +246,7 @@ export default function NestScreen() {
       ) : (
         <View style={styles.flex} />
       )}
-      <SpotlightOverlay nickname={pet?.nickname ?? ''} />
+      <SpotlightOverlay nickname={pet?.nickname ?? ''} canMist={species != null && !prefersDryNest(species)} />
       <WelcomeIntro
         visible={welcomeVisible}
         mode={welcomeMode}
@@ -320,13 +318,23 @@ function OccupiedNest({
   const router = useRouter();
   const palette = useNestPalette();
   const { t } = useTranslation();
-  const care = useNestCare({ pet, species, performCare });
+  const care = useNestCare({
+    pet,
+    species,
+    performCare,
+    enabled: !pet.isHatched && !snapshot.isUnviable,
+  });
   const [stageBox, setStageBox] = useState({ width: 0, height: 0 });
+  const remeasure = useTutorialRemeasure();
   const stepRef = useRef(onStepCradle);
   stepRef.current = onStepCradle;
   const glide = useCallback((direction: -1 | 1) => {
     stepRef.current?.(direction);
   }, []);
+
+  useEffect(() => {
+    remeasure();
+  }, [pet.id, remeasure]);
 
   const onStageLayout = useCallback((event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
@@ -466,11 +474,17 @@ function OccupiedNest({
       <GestureDetector gesture={cradlePan}>
       <View style={styles.stage} onLayout={onStageLayout}>
             <View style={styles.specimen}>
-              <WishBubble wish={wish} species={species} nowEpoch={nowEpoch} lullabyTaps={care.lullabyTaps} />
+              <WishBubble
+                wish={wish}
+                species={species}
+                nowEpoch={nowEpoch}
+                lullabyTaps={care.lullabyTaps}
+                cradleId={pet.id}
+              />
               <View
                 style={[
                   styles.eggWell,
-                  { height: Math.round(EGG_FRAME.height * eggScale + 8) },
+                  { height: Math.round(EGG_FRAME.height * eggScale + WELL_EXTRA) },
                 ]}>
                 <View pointerEvents="none" style={styles.haloLayer}>
                   <NestHalo
@@ -479,8 +493,9 @@ function OccupiedNest({
                     scale={eggScale}
                   />
                 </View>
-                <TutorialAnchor targetId="egg">
+                <TutorialAnchor targetId={NEST_ANCHOR.egg}>
                   <EggContainer
+                    key={pet.id}
                     snapshot={snapshot}
                     species={species}
                     vitalityScore={displayedVitality(climate)}
@@ -511,7 +526,7 @@ function OccupiedNest({
                     align="start"
                     top={rightTop}
                     bottom={rightBottom}
-                    topTarget="telemetry_heart"
+                    topTarget={NEST_ANCHOR.telemetryHeart}
                   />
                 </View>
               </View>
@@ -677,7 +692,7 @@ function PulseDot({ color, pulse }: { color: string; pulse: boolean }) {
 function NestHalo({ color, sweet, scale }: { color: string; sweet: boolean; scale: number }) {
   const scheme = useColorScheme();
   const dark = scheme === 'dark';
-  const size = Math.round(332 * Math.min(Math.max(scale, 0.82), 1));
+  const size = Math.round(332 * Math.min(Math.max(scale, MIN_EGG_SCALE), 1));
   const presence = (sweet ? 1 : 0.86) * (dark ? 1 : 0.58);
   const peak = 0.76 * presence;
   const id = `nest-halo-${color.replace('#', '')}-${dark ? 'd' : 'l'}-${sweet ? '1' : '0'}`;
@@ -708,7 +723,10 @@ function fitToStage(
   if (box.width < 1 || box.height < 1) {
     return 1;
   }
-  return Math.max(0.82, Math.min(1, (box.width - 16) / frame.width, (box.height - 74 - WISH_SLOT) / frame.height));
+  const reserved = WISH_SLOT_HEIGHT + SPECIMEN_GAP * 2 + HINT_BLOCK + WELL_EXTRA;
+  const widthScale = (box.width - 16) / frame.width;
+  const heightScale = (box.height - reserved) / frame.height;
+  return Math.max(MIN_EGG_SCALE, Math.min(1, widthScale, heightScale));
 }
 
 const styles = StyleSheet.create({
@@ -764,7 +782,7 @@ const styles = StyleSheet.create({
   specimen: {
     width: '100%',
     alignItems: 'center',
-    gap: 18,
+    gap: SPECIMEN_GAP,
   },
   eggWell: {
     width: '100%',

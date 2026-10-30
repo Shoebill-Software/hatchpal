@@ -28,6 +28,8 @@ import { SpeciesEggArt } from '@/components/SpeciesEggArt';
 import { hexToRgba } from '@/constants/nest';
 import { Fonts } from '@/constants/theme';
 import { SPECIES_REGISTRY } from '@/data/species';
+import { adoptionConfirmKey, showcaseActionKey } from '@/domain/adoptionEntry';
+import { adoptionIntent } from '@/domain/cradleCapacity';
 import { priceStringFor, productIdForSpecies, SANCTUARY_PASS_PRODUCT_ID } from '@/domain/entitlements';
 import {
   DIFFICULTY_TAGS,
@@ -84,7 +86,6 @@ export default function SpeciesShowcaseScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{
     speciesId?: string | string[];
-    replacing?: string | string[];
     adding?: string | string[];
   }>();
   const speciesId = asSpeciesId(firstParam(params.speciesId));
@@ -108,7 +109,6 @@ export default function SpeciesShowcaseScreen() {
   return (
     <ShowcaseBody
       species={species}
-      replacing={firstParam(params.replacing) === '1'}
       adding={firstParam(params.adding) === '1'}
     />
   );
@@ -116,11 +116,9 @@ export default function SpeciesShowcaseScreen() {
 
 function ShowcaseBody({
   species,
-  replacing,
   adding,
 }: {
   species: SpeciesConfig;
-  replacing: boolean;
   adding: boolean;
 }) {
   const router = useRouter();
@@ -128,10 +126,11 @@ function ShowcaseBody({
   const { height, width } = useWindowDimensions();
   const { t } = useTranslation();
   const palette = useHatcheryPalette();
-  const { adoptPet, adoptEggInNewCradle } = useActivePet();
+  const { adoptPet, adoptEggInNewCradle, pet } = useActivePet();
   const reduceMotion = useReduceMotion();
   const arrival = useArrival(species.id, reduceMotion);
   const { isAvailable, gateFor } = useKeeperAccess();
+  const intent = adoptionIntent({ adding, hasPet: pet != null });
   const available = isAvailable(species.id);
   const earnGate = gateFor(species.id);
   const packages = usePurchasesStore((state) => state.availablePackages);
@@ -191,7 +190,7 @@ function ShowcaseBody({
       return;
     }
     try {
-      if (adding) {
+      if (intent === 'add') {
         const created = adoptEggInNewCradle(species.id, trimmed);
         if (!created) {
           setNameError(t('showcase.cradleFull'));
@@ -297,7 +296,7 @@ function ShowcaseBody({
                 minimumFontScale={0.8}
                 maxFontSizeMultiplier={1.15}
                 style={[styles.beginLabel, { color: palette.amberInk }]}>
-                {replacing && !adding ? t('showcase.replace') : t('showcase.begin')}
+                {t(showcaseActionKey(intent))}
               </Text>
             </Pressable>
           ) : (
@@ -392,6 +391,7 @@ function ShowcaseBody({
         }}
         onConfirm={confirmAdoption}
         onClose={() => setNaming(false)}
+        confirmLabel={t(adoptionConfirmKey(intent))}
       />
       <SettingsSheetHost />
     </View>
@@ -938,6 +938,7 @@ function NamingSheet({
   palette,
   alarm,
   bottomInset,
+  confirmLabel,
   onChangeNickname,
   onConfirm,
   onClose,
@@ -948,6 +949,7 @@ function NamingSheet({
   palette: HatcheryPalette;
   alarm: string;
   bottomInset: number;
+  confirmLabel: string;
   onChangeNickname: (value: string) => void;
   onConfirm: () => void;
   onClose: () => void;
@@ -1016,7 +1018,7 @@ function NamingSheet({
               },
             ]}>
             <Text maxFontSizeMultiplier={1.15} style={[styles.beginLabel, { color: palette.amberInk }]}>
-              {t('showcase.confirmAdopt')}
+              {confirmLabel}
             </Text>
           </Pressable>
           <Pressable accessibilityRole="button" onPress={onClose} style={styles.pickAnother}>

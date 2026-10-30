@@ -244,9 +244,9 @@ const MONO_LATE: readonly Sample[] = [
   { x: 0.12, y: 0.44, r: 0.04 },
 ];
 
-/** Pose follows the day, so a mid-incubation candle already has a head, eye, and limbs. */
+/** Pose follows the milestone silhouette, so a mid-incubation candle already has a head, eye, and limbs. */
 function visualGrowth(stage: CandlingStageDescriptor): number {
-  return clamp01(ramp(stage.progress, 0.1, 0.8));
+  return clamp01(ramp(stage.embryo, 0.04, 0.88));
 }
 
 export function candlingBodyPlan(speciesId: SpeciesId): CandlingBodyPlan {
@@ -291,7 +291,8 @@ export function buildCandlingAnatomy(
   };
   const vesselSpread = Math.max(layout.rx * 0.3, (yolk.width + yolk.height) * 0.24) * (0.78 + stage.vessels * 0.4);
   const seed = speciesSeed(subject.id);
-  const membraneAmount = ramp(stage.progress, 0.26, 0.55);
+  // Chorioallantoic net tracks silhouette growth from milestone data, not a progress timer.
+  const membraneAmount = ramp(stage.embryo, 0.06, 0.42);
 
   const airCell = airCellArt(layout, stage.airCell);
 
@@ -322,7 +323,9 @@ export function buildCandlingAnatomy(
         : null,
     vessels: {
       ...createVesselTree(vesselOrigin.x, vesselOrigin.y, vesselSpread, { seed, arms: 9, depth: 4 }),
-      opacity: clamp01(stage.vessels * (1 - ramp(stage.embryo, 0.3, 0.55))),
+      // Milestone `vessels` already drops once the body covers the yolk sac; only a light
+      // late dim remains so the spider does not fight a nearly opaque silhouette.
+      opacity: clamp01(stage.vessels * (1 - ramp(stage.embryo, 0.62, 0.95) * 0.35)),
     },
     membraneVessels:
       membraneAmount > 0.04
