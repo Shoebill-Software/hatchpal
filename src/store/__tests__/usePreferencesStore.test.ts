@@ -14,11 +14,14 @@ jest.mock('react-native-mmkv', () => ({
   },
 }));
 
+import { NEST_TUTORIAL_STEP_COUNT } from '@/constants/tutorial';
 import { createMemoryStateStorage } from '@/store/createPetStore';
 import {
   DEFAULT_PREFERENCES,
   PREFERENCES_STORE_PERSIST_KEY,
+  PREFERENCES_STORE_PERSIST_VERSION,
   createPreferencesStoreApi,
+  migratePreferences,
   sanitizePreferences,
 } from '@/store/usePreferencesStore';
 
@@ -127,11 +130,10 @@ describe('Preferences store', () => {
     first.getState().previousTutorialStep();
     expect(first.getState().currentTutorialStep).toBe(0);
 
-    first.getState().nextTutorialStep();
-    first.getState().nextTutorialStep();
-    first.getState().nextTutorialStep();
-    first.getState().nextTutorialStep();
-    expect(first.getState().currentTutorialStep).toBe(4);
+    for (let step = 1; step < NEST_TUTORIAL_STEP_COUNT; step += 1) {
+      first.getState().nextTutorialStep();
+    }
+    expect(first.getState().currentTutorialStep).toBe(NEST_TUTORIAL_STEP_COUNT - 1);
     expect(first.getState().isTutorialActive).toBe(true);
     first.getState().nextTutorialStep();
     expect(first.getState().isTutorialActive).toBe(false);
@@ -177,5 +179,75 @@ describe('Preferences store', () => {
     skipped.getState().startNestTutorial();
     skipped.getState().completeTutorial();
     expect(createPreferencesStoreApi({ storage }).getState().hasCompletedNestTutorial).toBe(true);
+  });
+
+  it("persists Pip's welcome and hatchery tip, and Replay brings everything back", () => {
+    const storage = createMemoryStateStorage();
+    const first = createPreferencesStoreApi({ storage });
+    expect(first.getState().hasSeenWelcome).toBe(false);
+    expect(first.getState().hasSeenAdoptionTip).toBe(false);
+
+    first.getState().completeWelcome();
+    first.getState().markAdoptionTipSeen();
+    first.getState().startNestTutorial();
+    first.getState().completeTutorial();
+
+    const second = createPreferencesStoreApi({ storage });
+    expect(second.getState().hasSeenWelcome).toBe(true);
+    expect(second.getState().hasSeenAdoptionTip).toBe(true);
+    expect(second.getState().hasCompletedNestTutorial).toBe(true);
+
+    second.getState().replayTutorial();
+    const third = createPreferencesStoreApi({ storage });
+    expect(third.getState().hasSeenWelcome).toBe(false);
+    expect(third.getState().hasSeenAdoptionTip).toBe(false);
+    expect(third.getState().hasCompletedNestTutorial).toBe(false);
+  });
+
+  it('skipping the welcome skips every tutorial at once', () => {
+    const store = createPreferencesStoreApi();
+    store.getState().startNestTutorial();
+    store.getState().skipAllTutorials();
+    expect(store.getState()).toMatchObject({
+      hasSeenWelcome: true,
+      hasCompletedNestTutorial: true,
+      hasSeenAdoptionTip: true,
+      isTutorialActive: false,
+    });
+  });
+
+  it('shows the new tutorial once to keepers who finished the old one', () => {
+    const storage = createMemoryStateStorage();
+    storage.setItem(
+      PREFERENCES_STORE_PERSIST_KEY,
+      JSON.stringify({ state: { soundEnabled: false, hasCompletedNestTutorial: true }, version: 4 })
+    );
+    const store = createPreferencesStoreApi({ storage });
+    expect(store.getState().soundEnabled).toBe(false);
+    expect(store.getState().hasCompletedNestTutorial).toBe(false);
+    expect(store.getState().hasSeenWelcome).toBe(false);
+
+    const current = migratePreferences(
+      { hasSeenWelcome: true, hasCompletedNestTutorial: true },
+      PREFERENCES_STORE_PERSIST_VERSION
+    );
+    expect(current.hasSeenWelcome).toBe(true);
+    expect(current.hasCompletedNestTutorial).toBe(true);
+  });
+
+  it('only records tutorial signals while the tour is running, and clears them between steps', () => {
+    const store = createPreferencesStoreApi();
+    store.getState().signalTutorial('egg_taps');
+    expect(store.getState().tutorialSignal).toBeNull();
+
+    store.getState().startNestTutorial();
+    store.getState().signalTutorial('brood', 'perfect');
+    const first = store.getState().tutorialSignal;
+    expect(first).toMatchObject({ action: 'brood', detail: 'perfect' });
+    store.getState().signalTutorial('brood', 'perfect');
+    expect(store.getState().tutorialSignal?.nonce).not.toBe(first?.nonce);
+
+    store.getState().nextTutorialStep();
+    expect(store.getState().tutorialSignal).toBeNull();
   });
 });

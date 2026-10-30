@@ -19,9 +19,7 @@ import { sameTutorialRect, type TutorialRect } from './spotlightGeometry';
 export type TutorialAnchorMap = Partial<Record<TutorialTargetId, TutorialRect>>;
 
 type MeasureHost = {
-  measure: (
-    callback: (x: number, y: number, width: number, height: number, pageX: number, pageY: number) => void
-  ) => void;
+  measureInWindow: (callback: (x: number, y: number, width: number, height: number) => void) => void;
 };
 
 type TutorialAnchorApi = {
@@ -121,14 +119,14 @@ export function useTutorialAnchor(targetId: TutorialTargetId | null): {
     if (!id || !currentApi || !host) {
       return;
     }
-    host.measure((x, y, width, height, pageX, pageY) => {
+    host.measureInWindow((pageX, pageY, width, height) => {
       if (targetRef.current !== id) {
         return;
       }
       if (width < 1 || height < 1 || !Number.isFinite(pageX) || !Number.isFinite(pageY)) {
         return;
       }
-      currentApi.registerAnchor(id, { x, y, width, height, pageX, pageY });
+      currentApi.registerAnchor(id, { x: pageX, y: pageY, width, height, pageX, pageY });
     });
   }, []);
 
@@ -175,12 +173,12 @@ export function TutorialAnchor({
 }
 
 function asMeasureHost(node: ComponentRef<typeof View> | null): MeasureHost | null {
-  if (node == null || typeof node !== 'object' || !('measure' in node)) {
+  if (node == null || typeof node !== 'object' || !('measureInWindow' in node)) {
     return null;
   }
-  const candidate = node as { measure?: MeasureHost['measure'] };
-  if (typeof candidate.measure !== 'function') {
+  const candidate = node as { measureInWindow?: MeasureHost['measureInWindow'] };
+  if (typeof candidate.measureInWindow !== 'function') {
     return null;
   }
-  return { measure: candidate.measure };
+  return { measureInWindow: candidate.measureInWindow.bind(candidate) };
 }

@@ -6,7 +6,7 @@ import { usePreferencesHydrated } from '@/hooks/useLaunchStoresReady';
 import { usePreferencesStore } from '@/store/usePreferencesStore';
 
 /**
- * Opens the nest tour after the first egg lands, and again after Replay clears completion.
+ * Opens the nest tour once Pip's welcome is done and an egg is incubating, and again after Replay.
  * An already-settled nest waits only long enough for the settings sheet to dismiss.
  */
 export function useNestTutorialTrigger(input: {
@@ -17,6 +17,7 @@ export function useNestTutorialTrigger(input: {
   const { incubating, blocked, shouldSuspend } = input;
   const preferencesReady = usePreferencesHydrated();
   const reduceMotion = useReduceMotion();
+  const hasSeenWelcome = usePreferencesStore((state) => state.hasSeenWelcome);
   const hasCompleted = usePreferencesStore((state) => state.hasCompletedNestTutorial);
   const isActive = usePreferencesStore((state) => state.isTutorialActive);
   const suspendNestTutorial = usePreferencesStore((state) => state.suspendNestTutorial);
@@ -43,13 +44,13 @@ export function useNestTutorialTrigger(input: {
   }, [isActive, shouldSuspend, suspendNestTutorial]);
 
   useEffect(() => {
-    if (!preferencesReady || !incubating || blocked || hasCompleted || isActive) {
+    if (!preferencesReady || !incubating || blocked || !hasSeenWelcome || hasCompleted || isActive) {
       return;
     }
     const delay = tutorialStartDelay(settled.current, reduceMotion);
     const timer = setTimeout(() => {
       const state = usePreferencesStore.getState();
-      if (state.hasCompletedNestTutorial || state.isTutorialActive) {
+      if (!state.hasSeenWelcome || state.hasCompletedNestTutorial || state.isTutorialActive) {
         return;
       }
       state.startNestTutorial();
@@ -57,5 +58,5 @@ export function useNestTutorialTrigger(input: {
     return () => {
       clearTimeout(timer);
     };
-  }, [blocked, hasCompleted, incubating, isActive, preferencesReady, reduceMotion]);
+  }, [blocked, hasCompleted, hasSeenWelcome, incubating, isActive, preferencesReady, reduceMotion]);
 }

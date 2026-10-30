@@ -6,7 +6,7 @@ import {
   type TutorialTargetId,
 } from '@/constants/tutorial';
 
-/** Layout captured from `View.measure`: parent origin plus page origin. */
+/** Layout captured from `measureInWindow`, in window coordinates. */
 export type TutorialRect = {
   x: number;
   y: number;
@@ -111,29 +111,41 @@ export function placeTutorialCard(input: {
   }
 
   const hole = input.hole;
+  const holeBottom = hole.y + hole.height;
   const spaceAbove = hole.y - minTop;
-  const spaceBelow = maxBottom - (hole.y + hole.height);
+  const spaceBelow = maxBottom - holeBottom;
   const needed = cardHeight + TUTORIAL_CARD_GAP;
-  const placeBelow = spaceBelow >= needed && spaceBelow >= spaceAbove;
+  const belowTop = holeBottom + TUTORIAL_CARD_GAP;
+  const aboveTop = hole.y - TUTORIAL_CARD_GAP - cardHeight;
+  const belowClears = belowTop >= minTop && belowTop <= maxTop;
+  const aboveClears = aboveTop >= minTop && aboveTop <= maxTop;
+  const preferBelow = spaceBelow >= needed && spaceBelow >= spaceAbove;
 
   let placement: 'above' | 'below';
   let top: number;
-  if (placeBelow) {
+  if (preferBelow && belowClears) {
     placement = 'below';
-    top = hole.y + hole.height + TUTORIAL_CARD_GAP;
-  } else if (spaceAbove >= needed || spaceAbove >= spaceBelow) {
+    top = belowTop;
+  } else if (aboveClears) {
     placement = 'above';
-    top = hole.y - TUTORIAL_CARD_GAP - cardHeight;
+    top = aboveTop;
+  } else if (belowClears) {
+    placement = 'below';
+    top = belowTop;
+  } else if (spaceAbove >= spaceBelow) {
+    // Stay off the hole even when that slides the card into the status-bar inset.
+    placement = 'above';
+    top = aboveTop;
   } else {
     placement = 'below';
-    top = hole.y + hole.height + TUTORIAL_CARD_GAP;
+    top = belowTop;
   }
 
   const holeCenter = hole.x + hole.width / 2;
   const rawCaret = holeCenter - left - CARET_WIDTH / 2;
 
   return {
-    top: clamp(top, minTop, maxTop),
+    top,
     left,
     width,
     placement,

@@ -2,12 +2,14 @@ import { create } from 'zustand';
 import { createStore, type StateCreator, type StoreApi } from 'zustand/vanilla';
 import { persist, type StateStorage } from 'zustand/middleware';
 
-import { NEST_TUTORIAL_STEP_COUNT } from '@/constants/tutorial';
+import { NEST_TUTORIAL_STEP_COUNT, type TutorialAction } from '@/constants/tutorial';
 import { createMemoryStateStorage, createSafeJsonStorage } from '@/store/createPetStore';
 import { preferencesMmkvStateStorage } from '@/store/storage';
 
 export const PREFERENCES_STORE_PERSIST_KEY = 'hatchpal.preferences';
-export const PREFERENCES_STORE_PERSIST_VERSION = 4;
+export const PREFERENCES_STORE_PERSIST_VERSION = 5;
+/** Saves older than this predate Pip's tutorial, so it plays once for them too. */
+const GUIDED_TUTORIAL_VERSION = 5;
 
 export type AppearancePreference = 'system' | 'light' | 'dark';
 
@@ -16,14 +18,27 @@ export type PreferencesState = {
   soundEnabled: boolean;
   hapticsEnabled: boolean;
   notificationsEnabled: boolean;
+  /** Persisted. False until Pip's welcome is finished or skipped. */
+  hasSeenWelcome: boolean;
   /** Persisted. False until the nest coach mark is finished or skipped. */
   hasCompletedNestTutorial: boolean;
+  /** Persisted. False until Pip's hatchery tip is dismissed. */
+  hasSeenAdoptionTip: boolean;
+};
+
+/** Something the player did that an interactive tutorial step may be waiting for. */
+export type TutorialSignal = {
+  action: TutorialAction;
+  /** Outcome such as `perfect` or `toasty`. Absent for plain taps. */
+  detail?: string;
+  nonce: number;
 };
 
 /** Session-only. A relaunch with an unfinished tour starts again at the egg. */
 export type TutorialSessionState = {
   isTutorialActive: boolean;
   currentTutorialStep: number;
+  tutorialSignal: TutorialSignal | null;
 };
 
 export type PreferencesStore = PreferencesState &
@@ -40,6 +55,13 @@ export type PreferencesStore = PreferencesState &
     resetTutorial: () => void;
     /** Hides the tour without recording completion, so a later egg can still open it. */
     suspendNestTutorial: () => void;
+    completeWelcome: () => void;
+    /** Marks the welcome, nest tour, and hatchery tip as done. */
+    skipAllTutorials: () => void;
+    /** Clears every tutorial flag so Pip starts over from the welcome. */
+    replayTutorial: () => void;
+    markAdoptionTipSeen: () => void;
+    signalTutorial: (action: TutorialAction, detail?: string) => void;
   };
 
 export const DEFAULT_PREFERENCES: PreferencesState = {
@@ -47,17 +69,21 @@ export const DEFAULT_PREFERENCES: PreferencesState = {
   soundEnabled: true,
   hapticsEnabled: true,
   notificationsEnabled: true,
+  hasSeenWelcome: false,
   hasCompletedNestTutorial: false,
+  hasSeenAdoptionTip: false,
 };
 
 const DEFAULT_TUTORIAL_SESSION: TutorialSessionState = {
   isTutorialActive: false,
   currentTutorialStep: 0,
+  tutorialSignal: null,
 };
 
 type AppearanceApplier = (appearance: AppearancePreference) => void;
 
 let appearanceApplier: AppearanceApplier = () => undefined;
+let signalNonce = 0;
 
 /** Called once from the color-scheme module so the store stays free of React Native. */
 export function registerAppearanceApplier(applier: AppearanceApplier): void {
@@ -73,15 +99,30 @@ export function isAppearancePreference(value: unknown): value is AppearancePrefe
 export function sanitizePreferences(value: unknown): PreferencesState {
   const record =
     value != null && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  const flag = (input: unknown, fallback: boolean): boolean => (typeof input === 'boolean' ? input : fallback);
 
   return {
     appearance: isAppearancePreference(record.appearance) ? record.appearance : 'system',
-    soundEnabled: typeof record.soundEnabled === 'boolean' ? record.soundEnabled : true,
-    hapticsEnabled: typeof record.hapticsEnabled === 'boolean' ? record.hapticsEnabled : true,
-    notificationsEnabled:
-      typeof record.notificationsEnabled === 'boolean' ? record.notificationsEnabled : true,
-    hasCompletedNestTutorial:
-      typeof record.hasCompletedNestTutorial === 'boolean' ? record.hasCompletedNestTutorial : false,
+    soundEnabled: flag(record.soundEnabled, true),
+    hapticsEnabled: flag(record.hapticsEnabled, true),
+    notificationsEnabled: flag(record.notificationsEnabled, true),
+    hasSeenWelcome: flag(record.hasSeenWelcome, false),
+    hasCompletedNestTutorial: flag(record.hasCompletedNestTutorial, false),
+    hasSeenAdoptionTip: flag(record.hasSeenAdoptionTip, false),
+  };
+}
+
+/** Upgrades a stored state written by `version`. Older saves meet Pip once. */
+export function migratePreferences(value: unknown, version: number): PreferencesState {
+  const sanitized = sanitizePreferences(value);
+  if (version >= GUIDED_TUTORIAL_VERSION) {
+    return sanitized;
+  }
+  return {
+    ...sanitized,
+    hasSeenWelcome: false,
+    hasCompletedNestTutorial: false,
+    hasSeenAdoptionTip: false,
   };
 }
 
@@ -121,14 +162,16 @@ function readStoredPreferences(storage: StateStorage): PreferencesState {
     if (parsed == null || typeof parsed !== 'object' || !('state' in parsed)) {
       return DEFAULT_PREFERENCES;
     }
-    return sanitizePreferences((parsed as { state: unknown }).state);
+    const envelope = parsed as { state: unknown; version?: unknown };
+    const version = typeof envelope.version === 'number' ? envelope.version : 0;
+    return migratePreferences(envelope.state, version);
   } catch {
     return DEFAULT_PREFERENCES;
   }
 }
 
-function finishNestTutorial(): Pick<PreferencesStore, 'isTutorialActive' | 'hasCompletedNestTutorial'> {
-  return { isTutorialActive: false, hasCompletedNestTutorial: true };
+function finishNestTutorial(): Pick<PreferencesStore, 'isTutorialActive' | 'hasCompletedNestTutorial' | 'tutorialSignal'> {
+  return { isTutorialActive: false, hasCompletedNestTutorial: true, tutorialSignal: null };
 }
 
 function createPreferencesSlice(initial: PreferencesState = DEFAULT_PREFERENCES): StateCreator<PreferencesStore> {
@@ -150,7 +193,7 @@ function createPreferencesSlice(initial: PreferencesState = DEFAULT_PREFERENCES)
       return refreshAlerts();
     },
     startNestTutorial: () => {
-      set({ isTutorialActive: true, currentTutorialStep: 0 });
+      set({ isTutorialActive: true, currentTutorialStep: 0, tutorialSignal: null });
     },
     nextTutorialStep: () => {
       set((state) => {
@@ -163,7 +206,7 @@ function createPreferencesSlice(initial: PreferencesState = DEFAULT_PREFERENCES)
             currentTutorialStep: NEST_TUTORIAL_STEP_COUNT - 1,
           };
         }
-        return { currentTutorialStep: state.currentTutorialStep + 1 };
+        return { currentTutorialStep: state.currentTutorialStep + 1, tutorialSignal: null };
       });
     },
     previousTutorialStep: () => {
@@ -171,7 +214,7 @@ function createPreferencesSlice(initial: PreferencesState = DEFAULT_PREFERENCES)
         if (!state.isTutorialActive || state.currentTutorialStep <= 0) {
           return state;
         }
-        return { currentTutorialStep: state.currentTutorialStep - 1 };
+        return { currentTutorialStep: state.currentTutorialStep - 1, tutorialSignal: null };
       });
     },
     skipTutorial: () => {
@@ -184,7 +227,38 @@ function createPreferencesSlice(initial: PreferencesState = DEFAULT_PREFERENCES)
       set({ hasCompletedNestTutorial: false });
     },
     suspendNestTutorial: () => {
-      set({ isTutorialActive: false, currentTutorialStep: 0 });
+      set({ isTutorialActive: false, currentTutorialStep: 0, tutorialSignal: null });
+    },
+    completeWelcome: () => {
+      set({ hasSeenWelcome: true });
+    },
+    skipAllTutorials: () => {
+      set({
+        ...finishNestTutorial(),
+        hasSeenWelcome: true,
+        hasSeenAdoptionTip: true,
+        currentTutorialStep: 0,
+      });
+    },
+    replayTutorial: () => {
+      set({
+        hasSeenWelcome: false,
+        hasCompletedNestTutorial: false,
+        hasSeenAdoptionTip: false,
+        ...DEFAULT_TUTORIAL_SESSION,
+      });
+    },
+    markAdoptionTipSeen: () => {
+      set({ hasSeenAdoptionTip: true });
+    },
+    signalTutorial: (action, detail) => {
+      set((state) => {
+        if (!state.isTutorialActive) {
+          return state;
+        }
+        signalNonce += 1;
+        return { tutorialSignal: { action, detail, nonce: signalNonce } };
+      });
     },
   });
 }
@@ -199,10 +273,12 @@ function persistPreferences(storage: StateStorage, initial: PreferencesState = D
       soundEnabled: state.soundEnabled,
       hapticsEnabled: state.hapticsEnabled,
       notificationsEnabled: state.notificationsEnabled,
+      hasSeenWelcome: state.hasSeenWelcome,
       hasCompletedNestTutorial: state.hasCompletedNestTutorial,
+      hasSeenAdoptionTip: state.hasSeenAdoptionTip,
     }),
     merge: (persistedState, currentState) => mergePreferencesState(persistedState, currentState),
-    migrate: (persistedState) => sanitizePreferences(persistedState),
+    migrate: (persistedState, version) => migratePreferences(persistedState, version),
   });
 }
 

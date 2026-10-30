@@ -1,69 +1,79 @@
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
+  cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
+  withRepeat,
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import {
-  NEST_TUTORIAL_STEP_COUNT,
-  NEST_TUTORIAL_STEPS,
-  SPOTLIGHT_MOVE_MS,
-  clampTutorialStep,
-} from '@/constants/tutorial';
+import { SPOTLIGHT_MOVE_MS, type NestTutorialStep, type PipMood } from '@/constants/tutorial';
 import { Fonts } from '@/constants/theme';
-import { useNestPalette } from '@/constants/nest';
+import { hexToRgba, useNestPalette } from '@/constants/nest';
 import { useTranslation } from '@/i18n';
 import { ImpactFeedbackStyle, triggerImpact } from '@/services/hapticFeedback';
 
+import { Pip } from './Pip';
 import { placeTutorialCard, type SpotlightHole } from './spotlightGeometry';
+import { useTypewriter } from './useTypewriter';
 
 const MOVE = { duration: SPOTLIGHT_MOVE_MS, easing: Easing.out(Easing.cubic) };
 
 export type TutorialTooltipProps = {
-  stepIndex: number;
+  step: NestTutorialStep;
+  index: number;
+  total: number;
+  title: string;
+  body: string;
+  mood: PipMood;
+  /** The step is waiting for the player to try the highlighted control. */
+  waiting: boolean;
+  /** Taps so far toward a counted action, such as the hello lullaby. */
+  progress?: { done: number; total: number };
   hole: SpotlightHole | null;
   screenWidth: number;
   screenHeight: number;
+  /** Space the floating tab bar covers at the bottom of the screen. */
+  bottomClearance: number;
   reduceMotion: boolean;
   onSkip: () => void;
-  onBack: () => void;
   onNext: () => void;
-  onComplete: () => void;
 };
 
 export function TutorialTooltip({
-  stepIndex,
+  step,
+  index,
+  total,
+  title,
+  body,
+  mood,
+  waiting,
+  progress,
   hole,
   screenWidth,
   screenHeight,
+  bottomClearance,
   reduceMotion,
   onSkip,
-  onBack,
   onNext,
-  onComplete,
 }: TutorialTooltipProps) {
   const palette = useNestPalette();
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
-  const index = clampTutorialStep(stepIndex);
-  const step = NEST_TUTORIAL_STEPS[index] ?? NEST_TUTORIAL_STEPS[0];
-  const isLast = index >= NEST_TUTORIAL_STEP_COUNT - 1;
-  const canGoBack = index > 0;
-  const [contentHeight, setContentHeight] = useState(280);
-  const maxCardHeight = Math.max(200, screenHeight - insets.top - insets.bottom - 24);
-  const cardHeight = Math.min(Math.max(contentHeight, 160), maxCardHeight);
+  const isLast = index >= total - 1;
+  const [cardHeight, setCardHeight] = useState(200);
+  const typed = useTypewriter(body, { instant: reduceMotion });
   const placement = placeTutorialCard({
     hole,
     screenWidth,
     screenHeight,
     cardHeight,
     insetTop: insets.top,
-    insetBottom: insets.bottom,
+    insetBottom: Math.max(insets.bottom, bottomClearance),
     insetLeft: insets.left,
     insetRight: insets.right,
   });
@@ -72,26 +82,21 @@ export function TutorialTooltip({
   const left = useSharedValue(placement.left);
   const cardWidth = useSharedValue(placement.width);
   const opacity = useSharedValue(0);
-  const copy = useSharedValue(1);
   const placed = useRef(false);
+  const [hopKey, setHopKey] = useState(0);
 
   useEffect(() => {
     const duration = reduceMotion || !placed.current ? 0 : MOVE.duration;
-    const easing = MOVE.easing;
-    top.value = withTiming(placement.top, { duration, easing });
-    left.value = withTiming(placement.left, { duration, easing });
-    cardWidth.value = withTiming(placement.width, { duration, easing });
-    opacity.value = withTiming(1, { duration: reduceMotion ? 0 : 220 });
+    top.value = withTiming(placement.top, { duration, easing: MOVE.easing });
+    left.value = withTiming(placement.left, { duration, easing: MOVE.easing });
+    cardWidth.value = withTiming(placement.width, { duration, easing: MOVE.easing });
+    opacity.value = withTiming(1, { duration: reduceMotion ? 0 : 240 });
     placed.current = true;
   }, [cardWidth, left, opacity, placement.left, placement.top, placement.width, reduceMotion, top]);
 
   useEffect(() => {
-    if (reduceMotion) {
-      copy.value = 1;
-      return;
-    }
-    copy.value = withSequence(withTiming(0.2, { duration: 90 }), withTiming(1, { duration: 240 }));
-  }, [copy, index, reduceMotion]);
+    setHopKey((key) => key + 1);
+  }, [body]);
 
   const position = useAnimatedStyle(() => ({
     top: top.value,
@@ -99,58 +104,83 @@ export function TutorialTooltip({
     width: cardWidth.value,
     opacity: opacity.value,
   }));
-  const copyStyle = useAnimatedStyle(() => ({ opacity: copy.value }));
-
-  const rememberContentHeight = (height: number) => {
-    if (height < 1) {
-      return;
-    }
-    setContentHeight((current) => (height > current + 0.5 ? height : current));
-  };
-
-  useEffect(() => {
-    setContentHeight(280);
-  }, [index]);
 
   const advance = () => {
-    void triggerImpact(ImpactFeedbackStyle.Light);
-    if (isLast) {
-      onComplete();
+    if (!typed.done) {
+      typed.finish();
       return;
     }
+    void triggerImpact(ImpactFeedbackStyle.Light);
     onNext();
   };
 
   return (
     <Animated.View
-      accessibilityViewIsModal
-      style={[
-        styles.card,
-        position,
-        {
-          maxHeight: maxCardHeight,
-          backgroundColor: palette.surface,
-          borderColor: palette.border,
-        },
-      ]}>
+      pointerEvents={waiting ? 'box-none' : 'auto'}
+      onLayout={(event) => {
+        const height = event.nativeEvent.layout.height;
+        if (height > 1) {
+          setCardHeight((current) => (Math.abs(current - height) > 0.5 ? height : current));
+        }
+      }}
+      style={[styles.card, position, { backgroundColor: palette.surface, borderColor: hexToRgba(step.rim, 0.55) }]}>
       {placement.showCaret ? (
-        <Caret placement={placement.placement} left={placement.caretLeft} fill={palette.surface} border={palette.border} />
+        <Caret placement={placement.placement} left={placement.caretLeft} fill={palette.surface} border={hexToRgba(step.rim, 0.55)} />
       ) : null}
-      <ScrollView
-        bounces={contentHeight > maxCardHeight}
-        showsVerticalScrollIndicator={false}
-        style={[styles.scroll, { maxHeight: cardHeight }]}
-        onContentSizeChange={(_width, height) => {
-          rememberContentHeight(height);
-        }}>
-        <View style={styles.copyBlock}>
-        <View style={styles.header}>
-          <Text
-            maxFontSizeMultiplier={1.2}
-            style={[styles.step, { color: palette.textMuted }]}
-            accessibilityLiveRegion="polite">
-            {t('tutorial.step', { current: index + 1, total: NEST_TUTORIAL_STEP_COUNT })}
-          </Text>
+      <Pressable
+        accessible={false}
+        pointerEvents={waiting ? 'none' : 'auto'}
+        onPress={typed.done ? undefined : typed.finish}
+        style={styles.content}>
+        <View style={styles.speaker}>
+          <View style={[styles.avatar, { backgroundColor: hexToRgba(step.rim, 0.16) }]}>
+            <Pip
+              size={62}
+              mood={mood}
+              talking={!typed.done}
+              reduceMotion={reduceMotion}
+              hopKey={hopKey}
+              accessibilityLabel={t('welcome.pipA11y')}
+            />
+          </View>
+          <View style={styles.copy}>
+            <Text maxFontSizeMultiplier={1.25} style={[styles.title, { color: palette.text, fontFamily: Fonts.serif }]}>
+              {title}
+            </Text>
+            <View>
+              <Text maxFontSizeMultiplier={1.3} style={[styles.body, styles.ghost]} accessibilityElementsHidden>
+                {body}
+              </Text>
+              <Text
+                accessibilityLabel={body}
+                accessibilityLiveRegion="polite"
+                maxFontSizeMultiplier={1.3}
+                style={[styles.body, styles.typed, { color: palette.textMuted }]}>
+                {typed.shown}
+              </Text>
+            </View>
+          </View>
+        </View>
+      </Pressable>
+
+      <View pointerEvents="box-none" style={styles.footer}>
+        <View
+          pointerEvents="none"
+          accessible
+          accessibilityLabel={t('tutorial.step', { current: index + 1, total })}
+          style={styles.dots}>
+          {Array.from({ length: total }, (_, dot) => (
+            <View
+              key={dot}
+              style={[
+                styles.dot,
+                dot === index ? styles.dotActive : null,
+                { backgroundColor: dot <= index ? step.rim : palette.border },
+              ]}
+            />
+          ))}
+        </View>
+        {isLast ? null : (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t('tutorial.skip')}
@@ -161,63 +191,74 @@ export function TutorialTooltip({
               {t('tutorial.skip')}
             </Text>
           </Pressable>
-        </View>
-
-        <Animated.View style={copyStyle}>
-          <Text maxFontSizeMultiplier={1.25} style={[styles.title, { color: palette.text, fontFamily: Fonts.serif }]}>
-            {t(step.titleKey)}
-          </Text>
-          <Text maxFontSizeMultiplier={1.35} style={[styles.body, { color: palette.textMuted }]}>
-            {t(step.bodyKey)}
-          </Text>
-        </Animated.View>
-
-        <View style={styles.actions}>
-          {canGoBack ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t('tutorial.back')}
-              onPress={onBack}
-              hitSlop={8}
-              style={({ pressed }) => [styles.textButton, { opacity: pressed ? 0.6 : 1 }]}>
-              <Text maxFontSizeMultiplier={1.2} style={[styles.textLabel, { color: palette.text }]}>
-                {t('tutorial.back')}
-              </Text>
-            </Pressable>
-          ) : (
-            <View />
-          )}
-          {isLast ? null : (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t('tutorial.next')}
-              onPress={advance}
-              style={({ pressed }) => [
-                styles.pill,
-                { backgroundColor: palette.action, opacity: pressed ? 0.88 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] },
-              ]}>
-              <Text maxFontSizeMultiplier={1.2} style={[styles.pillLabel, { color: palette.actionText }]}>
-                {t('tutorial.next')}
-              </Text>
-            </Pressable>
-          )}
-        </View>
-        {isLast ? (
+        )}
+        {waiting ? (
+          <YourTurn tint={step.rim} progress={progress} reduceMotion={reduceMotion} />
+        ) : (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={t('tutorial.begin')}
+            accessibilityLabel={isLast ? t('tutorial.done') : t('tutorial.next')}
             onPress={advance}
             style={({ pressed }) => [
-              styles.begin,
-              { backgroundColor: palette.action, opacity: pressed ? 0.88 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] },
+              styles.pill,
+              { backgroundColor: palette.action, opacity: pressed ? 0.88 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] },
             ]}>
-            <Text maxFontSizeMultiplier={1.2} style={[styles.beginLabel, { color: palette.actionText }]}>
-              {t('tutorial.begin')}
+            <Text maxFontSizeMultiplier={1.2} style={[styles.pillLabel, { color: palette.actionText }]}>
+              {isLast ? t('tutorial.done') : t('tutorial.next')}
             </Text>
           </Pressable>
-        ) : null}
+        )}
+      </View>
+    </Animated.View>
+  );
+}
+
+function YourTurn({
+  tint,
+  progress,
+  reduceMotion,
+}: {
+  tint: string;
+  progress?: { done: number; total: number };
+  reduceMotion: boolean;
+}) {
+  const { t } = useTranslation();
+  const palette = useNestPalette();
+  const glow = useSharedValue(1);
+
+  useEffect(() => {
+    if (reduceMotion) {
+      cancelAnimation(glow);
+      glow.value = 1;
+      return;
+    }
+    glow.value = withRepeat(withSequence(withTiming(0.45, { duration: 700 }), withTiming(1, { duration: 700 })), -1, false);
+    return () => {
+      cancelAnimation(glow);
+    };
+  }, [glow, reduceMotion]);
+
+  const style = useAnimatedStyle(() => ({ opacity: 0.55 + glow.value * 0.45 }));
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      accessible
+      accessibilityLabel={t('tutorial.tryIt')}
+      style={[styles.turn, { borderColor: tint, backgroundColor: hexToRgba(tint, 0.14) }, style]}>
+      <Text maxFontSizeMultiplier={1.2} style={[styles.turnLabel, { color: palette.text }]}>
+        {t('tutorial.tryIt')}
+      </Text>
+      {progress ? (
+        <View style={styles.turnDots}>
+          {Array.from({ length: progress.total }, (_, dot) => (
+            <View
+              key={dot}
+              style={[styles.turnDot, { borderColor: tint, backgroundColor: dot < progress.done ? tint : 'transparent' }]}
+            />
+          ))}
         </View>
-      </ScrollView>
+      ) : null}
     </Animated.View>
   );
 }
@@ -256,39 +297,77 @@ function Caret({
 }
 
 const styles = StyleSheet.create({
-  scroll: {
-    flexGrow: 0,
-  },
-  copyBlock: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 16,
-    gap: 12,
-  },
   card: {
     position: 'absolute',
-    borderWidth: 1,
-    borderRadius: 22,
+    borderWidth: 1.5,
+    borderRadius: 24,
     overflow: 'visible',
     shadowColor: '#000000',
-    shadowOpacity: 0.28,
-    shadowRadius: 18,
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
     shadowOffset: { width: 0, height: 10 },
     elevation: 12,
   },
-  header: {
+  content: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+  },
+  speaker: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  avatar: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  copy: {
+    flex: 1,
+    gap: 4,
+  },
+  title: {
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: '500',
+  },
+  body: {
+    fontSize: 15,
+    lineHeight: 21,
+    fontWeight: '400',
+  },
+  ghost: {
+    opacity: 0,
+  },
+  typed: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+  },
+  footer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     gap: 12,
-    minHeight: 32,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 14,
   },
-  step: {
+  dots: {
     flex: 1,
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 1.6,
-    textTransform: 'uppercase',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  dotActive: {
+    width: 16,
   },
   skip: {
     minHeight: 44,
@@ -297,33 +376,6 @@ const styles = StyleSheet.create({
   },
   skipLabel: {
     fontSize: 14,
-    fontWeight: '600',
-  },
-  title: {
-    fontSize: 22,
-    lineHeight: 28,
-    fontWeight: '500',
-  },
-  body: {
-    marginTop: 8,
-    fontSize: 15,
-    lineHeight: 22,
-    fontWeight: '400',
-  },
-  actions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    minHeight: 44,
-  },
-  textButton: {
-    minHeight: 44,
-    justifyContent: 'center',
-    paddingRight: 12,
-  },
-  textLabel: {
-    fontSize: 15,
     fontWeight: '600',
   },
   pill: {
@@ -338,17 +390,28 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.2,
   },
-  begin: {
-    minHeight: 52,
+  turn: {
+    minHeight: 44,
+    paddingHorizontal: 16,
     borderRadius: 999,
+    borderWidth: 1.5,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 22,
+    gap: 8,
   },
-  beginLabel: {
-    fontSize: 16,
+  turnLabel: {
+    fontSize: 14,
     fontWeight: '700',
-    letterSpacing: 0.3,
+  },
+  turnDots: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  turnDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    borderWidth: 1.5,
   },
   caretHost: {
     position: 'absolute',

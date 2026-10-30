@@ -3,14 +3,26 @@ import { NEST_TUTORIAL_STEPS, NEST_TUTORIAL_STEP_COUNT, tutorialStartDelay } fro
 import { placeTutorialCard, spotlightHole, sameTutorialRect } from '../spotlightGeometry';
 
 describe('nest tutorial geometry', () => {
-  it('walks egg, heart, warmth, moisture, then candling on the egg', () => {
-    expect(NEST_TUTORIAL_STEP_COUNT).toBe(5);
+  it('walks hello, heart, warmth, moisture, weather, hearts, the stakes, candling, then a centered finale', () => {
+    expect(NEST_TUTORIAL_STEP_COUNT).toBe(9);
     expect(NEST_TUTORIAL_STEPS.map((step) => step.target)).toEqual([
       'egg',
       'telemetry_heart',
       'warm_control',
       'mist_control',
+      'almanac_weather',
+      'almanac_hearts',
+      'telemetry_heart',
       'egg',
+      null,
+    ]);
+  });
+
+  it('makes the player try the egg, the brood dial, and the mister by hand', () => {
+    expect(NEST_TUTORIAL_STEPS.filter((step) => step.waitFor).map((step) => [step.id, step.waitFor])).toEqual([
+      ['hello', 'egg_taps'],
+      ['warmth', 'brood'],
+      ['moisture', 'mist'],
     ]);
   });
 
@@ -61,6 +73,25 @@ describe('nest tutorial geometry', () => {
     expect(above.placement).toBe('above');
     expect(above.top + screen.cardHeight).toBeLessThanOrEqual(700);
     expect(above.showCaret).toBe(true);
+  });
+
+  it('keeps a tall card off the spotlight instead of clamping it back over the hole', () => {
+    const hole = { x: 40, y: 140, width: 200, height: 200 };
+    const cardHeight = 400;
+    const placed = placeTutorialCard({
+      hole,
+      screenWidth: 390,
+      screenHeight: 844,
+      cardHeight,
+      insetTop: 47,
+      insetBottom: 100,
+      insetLeft: 0,
+      insetRight: 0,
+    });
+    const cardBottom = placed.top + cardHeight;
+    const holeBottom = hole.y + hole.height;
+    const coversHole = placed.top < holeBottom && cardBottom > hole.y && placed.left < hole.x + hole.width;
+    expect(coversHole).toBe(false);
   });
 
   it('keeps a wide-screen card within the editorial measure and centers it', () => {
