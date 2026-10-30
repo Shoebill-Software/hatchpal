@@ -3,7 +3,8 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNestPalette } from '@/constants/nest';
 import { Spacing } from '@/constants/theme';
 import { useTranslation } from '@/i18n';
-import { usePurchasesStore } from '@/store/usePurchasesStore';
+import { orderedCradleIds } from '@/store/createPetStore';
+import { usePetStore } from '@/store/usePetStore';
 
 export interface ChangeEggDialogProps {
   visible: boolean;
@@ -14,7 +15,7 @@ export interface ChangeEggDialogProps {
 export function ChangeEggDialog({ visible, onKeepCurrent, onConfirm }: ChangeEggDialogProps) {
   const palette = useNestPalette();
   const { t } = useTranslation();
-  const isPro = usePurchasesStore((state) => state.isProUnlocked);
+  const occupied = usePetStore((state) => orderedCradleIds(state.pets, state.cradleOrder).length);
 
   return (
     <Modal
@@ -29,7 +30,7 @@ export function ChangeEggDialog({ visible, onKeepCurrent, onConfirm }: ChangeEgg
           style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.border }]}>
           <Text style={[styles.title, { color: palette.text }]}>{t('changeEgg.title')}</Text>
           <Text style={[styles.body, { color: palette.textMuted }]}>
-            {t(isPro ? 'changeEgg.bodyPro' : 'changeEgg.body')}
+            {t(occupied > 1 ? 'changeEgg.bodyPro' : 'changeEgg.body')}
           </Text>
 
           <Pressable

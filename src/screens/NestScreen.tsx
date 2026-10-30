@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Modal, Platform, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import { useRouter, useIsFocused } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   cancelAnimation,
@@ -21,40 +20,59 @@ import { ClimateControls, describeClimate } from '@/components/ClimateControls';
 import { EGG_FRAME, EggContainer } from '@/components/EggContainer';
 import { EmptyNestView } from '@/components/EmptyNestView';
 import { HatchingCeremony } from '@/components/HatchingCeremony';
+import { HeartBurst, NestAlmanac, WishBubble } from '@/components/NestCareHud';
 import { NestPresence } from '@/components/NestPresence';
 import { NestStatusBar } from '@/components/NestStatusBar';
-import { SettingsModal } from '@/components/SettingsModal';
+import { SettingsButton, useSettings } from '@/components/SettingsMenu';
 import { SpotlightOverlay } from '@/components/tutorial/SpotlightOverlay';
 import { TutorialAnchor, TutorialAnchorProvider, useTutorialAnchor } from '@/components/tutorial/TutorialAnchor';
+import { shouldStartWelcome } from '@/components/tutorial/cradleWelcome';
 import { useNestTutorialTrigger } from '@/components/tutorial/useNestTutorialTrigger';
+import { WelcomeIntro, type WelcomeMode } from '@/components/tutorial/WelcomeIntro';
 import type { TutorialTargetId } from '@/constants/tutorial';
 import { useNestPalette } from '@/constants/nest';
-import { SANCTUARY_CRADLE_LIMIT } from '@/domain/cradleCapacity';
+import { cradleAllowance, SANCTUARY_CRADLE_LIMIT } from '@/domain/cradleCapacity';
 import { priceStringFor, SANCTUARY_PASS_PRODUCT_ID } from '@/domain/entitlements';
+import { getSpeciesConfig } from '@/data/species';
+import {
+  keeperMilestones,
+  newlyUnlockedMilestones,
+  toHatchCredits,
+} from '@/domain/keeperRewards';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { caredHeartRate, displayedVitality, readClimate } from '@/domain/climateEngine';
+import { activeWish, careLogOf, resolveTemperament } from '@/domain/nestCare';
+import { weatherAt } from '@/domain/nestWeather';
 import { resolveHatchEpoch } from '@/domain/timeEngine';
 import type { PetInstance, PetSnapshot, SpeciesConfig } from '@/domain/types';
 import { useActivePet, type ActivePetView } from '@/hooks/useActivePet';
+import { usePreferencesHydrated } from '@/hooks/useLaunchStoresReady';
+import { useNestCare } from '@/hooks/useNestCare';
 import { useReduceMotion } from '@/hooks/useReduceMotion';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useNestPipAudio, useSoundEffects } from '@/hooks/useSoundEffects';
+import { useNestPipAudio } from '@/hooks/useSoundEffects';
 import { formatCompactDate, useTranslation } from '@/i18n';
+import type { TranslationKey } from '@/i18n/en';
 import { ImpactFeedbackStyle, NotificationFeedbackType, triggerImpact, triggerNotification } from '@/services/hapticFeedback';
 import { isPurchaseCancelled } from '@/services/purchaseErrors';
 import { useCollectionStore } from '@/store/useCollectionStore';
+import { usePreferencesStore } from '@/store/usePreferencesStore';
 import { usePurchasesStore } from '@/store/usePurchasesStore';
 
 const HEART = '#C45B5B';
 /** Clears the floating iOS tab bar, including the labels under the care buttons. */
 const TAB_CLEARANCE = Platform.select({ ios: 136, android: 108, default: 108 }) ?? 108;
+/** Lets the settings sheet or a route transition finish before Pip appears. */
+const WELCOME_DELAY_MS = 700;
+/** Height of the wish slot above the egg, reserved even when the egg wishes for nothing. */
+const WISH_SLOT = 50;
 
 export default function NestScreen() {
   const router = useRouter();
   const palette = useNestPalette();
   const { t } = useTranslation();
   const [changeEggVisible, setChangeEggVisible] = useState(false);
-  const [settingsVisible, setSettingsVisible] = useState(false);
+  const { visible: settingsVisible } = useSettings();
   const [passInvite, setPassInvite] = useState(false);
   const [buyingPass, setBuyingPass] = useState(false);
   const {
@@ -68,20 +86,28 @@ export default function NestScreen() {
     activePetIndex,
     switchCradle,
     abandonActivePet,
-    recordInteraction,
+    performCare,
     markHatched,
   } = useActivePet();
   const isPro = usePurchasesStore((state) => state.isProUnlocked);
   const packages = usePurchasesStore((state) => state.availablePackages);
   const purchaseProduct = usePurchasesStore((state) => state.purchaseProduct);
   const archiveSpecimen = useCollectionStore((state) => state.archiveSpecimen);
+  const hatchCount = useCollectionStore((state) => state.hatchedArchive.length);
+  const maxCradles = cradleAllowance(isPro, hatchCount);
   const passPrice = priceStringFor(packages, SANCTUARY_PASS_PRODUCT_ID);
+  const addHintKey: TranslationKey =
+    isPro || cradles.length < maxCradles
+      ? 'nest.addCradleHintPro'
+      : maxCradles <= 1
+        ? 'nest.addCradleHintEarn'
+        : 'nest.addCradleHintPass';
   const addOffer =
     cradles.length >= SANCTUARY_CRADLE_LIMIT
       ? null
       : {
           label: t('nest.addCradle'),
-          hint: t(isPro ? 'nest.addCradleHintPro' : 'nest.addCradleHint'),
+          hint: t(addHintKey),
         };
   useNestPipAudio(Boolean(snapshot?.isPipped), snapshot?.currentMilestone.stage ?? null);
 
@@ -89,9 +115,33 @@ export default function NestScreen() {
   const incubating = Boolean(showCreature && pet && !pet.isHatched);
   const ceremony = Boolean(snapshot?.isReadyToHatch && pet && !pet.isHatched);
   const nestFocused = useIsFocused();
+  const preferencesReady = usePreferencesHydrated();
+  const hasSeenWelcome = usePreferencesStore((state) => state.hasSeenWelcome);
+  const completeWelcome = usePreferencesStore((state) => state.completeWelcome);
+  const skipAllTutorials = usePreferencesStore((state) => state.skipAllTutorials);
+  const [welcomeArmed, setWelcomeArmed] = useState(false);
+  const welcomeBlocked =
+    !hasHydrated || !preferencesReady || !nestFocused || settingsVisible || changeEggVisible || passInvite || ceremony;
+  const welcomeEligible = shouldStartWelcome({
+    hasSeenWelcome,
+    hasPet: pet != null,
+    blocked: welcomeBlocked,
+  });
+  const welcomeVisible = welcomeArmed && welcomeEligible;
+  const welcomeMode: WelcomeMode = !pet ? 'adopt' : incubating && !snapshot?.isUnviable ? 'meet' : 'close';
+
+  useEffect(() => {
+    if (!welcomeEligible) {
+      setWelcomeArmed(false);
+      return;
+    }
+    const timer = setTimeout(() => setWelcomeArmed(true), WELCOME_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [welcomeEligible]);
+
   useNestTutorialTrigger({
     incubating,
-    blocked: !nestFocused || settingsVisible || changeEggVisible || ceremony,
+    blocked: !nestFocused || settingsVisible || changeEggVisible || ceremony || welcomeVisible || !hasSeenWelcome,
     shouldSuspend: !incubating || ceremony,
   });
 
@@ -115,11 +165,13 @@ export default function NestScreen() {
     if (index >= SANCTUARY_CRADLE_LIMIT) {
       return;
     }
-    if (isPro) {
+    if (cradles.length < maxCradles) {
       router.push({ pathname: '/adopt', params: { adding: '1' } });
       return;
     }
-    setPassInvite(true);
+    if (!isPro) {
+      setPassInvite(true);
+    }
   };
 
   const stepCradle = (direction: -1 | 1) => {
@@ -152,7 +204,6 @@ export default function NestScreen() {
           <View style={[styles.flex, styles.frame, { paddingBottom: TAB_CLEARANCE }]}>
             <NestTopBar
               title={pet?.nickname ?? t('common.hatchpal')}
-              onOpenSettings={() => setSettingsVisible(true)}
               accessory={
                 showCreature && pet
                   ? {
@@ -181,7 +232,7 @@ export default function NestScreen() {
                     snapshot={snapshot}
                     isClockTampered={isClockTampered}
                     nowEpoch={nowEpoch}
-                    recordInteraction={recordInteraction}
+                    performCare={performCare}
                     markHatched={markHatched}
                     onStepCradle={cradles.length > 0 ? stepCradle : undefined}
                     abandonActivePet={abandonActivePet}
@@ -197,18 +248,28 @@ export default function NestScreen() {
       ) : (
         <View style={styles.flex} />
       )}
-      <SpotlightOverlay />
+      <SpotlightOverlay nickname={pet?.nickname ?? ''} />
+      <WelcomeIntro
+        visible={welcomeVisible}
+        mode={welcomeMode}
+        nickname={pet?.nickname}
+        onFinish={completeWelcome}
+        onSkip={skipAllTutorials}
+      />
       <ChangeEggDialog
         visible={changeEggVisible}
         onKeepCurrent={() => setChangeEggVisible(false)}
         onConfirm={confirmChangeEgg}
       />
-      <SettingsModal visible={settingsVisible} onClose={() => setSettingsVisible(false)} />
       <Modal visible={passInvite} transparent animationType="fade" onRequestClose={() => setPassInvite(false)}>
         <View style={styles.inviteBackdrop}>
           <View style={[styles.inviteCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
-            <Text style={[styles.inviteTitle, { color: palette.text }]}>{t('nest.passTitle')}</Text>
-            <Text style={[styles.inviteBody, { color: palette.textMuted }]}>{t('nest.passBody')}</Text>
+            <Text style={[styles.inviteTitle, { color: palette.text }]}>
+              {t(hatchCount > 0 ? 'nest.passTitleThird' : 'nest.passTitle')}
+            </Text>
+            <Text style={[styles.inviteBody, { color: palette.textMuted }]}>
+              {t(hatchCount > 0 ? 'nest.passBodyThird' : 'nest.passBody')}
+            </Text>
             <Pressable
               accessibilityRole="button"
               disabled={buyingPass}
@@ -239,7 +300,7 @@ function OccupiedNest({
   snapshot,
   isClockTampered,
   nowEpoch,
-  recordInteraction,
+  performCare,
   markHatched,
   onStepCradle,
   abandonActivePet,
@@ -250,7 +311,7 @@ function OccupiedNest({
   snapshot: PetSnapshot;
   isClockTampered: boolean;
   nowEpoch: number;
-  recordInteraction: ActivePetView['recordInteraction'];
+  performCare: ActivePetView['performCare'];
   markHatched: ActivePetView['markHatched'];
   onStepCradle?: (direction: -1 | 1) => void;
   abandonActivePet: ActivePetView['abandonActivePet'];
@@ -259,18 +320,12 @@ function OccupiedNest({
   const router = useRouter();
   const palette = useNestPalette();
   const { t } = useTranslation();
-  const { play } = useSoundEffects();
-  const mistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [warmPulse, setWarmPulse] = useState(0);
-  const [mistPulse, setMistPulse] = useState(0);
+  const care = useNestCare({ pet, species, performCare });
   const [stageBox, setStageBox] = useState({ width: 0, height: 0 });
-
-  useEffect(() => {
-    return () => {
-      if (mistTimer.current != null) {
-        clearTimeout(mistTimer.current);
-      }
-    };
+  const stepRef = useRef(onStepCradle);
+  stepRef.current = onStepCradle;
+  const glide = useCallback((direction: -1 | 1) => {
+    stepRef.current?.(direction);
   }, []);
 
   const onStageLayout = useCallback((event: LayoutChangeEvent) => {
@@ -296,6 +351,8 @@ function OccupiedNest({
   });
 
   const placeInSanctuary = (name: string) => {
+    const taxonOf = (speciesId: typeof species.id) => getSpeciesConfig(speciesId).taxon;
+    const before = keeperMilestones(toHatchCredits(useCollectionStore.getState().hatchedArchive, taxonOf));
     archiveSpecimen({
       speciesId: species.id,
       nickname: name,
@@ -304,8 +361,20 @@ function OccupiedNest({
       hatchDateEpoch: resolveHatchEpoch(pet, species),
       incubationDurationDays: species.incubationDays,
       adultSilhouette: species.id,
+      temperament: resolveTemperament(pet.care),
+      hearts: careLogOf(pet).hearts,
     });
+    const unlocked = newlyUnlockedMilestones(
+      before,
+      keeperMilestones(toHatchCredits(useCollectionStore.getState().hatchedArchive, taxonOf))
+    )
+      .map((milestone) => milestone.id)
+      .join(',');
     abandonActivePet();
+    if (unlocked.length > 0) {
+      router.push({ pathname: '/sanctuary', params: { reward: unlocked } });
+      return;
+    }
     router.push('/sanctuary');
   };
 
@@ -352,11 +421,7 @@ function OccupiedNest({
   }
   const eggScale = fitToStage(stageBox, EGG_FRAME);
   const holdHint = t('nest.holdToCandle');
-  const stepRef = useRef(onStepCradle);
-  stepRef.current = onStepCradle;
-  const glide = useCallback((direction: -1 | 1) => {
-    stepRef.current?.(direction);
-  }, []);
+  const wish = activeWish(pet, species, nowEpoch);
   const cradlePan = Gesture.Pan()
     .enabled(onStepCradle != null)
     .activeOffsetX([-28, 28])
@@ -370,27 +435,6 @@ function OccupiedNest({
         scheduleOnRN(glide, -1);
       }
     });
-
-  const warmNest = () => {
-    recordInteraction('warm_nest');
-    setWarmPulse((pulse) => pulse + 1);
-    void triggerImpact(ImpactFeedbackStyle.Medium);
-    play('thermal_hum');
-  };
-
-  const mistSubstrate = () => {
-    recordInteraction('mist_nest');
-    setMistPulse((pulse) => pulse + 1);
-    void triggerImpact(ImpactFeedbackStyle.Light);
-    play('mist_whoosh');
-    if (mistTimer.current != null) {
-      clearTimeout(mistTimer.current);
-    }
-    mistTimer.current = setTimeout(() => {
-      void triggerImpact(ImpactFeedbackStyle.Light);
-      mistTimer.current = null;
-    }, 110);
-  };
 
   const leftTop: Reading = {
     label: t('nest.dayLabel'),
@@ -417,9 +461,12 @@ function OccupiedNest({
         </Text>
       ) : null}
 
+      <NestAlmanac weather={weatherAt(pet, nowEpoch)} hearts={careLogOf(pet).hearts} heartPulse={care.heartPulse} />
+
       <GestureDetector gesture={cradlePan}>
       <View style={styles.stage} onLayout={onStageLayout}>
             <View style={styles.specimen}>
+              <WishBubble wish={wish} species={species} nowEpoch={nowEpoch} lullabyTaps={care.lullabyTaps} />
               <View
                 style={[
                   styles.eggWell,
@@ -442,8 +489,11 @@ function OccupiedNest({
                     temperatureStatus={climate.temperatureStatus}
                     humidityStatus={climate.humidityStatus}
                     heartRate={heartRate}
-                    warmPulse={warmPulse}
-                    mistPulse={mistPulse}
+                    warmPulse={care.warmPulse}
+                    mistPulse={care.mistPulse}
+                    cheerPulse={care.cheerPulse}
+                    brooding={care.brooding}
+                    onTap={care.onEggTap}
                     fitScale={eggScale}
                     accessibilityLabel={eggLabel(
                       t('egg.a11y', { name: species.commonName, status: holdHint }),
@@ -454,6 +504,7 @@ function OccupiedNest({
                     onCandle={() => router.push('/candling')}
                   />
                 </TutorialAnchor>
+                <HeartBurst pulse={care.heartPulse} />
                 <View pointerEvents="box-none" style={styles.sideLabels}>
                   <TelemetryColumn align="end" top={leftTop} bottom={leftBottom} />
                   <TelemetryColumn
@@ -471,7 +522,16 @@ function OccupiedNest({
           </View>
       </GestureDetector>
           <View style={styles.dock}>
-            <ClimateControls species={species} climate={climate} onWarm={warmNest} onMist={mistSubstrate} />
+            <ClimateControls
+              species={species}
+              climate={climate}
+              notice={care.notice}
+              soaking={care.soaking}
+              onBroodStart={care.onBroodStart}
+              onBroodEnd={care.onBroodEnd}
+              onBroodTooShort={care.onBroodTooShort}
+              onSpritz={care.onSpritz}
+            />
       </View>
 
       <HatchingCeremony
@@ -496,15 +556,12 @@ interface Reading {
 
 function NestTopBar({
   title,
-  onOpenSettings,
   accessory,
 }: {
   title: string;
-  onOpenSettings: () => void;
   accessory?: { label: string; onPress: () => void };
 }) {
   const palette = useNestPalette();
-  const { t } = useTranslation();
 
   return (
     <View style={styles.topBar}>
@@ -528,19 +585,7 @@ function NestTopBar({
           </Text>
         </Pressable>
       ) : null}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={t('settings.open')}
-        onPress={onOpenSettings}
-        hitSlop={8}
-        style={({ pressed }) => [styles.settingsHit, { opacity: pressed ? 0.55 : 1 }]}>
-        <SymbolView
-          name={{ ios: 'gearshape', android: 'settings', web: 'settings' }}
-          size={20}
-          tintColor={palette.textMuted}
-          fallback={<Text style={[styles.settingsGlyph, { color: palette.textMuted }]}>⚙</Text>}
-        />
-      </Pressable>
+      <SettingsButton />
     </View>
   );
 }
@@ -663,7 +708,7 @@ function fitToStage(
   if (box.width < 1 || box.height < 1) {
     return 1;
   }
-  return Math.max(0.82, Math.min(1, (box.width - 16) / frame.width, (box.height - 56) / frame.height));
+  return Math.max(0.82, Math.min(1, (box.width - 16) / frame.width, (box.height - 74 - WISH_SLOT) / frame.height));
 }
 
 const styles = StyleSheet.create({
@@ -701,16 +746,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     letterSpacing: 0.2,
-  },
-  settingsHit: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  settingsGlyph: {
-    fontSize: 18,
-    lineHeight: 22,
   },
   clock: {
     fontSize: 12,

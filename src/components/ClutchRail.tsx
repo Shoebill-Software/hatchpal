@@ -8,7 +8,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
 
-import { ADOPTION_ATMOSPHERE } from '@/components/adoptionAtmosphere';
+import { ADOPTION_ATMOSPHERE, useHatcheryPalette } from '@/components/adoptionAtmosphere';
 import { EggLockBadge } from '@/components/EggCarousel';
 import { SpeciesEggArt } from '@/components/SpeciesEggArt';
 import type { SpeciesConfig, SpeciesId } from '@/domain/types';
@@ -90,6 +90,8 @@ function ClutchEgg({
 }) {
   const { t } = useTranslation();
   const atmosphere = ADOPTION_ATMOSPHERE[species.id];
+  const dark = useHatcheryPalette().scheme === 'dark';
+  const glowId = `clutch-${species.id}-${dark ? 'd' : 'l'}`;
   const scale = useSharedValue(selected ? 1.14 : 0.92);
   const lift = useSharedValue(selected ? -8 : 2);
   const opacity = useSharedValue(selected ? 1 : 0.62);
@@ -128,13 +130,13 @@ function ClutchEgg({
       <Animated.View pointerEvents="none" style={[styles.glow, glowStyle]}>
         <Svg width={78} height={78} viewBox="0 0 78 78">
           <Defs>
-            <RadialGradient id={`clutch-${species.id}`} cx="39" cy="44" r="30" gradientUnits="userSpaceOnUse">
-              <Stop offset="0%" stopColor={atmosphere.high} stopOpacity={0.95} />
-              <Stop offset="55%" stopColor={atmosphere.mid} stopOpacity={0.35} />
+            <RadialGradient id={glowId} cx="39" cy="44" r="30" gradientUnits="userSpaceOnUse">
+              <Stop offset="0%" stopColor={dark ? atmosphere.high : atmosphere.mid} stopOpacity={dark ? 0.95 : 0.55} />
+              <Stop offset="55%" stopColor={atmosphere.mid} stopOpacity={dark ? 0.35 : 0.2} />
               <Stop offset="100%" stopColor={atmosphere.low} stopOpacity={0} />
             </RadialGradient>
           </Defs>
-          <Ellipse cx="39" cy="46" rx="28" ry="18" fill={`url(#clutch-${species.id})`} />
+          <Ellipse cx="39" cy="46" rx="28" ry="18" fill={`url(#${glowId})`} />
         </Svg>
       </Animated.View>
       <Animated.View pointerEvents="none" style={eggStyle}>
