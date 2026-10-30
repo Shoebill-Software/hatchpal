@@ -35,6 +35,8 @@ describe('Progressive candling stages', () => {
     expect(early.embryo).toBeLessThan(0.2);
     expect(early.eye).toBe(0);
     expect(early.crowding).toBe(0);
+    expect(early.airCell).toBeGreaterThan(0.05);
+    expect(early.airCell).toBeLessThan(0.25);
 
     const vascular = resolveCandlingStage(0.3);
     expect(vascular.id).toBe('vascular');

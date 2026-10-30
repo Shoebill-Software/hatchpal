@@ -61,12 +61,14 @@ export function resolveCandlingStageId(progress: number): CandlingStageId {
 export function resolveCandlingStage(progress: number): CandlingStageDescriptor {
   const p = clamp01(progress);
 
-  const yolk = clamp01((0.35 + ramp(p, 0, 0.06) * 0.65) * (1 - ramp(p, 0.42, 0.9) * 0.78));
-  const vessels = clamp01(ramp(p, 0.18, 0.36) * (1 - ramp(p, 0.82, 1) * 0.45));
+  const yolk = clamp01((0.35 + ramp(p, 0, 0.06) * 0.65) * (1 - ramp(p, 0.38, 0.78) * 0.9));
+  // The vessel net is obvious in the middle, then the body covers it.
+  const vessels = clamp01(ramp(p, 0.16, 0.32) * (1 - ramp(p, 0.5, 0.88) * 0.85));
   const embryo = clamp01(0.1 + ramp(p, 0.38, 1) * 0.82);
   const eye = ramp(p, 0.42, 0.52);
-  const airCell = clamp01(ramp(p, 0.28, 1) * 0.55 + ramp(p, 0.8, 1) * 0.2);
-  const crowding = ramp(p, 0.72, 1);
+  // A fresh egg already has a small air cell. It widens toward internal pip.
+  const airCell = clamp01(0.1 + ramp(p, 0.15, 1) * 0.55 + ramp(p, 0.78, 1) * 0.22);
+  const crowding = ramp(p, 0.48, 0.9);
   const movement = clamp01(ramp(p, 0.45, 0.7));
 
   return {

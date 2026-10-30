@@ -1,8 +1,9 @@
 import { Redirect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
+  FadeInDown,
   cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
@@ -18,6 +19,7 @@ import {
   resolveCandlingStage,
 } from '@/components/candling/candlingStages';
 import { NestStatusBar } from '@/components/NestStatusBar';
+import { SettingsButton } from '@/components/SettingsMenu';
 import { Spacing } from '@/constants/theme';
 import { caredHeartRate, displayedVitality, readClimate } from '@/domain/climateEngine';
 import { useActivePet } from '@/hooks/useActivePet';
@@ -25,6 +27,7 @@ import { useSoundEffects } from '@/hooks/useSoundEffects';
 import { useTranslation } from '@/i18n';
 import { heartbeatIntervalMs } from '@/hooks/hapticHeartbeat';
 import { useHapticHeartbeat } from '@/hooks/useHapticHeartbeat';
+import { NotificationFeedbackType, triggerNotification } from '@/services/hapticFeedback';
 
 const CHAMBER = '#070504';
 const CHAMBER_PANEL = '#120E0B';
@@ -36,7 +39,9 @@ export default function CandlingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
-  const { pet, species, snapshot, hasHydrated, isClockTampered, nowEpoch } = useActivePet();
+  const { pet, species, snapshot, hasHydrated, isClockTampered, nowEpoch, performCare } = useActivePet();
+  const peekedPet = useRef<string | null>(null);
+  const [wishGranted, setWishGranted] = useState(false);
 
   const climate = pet && species ? readClimate(pet, species, nowEpoch) : null;
   const bpm = caredHeartRate(
@@ -55,6 +60,24 @@ export default function CandlingScreen() {
     pulseImmediately: true,
     onPulse: playHeartbeat,
   });
+
+  const petId = pet && !pet.isHatched ? pet.id : null;
+  useEffect(() => {
+    if (!hasHydrated || !petId || peekedPet.current === petId) {
+      return;
+    }
+    peekedPet.current = petId;
+    const result = performCare({ kind: 'peek' });
+    if (!result?.granted) {
+      return;
+    }
+    setWishGranted(true);
+    const timer = setTimeout(() => {
+      play('wish_granted');
+      void triggerNotification(NotificationFeedbackType.Success);
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [hasHydrated, performCare, petId, play]);
 
   const goToNest = () => {
     if (router.canGoBack()) {
@@ -108,6 +131,7 @@ export default function CandlingScreen() {
         </View>
 
         <HeartbeatBadge bpm={bpm} active={candlingActive} label={heartLabel} />
+        <SettingsButton tint={GOLD} />
       </View>
 
       {isClockTampered ? (
@@ -116,9 +140,17 @@ export default function CandlingScreen() {
         </View>
       ) : null}
 
-      <CandlingVisualizer snapshot={snapshot} species={species} />
+      <CandlingVisualizer snapshot={snapshot} species={species} bpm={candlingActive ? bpm : 0} />
 
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, Spacing.three) }]}>
+        {wishGranted ? (
+          <Animated.Text
+            entering={FadeInDown.delay(500).duration(320)}
+            accessibilityLiveRegion="polite"
+            style={styles.wish}>
+            {t('candling.wishGranted')}
+          </Animated.Text>
+        ) : null}
         <Text style={styles.stageCaption}>{stageCaption}</Text>
         <Text style={styles.labKicker}>{t('candling.labNote')}</Text>
         <Text style={styles.labBody}>{summary}</Text>
@@ -278,6 +310,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     paddingTop: Spacing.three,
     gap: Spacing.two,
+  },
+  wish: {
+    color: '#F2A7B4',
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 0.2,
   },
   stageCaption: {
     color: GOLD,
