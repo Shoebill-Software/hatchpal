@@ -4,7 +4,9 @@ import * as SystemUI from 'expo-system-ui';
 import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+import { HATCHERY_PALETTE } from '@/components/adoptionAtmosphere';
 import { NestStatusBar } from '@/components/NestStatusBar';
+import { SettingsMenuProvider } from '@/components/SettingsMenu';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useLaunchStoresReady } from '@/hooks/useLaunchStoresReady';
 import { I18nProvider, useTranslation } from '@/i18n';
@@ -19,8 +21,11 @@ const OBSIDIAN = '#0E0E10';
 const PAPER = '#F3EDE3';
 
 export default function RootLayout() {
+  const colorScheme = useColorScheme();
+  const canvas = colorScheme === 'dark' ? OBSIDIAN : PAPER;
+
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: OBSIDIAN }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: canvas }}>
       <I18nProvider>
         <RootNavigator />
       </I18nProvider>
@@ -34,6 +39,7 @@ function RootNavigator() {
   const dark = colorScheme === 'dark';
   const ready = useLaunchStoresReady();
   const canvas = dark ? OBSIDIAN : PAPER;
+  const field = HATCHERY_PALETTE[dark ? 'dark' : 'light'].ground;
 
   useEffect(() => {
     void SystemUI.setBackgroundColorAsync(canvas).catch(() => undefined);
@@ -53,6 +59,7 @@ function RootNavigator() {
 
   return (
     <ThemeProvider value={dark ? DarkTheme : DefaultTheme}>
+      <SettingsMenuProvider>
       <NestStatusBar />
       <Stack
         screenOptions={{
@@ -86,7 +93,7 @@ function RootNavigator() {
             animation: 'fade',
             animationDuration: 560,
             gestureEnabled: true,
-            contentStyle: { backgroundColor: '#0C0A09' },
+            contentStyle: { backgroundColor: field },
           }}
         />
         <Stack.Screen
@@ -97,10 +104,11 @@ function RootNavigator() {
             animation: 'fade',
             animationDuration: 520,
             gestureEnabled: true,
-            contentStyle: { backgroundColor: '#0C0A09' },
+            contentStyle: { backgroundColor: field },
           }}
         />
       </Stack>
+      </SettingsMenuProvider>
     </ThemeProvider>
   );
 }

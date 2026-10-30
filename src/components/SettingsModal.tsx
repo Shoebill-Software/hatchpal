@@ -102,15 +102,7 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
     return nickname && nickname.trim().length > 0 ? nickname : null;
   });
   const abandonActivePet = usePetStore((state) => state.abandonActivePet);
-  const incubating = usePetStore((state) => {
-    if (!state.activePetId) {
-      return false;
-    }
-    const pet = state.pets[state.activePetId];
-    return pet != null && !pet.isHatched;
-  });
-  const resetTutorial = usePreferencesStore((state) => state.resetTutorial);
-  const suspendNestTutorial = usePreferencesStore((state) => state.suspendNestTutorial);
+  const restartTutorial = usePreferencesStore((state) => state.replayTutorial);
 
   useEffect(() => {
     if (!visible) {
@@ -176,13 +168,7 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
   };
 
   const replayTutorial = () => {
-    if (!incubating) {
-      return;
-    }
-    resetTutorial();
-    if (usePreferencesStore.getState().isTutorialActive) {
-      suspendNestTutorial();
-    }
+    restartTutorial();
     void triggerImpact(ImpactFeedbackStyle.Light);
     closeSettings();
   };
@@ -267,20 +253,15 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
 
             <Section title={t('settings.guideTitle')}>
               <Text style={[styles.hint, { color: palette.textMuted }]}>
-                {incubating ? t('settings.replayTutorialHint') : t('settings.replayTutorialNeedsEgg')}
+                {t('settings.replayTutorialHint')}
               </Text>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={t('settings.replayTutorial')}
-                accessibilityState={{ disabled: !incubating }}
-                disabled={!incubating}
                 onPress={replayTutorial}
                 style={({ pressed }) => [
                   styles.replayButton,
-                  {
-                    borderColor: palette.action,
-                    opacity: !incubating ? 0.45 : pressed ? 0.82 : 1,
-                  },
+                  { borderColor: palette.action, opacity: pressed ? 0.82 : 1 },
                 ]}>
                 <Text style={[styles.replayLabel, { color: palette.action }]}>{t('settings.replayTutorial')}</Text>
               </Pressable>

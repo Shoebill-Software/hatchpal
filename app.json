@@ -21,7 +21,7 @@
     "ios": {
       "icon": "./assets/images/icon-ios.png",
       "bundleIdentifier": "com.shoebillsoftware.hatchpal",
-      "buildNumber": "1",
+      "buildNumber": "2",
       "appleTeamId": "Y6BQW63Q2S",
       "entitlements": {
         "com.apple.security.application-groups": [
@@ -32,7 +32,7 @@
         "usesNonExemptEncryption": false
       },
       "infoPlist": {
-        "NSUserNotificationsUsageDescription": "HatchPal uses notifications offline to tell you about rare biological events, such as shell pipping and hatching. No internet connection is required.",
+        "NSUserNotificationsUsageDescription": "HatchPal uses notifications offline to tell you when an egg reaches a real biological milestone, from the first blood vessels to the day it hatches. No internet connection is required.",
         "UIStatusBarStyle": "UIStatusBarStyleLightContent"
       }
     },

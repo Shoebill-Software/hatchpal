@@ -32,8 +32,8 @@ export default function AppTabs() {
       <NativeTabs.Trigger name="sanctuary">
         <NativeTabs.Trigger.Label>{t('nav.sanctuary')}</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon
-          sf={{ default: 'building.columns', selected: 'building.columns.fill' }}
-          md="museum"
+          sf={{ default: 'leaf', selected: 'leaf.fill' }}
+          md="park"
         />
       </NativeTabs.Trigger>
     </NativeTabs>
