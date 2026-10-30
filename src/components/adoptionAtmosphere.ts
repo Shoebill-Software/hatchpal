@@ -1,14 +1,46 @@
 import type { SpeciesId } from '@/domain/types';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
-/** Night room shared with the dossier. The nest stays warm paper; this chamber does not. */
-export const HATCHERY = {
-  ground: '#0C0A09',
-  ink: '#F6F0E6',
-  muted: '#C4B6A6',
-  quiet: '#9A8E82',
-  amber: '#E7A15A',
-  amberInk: '#1A1410',
-} as const;
+export interface HatcheryPalette {
+  scheme: 'light' | 'dark';
+  ground: string;
+  ink: string;
+  muted: string;
+  quiet: string;
+  amber: string;
+  amberInk: string;
+  /** Translucent ink for chips and hairlines. Alpha is applied by the caller. */
+  veil: string;
+}
+
+/** Dusk field at night, morning field by day. Both share one horizon composition. */
+export const HATCHERY_PALETTE: Record<'light' | 'dark', HatcheryPalette> = {
+  dark: {
+    scheme: 'dark',
+    ground: '#0C0A09',
+    ink: '#F6F0E6',
+    muted: '#C4B6A6',
+    quiet: '#9A8E82',
+    amber: '#E7A15A',
+    amberInk: '#1A1410',
+    veil: '246, 240, 230',
+  },
+  light: {
+    scheme: 'light',
+    ground: '#F4EEE4',
+    ink: '#2A2119',
+    muted: '#5E5246',
+    quiet: '#857869',
+    amber: '#7A3E1D',
+    amberInk: '#FFF8F0',
+    veil: '42, 33, 25',
+  },
+};
+
+export function useHatcheryPalette(): HatcheryPalette {
+  const scheme = useColorScheme();
+  return HATCHERY_PALETTE[scheme === 'dark' ? 'dark' : 'light'];
+}
 
 /** Full-bleed adoption lighting. Each stop is an environmental wash, not a spotlight. */
 export interface AdoptionAtmosphere {

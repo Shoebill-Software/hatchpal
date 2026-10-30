@@ -1,7 +1,7 @@
+import { SymbolView } from 'expo-symbols';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
-  AccessibilityInfo,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -15,28 +15,30 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
-import Animated, {
-  Easing,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
+import Svg, { Defs, Ellipse, LinearGradient, Rect, Stop } from 'react-native-svg';
 
+import { ADOPTION_ATMOSPHERE, useHatcheryPalette, type HatcheryPalette } from '@/components/adoptionAtmosphere';
 import { fitSilhouette, GrowthSilhouette } from '@/components/GrowthSilhouette';
+import { HatcheryWash } from '@/components/HatcheryStage';
+import { NestStatusBar } from '@/components/NestStatusBar';
+import { SettingsButton, SettingsSheetHost } from '@/components/SettingsMenu';
+import { SpeciesEggArt } from '@/components/SpeciesEggArt';
 import { hexToRgba } from '@/constants/nest';
-import { Spacing } from '@/constants/theme';
+import { Fonts } from '@/constants/theme';
 import { SPECIES_REGISTRY } from '@/data/species';
 import { priceStringFor, productIdForSpecies, SANCTUARY_PASS_PRODUCT_ID } from '@/domain/entitlements';
 import {
   DIFFICULTY_TAGS,
   SPECIES_IDS,
   type DifficultyTag,
+  type RosterTag,
   type SpeciesConfig,
   type SpeciesId,
-  type TaxonomicClass,
 } from '@/domain/types';
+import { KEEPER_PROGRESS_KEY, useKeeperAccess } from '@/hooks/useKeeperMilestones';
+import { useReduceMotion } from '@/hooks/useReduceMotion';
 import { formatBiologicalWeight, useTranslation } from '@/i18n';
 import type { TranslationKey } from '@/i18n/en';
 import { ImpactFeedbackStyle, NotificationFeedbackType, triggerImpact, triggerNotification } from '@/services/hapticFeedback';
@@ -44,18 +46,18 @@ import { isPurchaseCancelled } from '@/services/purchaseErrors';
 import { useActivePet } from '@/hooks/useActivePet';
 import { usePurchasesStore } from '@/store/usePurchasesStore';
 
-const STUDIO = '#0C0A09';
-const INK = '#F4EDE3';
-const MUTED = '#C4B6A6';
-const CARD = '#17130F';
-const LINE = '#3A3228';
-const ADOPT = '#E7A15A';
-const ADOPT_TEXT = '#1A1410';
-
-const CLASS_LABEL: Record<TaxonomicClass, TranslationKey> = {
-  aves: 'showcase.class.aves',
-  reptilia: 'showcase.class.reptilia',
-  monotremata: 'showcase.class.monotremata',
+const TAG_LABEL: Record<RosterTag, TranslationKey> = {
+  galliform: 'taxon.galliform',
+  raptor: 'taxon.raptor',
+  strigiform: 'taxon.strigiform',
+  waterfowl: 'taxon.waterfowl',
+  passerine: 'taxon.passerine',
+  sphenisciform: 'taxon.sphenisciform',
+  ratite: 'taxon.ratite',
+  squamate: 'taxon.squamate',
+  testudine: 'taxon.testudine',
+  crocodilian: 'taxon.crocodilian',
+  monotreme: 'taxon.monotreme',
 };
 
 const DIFFICULTY_LABEL: Record<DifficultyTag, TranslationKey> = {
@@ -123,10 +125,15 @@ function ShowcaseBody({
 }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { height, width } = useWindowDimensions();
   const { t } = useTranslation();
+  const palette = useHatcheryPalette();
   const { adoptPet, adoptEggInNewCradle } = useActivePet();
   const reduceMotion = useReduceMotion();
-  const available = usePurchasesStore((state) => state.isSpeciesAvailable(species.id));
+  const arrival = useArrival(species.id, reduceMotion);
+  const { isAvailable, gateFor } = useKeeperAccess();
+  const available = isAvailable(species.id);
+  const earnGate = gateFor(species.id);
   const packages = usePurchasesStore((state) => state.availablePackages);
   const purchaseProduct = usePurchasesStore((state) => state.purchaseProduct);
   const [mode, setMode] = useState<FormMode>('both');
@@ -138,6 +145,10 @@ function ShowcaseBody({
   const speciesProductId = productIdForSpecies(species.id);
   const speciesPrice = speciesProductId ? priceStringFor(packages, speciesProductId) : '';
   const passPrice = priceStringFor(packages, SANCTUARY_PASS_PRODUCT_ID);
+  const roomy = height >= 760;
+  const frameWidth = Math.min(width, 640);
+  const accent = speciesAccent(species, palette.scheme);
+  const alarm = palette.scheme === 'dark' ? '#E7B2A2' : '#8E3B24';
 
   useEffect(() => {
     setMode('both');
@@ -201,139 +212,242 @@ function ShowcaseBody({
     }
   };
 
+  const passPrimary = speciesProductId == null;
+
   return (
-    <View style={styles.root}>
-      <StudioWash color={species.growth.glow} />
-      <View style={[styles.topBar, { paddingTop: insets.top + 6 }]}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('showcase.back')}
-          onPress={close}
-          style={({ pressed }) => [styles.backPill, { opacity: pressed ? 0.8 : 1 }]}>
-          <Text style={styles.backGlyph}>‹</Text>
-          <Text style={styles.backLabel}>{t('showcase.back')}</Text>
-        </Pressable>
-      </View>
-
-      <FormToggle
-        mode={mode}
-        accent={species.growth.glow}
-        onChange={(next) => {
-          void triggerImpact(ImpactFeedbackStyle.Light);
-          setMode(next);
-        }}
-      />
-      <FormStage species={species} mode={mode} reduceMotion={reduceMotion} />
-
-      <ScrollView
-        style={styles.dossierScroll}
-        contentContainerStyle={styles.dossierContent}
-        showsVerticalScrollIndicator={false}>
-        <Dossier species={species} />
-      </ScrollView>
-
-      <View style={[styles.dock, { paddingBottom: insets.bottom + Spacing.three }]}>
-        {available ? (
+    <View style={[styles.root, { backgroundColor: palette.ground }]}>
+      <NestStatusBar />
+      <HatcheryWash speciesId={species.id} />
+      <View style={[styles.column, { paddingTop: insets.top + 4 }]}>
+        <View style={styles.topBar}>
           <Pressable
             accessibilityRole="button"
-            onPress={() => {
-              void triggerImpact(ImpactFeedbackStyle.Medium);
-              setNameError(null);
-              setNaming(true);
-            }}
-            style={({ pressed }) => [styles.adopt, { opacity: pressed ? 0.88 : 1 }]}>
-            <Text style={styles.adoptLabel}>
-              {replacing && !adding ? t('showcase.replace') : t('showcase.begin')}
-            </Text>
+            accessibilityLabel={t('showcase.back')}
+            onPress={close}
+            hitSlop={8}
+            style={({ pressed }) => [
+              styles.back,
+              { backgroundColor: `rgba(${palette.veil}, 0.08)`, opacity: pressed ? 0.6 : 1 },
+            ]}>
+            <SymbolView
+              name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
+              size={16}
+              tintColor={palette.ink}
+              fallback={<Text style={[styles.backGlyph, { color: palette.ink }]}>‹</Text>}
+            />
           </Pressable>
-        ) : (
-          <>
-            {speciesProductId ? (
+          <SettingsButton tint={palette.ink} />
+        </View>
+
+        <Animated.View style={[styles.body, arrival]}>
+          <FormToggle
+            mode={mode}
+            accent={accent}
+            palette={palette}
+            onChange={(next) => {
+              void triggerImpact(ImpactFeedbackStyle.Light);
+              setMode(next);
+            }}
+          />
+          <FormStage
+            species={species}
+            mode={mode}
+            reduceMotion={reduceMotion}
+            palette={palette}
+            frameWidth={frameWidth}
+            stageHeight={roomy ? 228 : 176}
+          />
+          <FormCaption species={species} mode={mode} palette={palette} />
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}>
+            <FieldPlate species={species} palette={palette} roomy={roomy} frameWidth={frameWidth} accent={accent} />
+          </ScrollView>
+        </Animated.View>
+
+        <View
+          style={[
+            styles.dock,
+            {
+              paddingBottom: insets.bottom + 12,
+              backgroundColor: palette.ground,
+              borderTopColor: `rgba(${palette.veil}, 0.16)`,
+            },
+          ]}>
+          {available ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                void triggerImpact(ImpactFeedbackStyle.Medium);
+                setNameError(null);
+                setNaming(true);
+              }}
+              style={({ pressed }) => [
+                styles.begin,
+                {
+                  backgroundColor: palette.amber,
+                  opacity: pressed ? 0.88 : 1,
+                  transform: [{ scale: pressed ? 0.985 : 1 }],
+                },
+              ]}>
+              <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+                maxFontSizeMultiplier={1.15}
+                style={[styles.beginLabel, { color: palette.amberInk }]}>
+                {replacing && !adding ? t('showcase.replace') : t('showcase.begin')}
+              </Text>
+            </Pressable>
+          ) : (
+            <>
+              {earnGate ? (
+                <Text maxFontSizeMultiplier={1.2} style={[styles.earnHint, { color: palette.quiet }]}>
+                  {t('showcase.earnHint', {
+                    progress: t(KEEPER_PROGRESS_KEY[earnGate.id], {
+                      current: earnGate.progress,
+                      goal: earnGate.goal,
+                    }),
+                  })}
+                </Text>
+              ) : null}
+              {speciesProductId ? (
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={purchasing}
+                  onPress={() => buy(speciesProductId)}
+                  style={({ pressed }) => [
+                    styles.begin,
+                    {
+                      backgroundColor: palette.amber,
+                      opacity: purchasing ? 0.6 : pressed ? 0.88 : 1,
+                      transform: [{ scale: pressed ? 0.985 : 1 }],
+                    },
+                  ]}>
+                  <Text
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.75}
+                    maxFontSizeMultiplier={1.15}
+                    style={[styles.beginLabel, { color: palette.amberInk }]}>
+                    {t('showcase.unlockSpecies', { price: speciesPrice })}
+                  </Text>
+                </Pressable>
+              ) : null}
               <Pressable
                 accessibilityRole="button"
                 disabled={purchasing}
-                onPress={() => buy(speciesProductId)}
-                style={({ pressed }) => [styles.adopt, { opacity: purchasing ? 0.6 : pressed ? 0.88 : 1 }]}>
-                <Text style={styles.adoptLabel}>{t('showcase.unlockSpecies', { price: speciesPrice })}</Text>
+                onPress={() => buy(SANCTUARY_PASS_PRODUCT_ID)}
+                style={({ pressed }) => [
+                  styles.begin,
+                  passPrimary
+                    ? { backgroundColor: palette.amber }
+                    : { borderWidth: 1, borderColor: `rgba(${palette.veil}, 0.22)` },
+                  { opacity: purchasing ? 0.6 : pressed ? 0.88 : 1 },
+                ]}>
+                <Text
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.75}
+                  maxFontSizeMultiplier={1.15}
+                  style={[styles.beginLabel, { color: passPrimary ? palette.amberInk : palette.ink }]}>
+                  {t('showcase.getPass', { price: passPrice })}
+                </Text>
+                <Text
+                  numberOfLines={1}
+                  maxFontSizeMultiplier={1.15}
+                  style={[
+                    styles.passHint,
+                    { color: passPrimary ? hexToRgba(palette.amberInk, 0.72) : palette.quiet },
+                  ]}>
+                  {t('showcase.passSubtitle')}
+                </Text>
               </Pressable>
-            ) : null}
-            <Pressable
-              accessibilityRole="button"
-              disabled={purchasing}
-              onPress={() => buy(SANCTUARY_PASS_PRODUCT_ID)}
-              style={({ pressed }) => [styles.pass, { opacity: purchasing ? 0.6 : pressed ? 0.88 : 1 }]}>
-              <Text style={styles.passLabel}>{t('showcase.getPass', { price: passPrice })}</Text>
-              <Text style={styles.passHint}>{t('showcase.passSubtitle')}</Text>
-            </Pressable>
-          </>
-        )}
-        {purchaseError ? <Text style={styles.purchaseError}>{purchaseError}</Text> : null}
-        <Pressable accessibilityRole="button" onPress={close} style={styles.pickAnother}>
-          <Text style={styles.pickAnotherLabel}>{t('showcase.pickAnother')}</Text>
-        </Pressable>
+            </>
+          )}
+          {purchaseError ? (
+            <Text maxFontSizeMultiplier={1.2} style={[styles.purchaseError, { color: alarm }]}>
+              {purchaseError}
+            </Text>
+          ) : null}
+          <Pressable accessibilityRole="button" onPress={close} style={styles.pickAnother}>
+            <Text maxFontSizeMultiplier={1.15} style={[styles.pickAnotherLabel, { color: palette.quiet }]}>
+              {t('showcase.pickAnother')}
+            </Text>
+          </Pressable>
+        </View>
       </View>
 
-      <Modal visible={naming} transparent animationType="slide" onRequestClose={() => setNaming(false)}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.modalRoot}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t('showcase.cancelName')}
-            style={styles.modalScrim}
-            onPress={() => setNaming(false)}
-          />
-          <View style={[styles.modalCard, { paddingBottom: insets.bottom + Spacing.four }]}>
-            <Text style={styles.modalTitle}>{t('showcase.nicknameTitle')}</Text>
-            <Text style={styles.modalBody}>{t('showcase.nicknameBody')}</Text>
-            <Text style={styles.fieldLabel}>{t('adoption.nickname')}</Text>
-            <TextInput
-              value={nickname}
-              onChangeText={(value) => {
-                setNickname(value);
-                setNameError(null);
-              }}
-              maxLength={24}
-              autoCorrect={false}
-              placeholder={t('adoption.placeholder')}
-              placeholderTextColor={MUTED}
-              accessibilityLabel={t('adoption.nicknameA11y')}
-              style={[styles.input, { borderColor: nameError ? '#E07A3A' : LINE }]}
-            />
-            {nameError ? <Text style={styles.nameError}>{nameError}</Text> : null}
-            <Pressable
-              accessibilityRole="button"
-              onPress={confirmAdoption}
-              style={({ pressed }) => [styles.adopt, { opacity: pressed ? 0.88 : 1 }]}>
-              <Text style={styles.adoptLabel}>{t('showcase.confirmAdopt')}</Text>
-            </Pressable>
-            <Pressable accessibilityRole="button" onPress={() => setNaming(false)} style={styles.pickAnother}>
-              <Text style={styles.pickAnotherLabel}>{t('showcase.cancelName')}</Text>
-            </Pressable>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      <NamingSheet
+        visible={naming}
+        nickname={nickname}
+        nameError={nameError}
+        palette={palette}
+        alarm={alarm}
+        bottomInset={insets.bottom}
+        onChangeNickname={(value) => {
+          setNickname(value);
+          setNameError(null);
+        }}
+        onConfirm={confirmAdoption}
+        onClose={() => setNaming(false)}
+      />
+      <SettingsSheetHost />
     </View>
   );
 }
 
-function StudioWash({ color }: { color: string }) {
+function speciesAccent(species: SpeciesConfig, scheme: HatcheryPalette['scheme']): string {
+  const atmosphere = ADOPTION_ATMOSPHERE[species.id];
+  return scheme === 'dark' ? atmosphere.rim : atmosphere.low;
+}
+
+function useArrival(token: string, reduceMotion: boolean) {
+  const opacity = useSharedValue(1);
+  const seen = useRef<string | null>(null);
+
+  if (seen.current !== token) {
+    const first = seen.current == null;
+    seen.current = token;
+    if (!first && !reduceMotion) {
+      opacity.value = 0.25;
+    }
+  }
+
+  useEffect(() => {
+    opacity.value = withTiming(1, {
+      duration: reduceMotion ? 0 : 420,
+      easing: Easing.out(Easing.cubic),
+    });
+  }, [opacity, reduceMotion, token]);
+
+  return useAnimatedStyle(() => ({ opacity: opacity.value }));
+}
+
+function Horizon({ species, palette }: { species: SpeciesConfig; palette: HatcheryPalette }) {
+  const atmosphere = ADOPTION_ATMOSPHERE[species.id];
+  const dark = palette.scheme === 'dark';
+  const id = `plate-horizon-${species.id}-${palette.scheme}`;
+
   return (
-    <Svg
-      width="100%"
-      height={460}
-      viewBox="0 0 100 100"
-      preserveAspectRatio="none"
-      style={styles.wash}
-      pointerEvents="none">
+    <Svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
       <Defs>
-        <RadialGradient id="studio-wash" cx="50" cy="36" r="48" gradientUnits="userSpaceOnUse">
-          <Stop offset="0%" stopColor={color} stopOpacity={0.28} />
-          <Stop offset="55%" stopColor={color} stopOpacity={0.08} />
-          <Stop offset="100%" stopColor={color} stopOpacity={0} />
-        </RadialGradient>
+        <LinearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0%" stopColor={atmosphere.mid} stopOpacity={0} />
+          <Stop offset="58%" stopColor={atmosphere.mid} stopOpacity={dark ? 0.06 : 0.05} />
+          <Stop offset="100%" stopColor={atmosphere.mid} stopOpacity={dark ? 0.46 : 0.36} />
+        </LinearGradient>
       </Defs>
-      <Ellipse cx="50" cy="40" rx="62" ry="48" fill="url(#studio-wash)" />
+      <Rect x="0" y="42" width="100" height="58" fill={`url(#${id})`} />
+      <Ellipse
+        cx="50"
+        cy="93"
+        rx="18"
+        ry="1.15"
+        fill={dark ? atmosphere.rim : atmosphere.low}
+        opacity={dark ? 0.4 : 0.28}
+      />
     </Svg>
   );
 }
@@ -341,10 +455,12 @@ function StudioWash({ color }: { color: string }) {
 function FormToggle({
   mode,
   accent,
+  palette,
   onChange,
 }: {
   mode: FormMode;
   accent: string;
+  palette: HatcheryPalette;
   onChange: (mode: FormMode) => void;
 }) {
   const { t } = useTranslation();
@@ -355,7 +471,7 @@ function FormToggle({
   ];
 
   return (
-    <View style={styles.toggle}>
+    <View style={[styles.toggle, { backgroundColor: `rgba(${palette.veil}, 0.07)` }]}>
       {options.map((option) => {
         const selected = mode === option.id;
         return (
@@ -366,12 +482,14 @@ function FormToggle({
             onPress={() => onChange(option.id)}
             style={[
               styles.toggleItem,
-              {
-                backgroundColor: selected ? hexToRgba(accent, 0.28) : 'transparent',
-                borderColor: selected ? accent : 'transparent',
-              },
+              { backgroundColor: selected ? hexToRgba(accent, palette.scheme === 'dark' ? 0.24 : 0.14) : 'transparent' },
             ]}>
-            <Text style={[styles.toggleLabel, { color: selected ? INK : MUTED }]}>{t(option.label)}</Text>
+            <Text
+              numberOfLines={1}
+              maxFontSizeMultiplier={1.15}
+              style={[styles.toggleLabel, { color: selected ? palette.ink : palette.quiet }]}>
+              {t(option.label)}
+            </Text>
           </Pressable>
         );
       })}
@@ -383,17 +501,21 @@ function FormStage({
   species,
   mode,
   reduceMotion,
+  palette,
+  frameWidth,
+  stageHeight,
 }: {
   species: SpeciesConfig;
   mode: FormMode;
   reduceMotion: boolean;
+  palette: HatcheryPalette;
+  frameWidth: number;
+  stageHeight: number;
 }) {
-  const { width } = useWindowDimensions();
-  const { t } = useTranslation();
-  const stageInner = Math.max(240, width - Spacing.four * 2);
-  const adultH = Math.min(176, Math.round(stageInner * 0.46));
+  const stageInner = Math.max(240, frameWidth - 12);
+  const adultH = Math.round(stageHeight * 0.78);
   const babyScale = fieldScale(species.growth.hatchlingMeasureCm, species.growth.adultMeasureCm);
-  const babyH = Math.max(72, Math.round(adultH * babyScale));
+  const babyH = Math.max(64, Math.round(adultH * babyScale));
   const adultFit = fitSilhouette(species.id, stageInner, adultH);
   const babyFit = fitSilhouette(species.id, stageInner, babyH);
   const pairGap = 36;
@@ -408,6 +530,7 @@ function FormStage({
   const babyHome = -Math.round((adultW + pairGap) / 2);
   const adultHome = Math.round((babyW + pairGap) / 2);
   const solo = Math.min(1.8, adultH / babyH);
+  const accent = speciesAccent(species, palette.scheme);
 
   const babyX = useSharedValue(babyHome);
   const adultX = useSharedValue(adultHome);
@@ -459,65 +582,46 @@ function FormStage({
     transform: [{ scale: adultZoom.value }],
   }));
 
-  const babyMass = massLabel(species.hatchWeightGrams, t);
-  const adultMass = massLabel(species.adultWeightGrams, t);
-  const babyMeasure = t('showcase.measure', {
-    value: formatCm(species.growth.hatchlingMeasureCm),
-    kind: t('showcase.length'),
-  });
-  const adultMeasure = t('showcase.measure', {
-    value: formatCm(species.growth.adultMeasureCm),
-    kind: t(species.growth.adultMetricKind === 'wingspan' ? 'showcase.wingspan' : 'showcase.length'),
-  });
-
   return (
-    <View style={styles.stage}>
-      <Podium />
+    <View style={[styles.stage, { height: stageHeight }]}>
+      <View
+        pointerEvents="none"
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        style={StyleSheet.absoluteFill}>
+        <Horizon species={species} palette={palette} />
+      </View>
       <Animated.View
-        pointerEvents={mode === 'adult' ? 'none' : 'auto'}
+        pointerEvents="none"
         accessibilityElementsHidden={mode === 'adult'}
         importantForAccessibility={mode === 'adult' ? 'no-hide-descendants' : 'yes'}
         style={[styles.figureAnchor, babyShift]}>
-        <MeasureBadge
-          title={t('showcase.babyForm')}
-          mass={babyMass}
-          measure={babyMeasure}
-          label={t('showcase.a11y.baby', { name: species.commonName })}
-        />
         <Animated.View style={[styles.scaler, babyScaleStyle]}>
           <GrowthSilhouette
             speciesId={species.id}
             stage="juvenile"
             width={babyW}
             height={babyDrawH}
-            fill={INK}
-            opacity={0.34}
-            rim={species.growth.glow}
-            filterSuffix="showcase-baby"
+            fill={accent}
+            opacity={0.94}
+            filterSuffix={`showcase-baby-${palette.scheme}`}
           />
         </Animated.View>
       </Animated.View>
       <Animated.View
-        pointerEvents={mode === 'baby' ? 'none' : 'auto'}
+        pointerEvents="none"
         accessibilityElementsHidden={mode === 'baby'}
         importantForAccessibility={mode === 'baby' ? 'no-hide-descendants' : 'yes'}
         style={[styles.figureAnchor, adultShift]}>
-        <MeasureBadge
-          title={t('showcase.adultForm')}
-          mass={adultMass}
-          measure={adultMeasure}
-          label={t('showcase.a11y.adult', { name: species.commonName })}
-        />
         <Animated.View style={[styles.scaler, adultScaleStyle]}>
           <GrowthSilhouette
             speciesId={species.id}
             stage="adult"
             width={adultW}
             height={adultDrawH}
-            fill={INK}
-            opacity={0.34}
-            rim={species.growth.glow}
-            filterSuffix="showcase-adult"
+            fill={accent}
+            opacity={0.94}
+            filterSuffix={`showcase-adult-${palette.scheme}`}
           />
         </Animated.View>
       </Animated.View>
@@ -525,141 +629,254 @@ function FormStage({
   );
 }
 
-function Podium() {
+function FormCaption({
+  species,
+  mode,
+  palette,
+}: {
+  species: SpeciesConfig;
+  mode: FormMode;
+  palette: HatcheryPalette;
+}) {
+  const { t } = useTranslation();
+  const baby = mode !== 'adult';
+  const adult = mode !== 'baby';
+
   return (
-    <Svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none" style={styles.podium} pointerEvents="none">
-      <Ellipse cx="50" cy="90" rx="18" ry="1.1" fill={INK} opacity={0.28} />
-    </Svg>
+    <View style={styles.captionRow}>
+      {baby ? (
+        <MeasureCaption
+          title={t('showcase.babyForm')}
+          mass={massLabel(species.hatchWeightGrams, t)}
+          measure={t('showcase.measure', {
+            value: formatCm(species.growth.hatchlingMeasureCm),
+            kind: t('showcase.length'),
+          })}
+          label={t('showcase.a11y.baby', { name: species.commonName })}
+          palette={palette}
+        />
+      ) : null}
+      {baby && adult ? (
+        <View style={[styles.captionRule, { backgroundColor: `rgba(${palette.veil}, 0.18)` }]} />
+      ) : null}
+      {adult ? (
+        <MeasureCaption
+          title={t('showcase.adultForm')}
+          mass={massLabel(species.adultWeightGrams, t)}
+          measure={t('showcase.measure', {
+            value: formatCm(species.growth.adultMeasureCm),
+            kind: t(species.growth.adultMetricKind === 'wingspan' ? 'showcase.wingspan' : 'showcase.length'),
+          })}
+          label={t('showcase.a11y.adult', { name: species.commonName })}
+          palette={palette}
+        />
+      ) : null}
+    </View>
   );
 }
 
-function MeasureBadge({
+function MeasureCaption({
   title,
   mass,
   measure,
   label,
+  palette,
 }: {
   title: string;
   mass: string;
   measure: string;
   label: string;
+  palette: HatcheryPalette;
 }) {
   return (
-    <View accessible accessibilityLabel={`${label}. ${mass}. ${measure}`} style={styles.badge}>
-      <Text style={styles.badgeTitle}>{title}</Text>
-      <Text style={styles.badgeMass}>{mass}</Text>
-      <Text style={styles.badgeMeta}>{measure}</Text>
+    <View accessible accessibilityLabel={`${label}. ${mass}. ${measure}`} style={styles.captionItem}>
+      <Text
+        maxFontSizeMultiplier={1.15}
+        style={[styles.captionTitle, { color: palette.quiet }]}
+        accessibilityElementsHidden>
+        {title}
+      </Text>
+      <Text
+        numberOfLines={2}
+        maxFontSizeMultiplier={1.15}
+        style={[styles.captionValue, { color: palette.ink, fontFamily: Fonts?.serif }]}
+        accessibilityElementsHidden>
+        {mass} · {measure}
+      </Text>
     </View>
   );
 }
 
-function Dossier({ species }: { species: SpeciesConfig }) {
+function FieldPlate({
+  species,
+  palette,
+  roomy,
+  frameWidth,
+  accent,
+}: {
+  species: SpeciesConfig;
+  palette: HatcheryPalette;
+  roomy: boolean;
+  frameWidth: number;
+  accent: string;
+}) {
   const { t } = useTranslation();
+  const atmosphere = ADOPTION_ATMOSPHERE[species.id];
+  const eggHeight = roomy ? 108 : 86;
+  const titleSize = Math.max(26, Math.min(36, Math.floor((frameWidth - 56) / (species.commonName.length * 0.5))));
   const difficulty = species.showcase.difficultyTag;
-  const filled = PIP_COUNT[difficulty];
 
   return (
-    <View style={styles.card}>
-      <View style={styles.headerRow}>
-        <View style={styles.headerCopy}>
-          <Text style={styles.commonName}>{species.commonName}</Text>
-          <Text style={styles.binomial}>{species.scientificName}</Text>
-        </View>
-        <View style={[styles.classBadge, { backgroundColor: hexToRgba(species.growth.glow, 0.22) }]}>
-          <Text style={styles.classLabel}>{t(CLASS_LABEL[species.taxon])}</Text>
-        </View>
+    <View>
+      <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={styles.eggSeal}>
+        <SpeciesEggArt species={species} width={Math.round(eggHeight * (120 / 160))} height={eggHeight} />
       </View>
-
-      <View
+      <Text
+        maxFontSizeMultiplier={1.15}
+        style={[styles.taxon, { color: palette.scheme === 'dark' ? atmosphere.rim : atmosphere.low }]}>
+        {t(TAG_LABEL[species.tag])}
+      </Text>
+      <Text
+        numberOfLines={1}
+        maxFontSizeMultiplier={1.2}
         style={[
-          styles.banner,
+          styles.common,
           {
-            backgroundColor: hexToRgba(species.growth.glow, 0.16),
-            borderColor: hexToRgba(species.growth.glow, 0.45),
+            fontFamily: Fonts?.serif,
+            color: palette.ink,
+            fontSize: titleSize,
+            lineHeight: Math.round(titleSize * 1.16),
           },
         ]}>
-        <Text style={styles.bannerPrimary}>{t('showcase.hatchBanner', { days: species.incubationDays })}</Text>
-        <Text style={styles.bannerSecondary}>
-          {t('showcase.adultBanner', { days: species.adultMaturationDays })}
-        </Text>
+        {species.commonName}
+      </Text>
+      <Text
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.75}
+        maxFontSizeMultiplier={1.15}
+        style={[styles.scientific, { fontFamily: Fonts?.serif, color: palette.muted }]}>
+        {species.scientificName}
+      </Text>
+      <Text numberOfLines={2} maxFontSizeMultiplier={1.15} style={[styles.shell, { color: palette.muted }]}>
+        {species.egg.description}
+      </Text>
+
+      <View style={styles.ledger}>
+        <LedgerFigure
+          value={String(species.incubationDays)}
+          caption={t('showcase.ledgerHatch')}
+          accessibilityLabel={t('showcase.hatchBanner', { days: species.incubationDays })}
+          palette={palette}
+          roomy={roomy}
+        />
+        <View style={[styles.ledgerRule, { backgroundColor: `rgba(${palette.veil}, 0.18)` }]} />
+        <LedgerFigure
+          value={String(species.adultMaturationDays)}
+          caption={t('showcase.ledgerAdult')}
+          accessibilityLabel={t('showcase.adultBanner', { days: species.adultMaturationDays })}
+          palette={palette}
+          roomy={roomy}
+        />
       </View>
 
-      <View style={styles.tileRow}>
-        <InfoTile label={t('showcase.temperament')} value={species.showcase.temperament} />
-        <InfoTile label={t('showcase.habitat')} value={species.showcase.habitat} />
+      <View style={styles.noteRow}>
+        <FieldNote label={t('showcase.temperament')} value={species.showcase.temperament} palette={palette} />
+        <View style={[styles.noteRule, { backgroundColor: `rgba(${palette.veil}, 0.16)` }]} />
+        <FieldNote label={t('showcase.habitat')} value={species.showcase.habitat} palette={palette} />
       </View>
-      <SpecimenScale species={species} />
 
-      <Text style={styles.section}>{t('showcase.facts')}</Text>
-      <FactPager facts={species.showcase.funFacts} accent={species.growth.glow} />
+      <Text maxFontSizeMultiplier={1.15} style={[styles.section, { color: palette.quiet }]}>
+        {t('showcase.facts')}
+      </Text>
+      <FactPager facts={species.showcase.funFacts} accent={accent} palette={palette} />
 
-      <Text style={styles.section}>{t('showcase.care')}</Text>
+      <Text maxFontSizeMultiplier={1.15} style={[styles.section, { color: palette.quiet }]}>
+        {t('showcase.care')}
+      </Text>
       <View style={styles.careRow}>
-        <View style={styles.pips} accessibilityLabel={t(DIFFICULTY_LABEL[difficulty])}>
+        <View
+          style={styles.pips}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants">
           {DIFFICULTY_TAGS.map((tag, index) => (
             <View
               key={tag}
               style={[
                 styles.pip,
-                {
-                  backgroundColor: index < filled ? species.growth.glow : LINE,
-                },
+                { backgroundColor: index < PIP_COUNT[difficulty] ? accent : `rgba(${palette.veil}, 0.16)` },
               ]}
             />
           ))}
         </View>
-        <Text style={styles.careTag}>{t(DIFFICULTY_LABEL[difficulty])}</Text>
+        <Text maxFontSizeMultiplier={1.15} style={[styles.careTag, { color: palette.ink, fontFamily: Fonts?.serif }]}>
+          {t(DIFFICULTY_LABEL[difficulty])}
+        </Text>
       </View>
-      <Text style={styles.careBody}>{t(CARE_COPY[difficulty])}</Text>
+      <Text maxFontSizeMultiplier={1.2} style={[styles.careBody, { color: palette.muted }]}>
+        {t(CARE_COPY[difficulty])}
+      </Text>
     </View>
   );
 }
 
-function SpecimenScale({ species }: { species: SpeciesConfig }) {
-  const { t } = useTranslation();
-  const adult = Math.max(species.growth.adultMeasureCm, 0.1);
-  const hatchRatio = Math.min(1, Math.max(0.08, species.growth.hatchlingMeasureCm / adult));
-  const kind = t(species.growth.adultMetricKind === 'wingspan' ? 'showcase.wingspan' : 'showcase.length');
-  const hatchMeasure = t('showcase.measure', {
-    value: formatCm(species.growth.hatchlingMeasureCm),
-    kind: t('showcase.length'),
-  });
-  const adultMeasure = t('showcase.measure', {
-    value: formatCm(species.growth.adultMeasureCm),
-    kind,
-  });
-
+function LedgerFigure({
+  value,
+  caption,
+  accessibilityLabel,
+  palette,
+  roomy,
+}: {
+  value: string;
+  caption: string;
+  accessibilityLabel: string;
+  palette: HatcheryPalette;
+  roomy: boolean;
+}) {
+  const size = roomy ? 40 : 34;
   return (
-    <View>
-      <Text style={styles.section}>{t('showcase.scale')}</Text>
-      <View style={styles.scaleBlock}>
-        <Text style={styles.scaleLabel}>{t('showcase.babyForm')}</Text>
-        <View style={styles.scaleTrack}>
-          <View style={[styles.scaleFill, { width: `${Math.round(hatchRatio * 100)}%`, backgroundColor: species.growth.glow }]} />
-        </View>
-        <Text style={styles.scaleValue}>{hatchMeasure}</Text>
-      </View>
-      <View style={styles.scaleBlock}>
-        <Text style={styles.scaleLabel}>{t('showcase.adultForm')}</Text>
-        <View style={styles.scaleTrack}>
-          <View style={[styles.scaleFill, { width: '100%', backgroundColor: species.growth.glow }]} />
-        </View>
-        <Text style={styles.scaleValue}>{adultMeasure}</Text>
-      </View>
+    <View accessible accessibilityLabel={accessibilityLabel} style={styles.ledgerItem}>
+      <Text
+        maxFontSizeMultiplier={1.15}
+        style={[
+          styles.ledgerValue,
+          { color: palette.ink, fontFamily: Fonts?.serif, fontSize: size, lineHeight: Math.round(size * 1.12) },
+        ]}
+        accessibilityElementsHidden>
+        {value}
+      </Text>
+      <Text
+        maxFontSizeMultiplier={1.15}
+        style={[styles.ledgerCaption, { color: palette.quiet }]}
+        accessibilityElementsHidden>
+        {caption}
+      </Text>
     </View>
   );
 }
 
-function InfoTile({ label, value }: { label: string; value: string }) {
+function FieldNote({ label, value, palette }: { label: string; value: string; palette: HatcheryPalette }) {
   return (
-    <View style={styles.tile}>
-      <Text style={styles.tileLabel}>{label}</Text>
-      <Text style={styles.tileValue}>{value}</Text>
+    <View style={styles.note}>
+      <Text maxFontSizeMultiplier={1.15} style={[styles.noteLabel, { color: palette.quiet }]}>
+        {label}
+      </Text>
+      <Text maxFontSizeMultiplier={1.2} style={[styles.noteValue, { color: palette.ink, fontFamily: Fonts?.serif }]}>
+        {value}
+      </Text>
     </View>
   );
 }
 
-function FactPager({ facts, accent }: { facts: readonly string[]; accent: string }) {
+function FactPager({
+  facts,
+  accent,
+  palette,
+}: {
+  facts: readonly string[];
+  accent: string;
+  palette: HatcheryPalette;
+}) {
   const { t } = useTranslation();
   const [width, setWidth] = useState(0);
   const [index, setIndex] = useState(0);
@@ -684,25 +901,132 @@ function FactPager({ facts, accent }: { facts: readonly string[]; accent: string
           accessibilityLabel={t('showcase.a11y.fact', { index: index + 1, total: facts.length })}>
           {facts.map((fact, factIndex) => (
             <View key={`${factIndex}-${fact.slice(0, 16)}`} style={[styles.factPage, { width }]}>
-              <Text style={styles.factText}>{fact}</Text>
+              <View style={[styles.factRule, { backgroundColor: accent }]} />
+              <Text maxFontSizeMultiplier={1.25} style={[styles.factText, { color: palette.ink, fontFamily: Fonts?.serif }]}>
+                {fact}
+              </Text>
             </View>
           ))}
         </ScrollView>
       ) : (
-        <Text style={styles.factText}>{facts[0]}</Text>
+        <View style={styles.factPage}>
+          <View style={[styles.factRule, { backgroundColor: accent }]} />
+          <Text maxFontSizeMultiplier={1.25} style={[styles.factText, { color: palette.ink, fontFamily: Fonts?.serif }]}>
+            {facts[0]}
+          </Text>
+        </View>
       )}
-      <View style={styles.dots}>
+      <View style={styles.dots} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
         {facts.map((fact, factIndex) => (
           <View
             key={`${factIndex}-dot`}
             style={[
               styles.dot,
-              { backgroundColor: factIndex === index ? accent : LINE },
+              { backgroundColor: factIndex === index ? accent : `rgba(${palette.veil}, 0.2)` },
             ]}
           />
         ))}
       </View>
     </View>
+  );
+}
+
+function NamingSheet({
+  visible,
+  nickname,
+  nameError,
+  palette,
+  alarm,
+  bottomInset,
+  onChangeNickname,
+  onConfirm,
+  onClose,
+}: {
+  visible: boolean;
+  nickname: string;
+  nameError: string | null;
+  palette: HatcheryPalette;
+  alarm: string;
+  bottomInset: number;
+  onChangeNickname: (value: string) => void;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  const card = palette.scheme === 'dark' ? '#1C1814' : '#FFF9F1';
+  const field = palette.scheme === 'dark' ? '#100E0C' : palette.ground;
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalRoot}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('showcase.cancelName')}
+          style={styles.modalScrim}
+          onPress={onClose}
+        />
+        <View
+          accessibilityViewIsModal
+          style={[styles.modalCard, { backgroundColor: card, paddingBottom: bottomInset + 20 }]}>
+          <Text maxFontSizeMultiplier={1.2} style={[styles.modalTitle, { color: palette.ink, fontFamily: Fonts?.serif }]}>
+            {t('showcase.nicknameTitle')}
+          </Text>
+          <Text maxFontSizeMultiplier={1.2} style={[styles.modalBody, { color: palette.muted }]}>
+            {t('showcase.nicknameBody')}
+          </Text>
+          <Text maxFontSizeMultiplier={1.15} style={[styles.fieldLabel, { color: palette.quiet }]}>
+            {t('adoption.nickname')}
+          </Text>
+          <TextInput
+            value={nickname}
+            onChangeText={onChangeNickname}
+            onSubmitEditing={onConfirm}
+            maxLength={24}
+            autoCorrect={false}
+            autoCapitalize="words"
+            returnKeyType="done"
+            selectTextOnFocus
+            placeholder={t('adoption.placeholder')}
+            placeholderTextColor={palette.quiet}
+            accessibilityLabel={t('adoption.nicknameA11y')}
+            style={[
+              styles.input,
+              {
+                borderColor: nameError ? alarm : `rgba(${palette.veil}, 0.16)`,
+                backgroundColor: field,
+                color: palette.ink,
+                fontFamily: Fonts?.serif,
+              },
+            ]}
+          />
+          {nameError ? (
+            <Text maxFontSizeMultiplier={1.2} style={[styles.nameError, { color: alarm }]}>
+              {nameError}
+            </Text>
+          ) : null}
+          <Pressable
+            accessibilityRole="button"
+            onPress={onConfirm}
+            style={({ pressed }) => [
+              styles.begin,
+              {
+                backgroundColor: palette.amber,
+                opacity: pressed ? 0.88 : 1,
+                transform: [{ scale: pressed ? 0.985 : 1 }],
+              },
+            ]}>
+            <Text maxFontSizeMultiplier={1.15} style={[styles.beginLabel, { color: palette.amberInk }]}>
+              {t('showcase.confirmAdopt')}
+            </Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" onPress={onClose} style={styles.pickAnother}>
+            <Text maxFontSizeMultiplier={1.15} style={[styles.pickAnotherLabel, { color: palette.quiet }]}>
+              {t('showcase.cancelName')}
+            </Text>
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }
 
@@ -737,363 +1061,291 @@ function asSpeciesId(value: string): SpeciesId | null {
   return (SPECIES_IDS as readonly string[]).includes(value) ? (value as SpeciesId) : null;
 }
 
-function useReduceMotion(): boolean {
-  const [reduceMotion, setReduceMotion] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-    AccessibilityInfo.isReduceMotionEnabled()
-      .then((enabled) => {
-        if (active) {
-          setReduceMotion(enabled);
-        }
-      })
-      .catch(() => undefined);
-    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', (enabled) => {
-      setReduceMotion(enabled);
-    });
-    return () => {
-      active = false;
-      subscription.remove();
-    };
-  }, []);
-
-  return reduceMotion;
-}
-
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: STUDIO,
   },
-  wash: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
+  column: {
+    flex: 1,
+    minHeight: 0,
+    width: '100%',
+    maxWidth: 640,
+    alignSelf: 'center',
   },
   topBar: {
-    paddingHorizontal: Spacing.four,
-    paddingBottom: Spacing.two,
-  },
-  backPill: {
-    alignSelf: 'flex-start',
+    zIndex: 4,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    minHeight: 36,
-    paddingHorizontal: 12,
-    borderRadius: 18,
-    backgroundColor: 'rgba(20, 16, 12, 0.55)',
-    borderWidth: 1,
-    borderColor: LINE,
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+    minHeight: 48,
+  },
+  back: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   backGlyph: {
-    color: INK,
-    fontSize: 22,
-    lineHeight: 24,
-    fontWeight: '600',
+    fontSize: 26,
+    lineHeight: 28,
+    fontWeight: '400',
+    marginTop: -1,
   },
-  backLabel: {
-    color: INK,
-    fontSize: 14,
-    fontWeight: '700',
+  body: {
+    flex: 1,
+    minHeight: 0,
   },
   toggle: {
     flexDirection: 'row',
     alignSelf: 'center',
-    padding: 4,
-    borderRadius: 16,
-    backgroundColor: 'rgba(20, 16, 12, 0.55)',
-    borderWidth: 1,
-    borderColor: LINE,
-    marginBottom: Spacing.two,
+    maxWidth: '92%',
+    padding: 3,
+    borderRadius: 999,
+    marginBottom: 4,
   },
   toggleItem: {
-    minHeight: 34,
+    flexShrink: 1,
+    minHeight: 32,
     paddingHorizontal: 14,
-    borderRadius: 12,
-    borderWidth: 1,
+    borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
   },
   toggleLabel: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   stage: {
-    height: 268,
-    marginHorizontal: Spacing.three,
     alignItems: 'center',
     justifyContent: 'flex-end',
   },
-  podium: {
-    ...StyleSheet.absoluteFill,
-  },
   figureAnchor: {
     position: 'absolute',
-    bottom: 18,
+    bottom: 12,
     alignItems: 'center',
   },
   scaler: {
     transformOrigin: 'bottom',
   },
-  badge: {
-    marginBottom: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 10,
-    backgroundColor: 'rgba(12, 10, 9, 0.72)',
-    borderWidth: 1,
-    borderColor: LINE,
-    alignItems: 'center',
-    minWidth: 78,
-  },
-  badgeTitle: {
-    color: INK,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-  },
-  badgeMass: {
-    color: INK,
-    fontSize: 12,
-    fontWeight: '700',
-    fontFamily: Platform.select({ ios: 'Georgia', android: 'serif', default: 'Georgia' }),
-  },
-  badgeMeta: {
-    color: MUTED,
-    fontSize: 11,
-    fontWeight: '600',
-    fontFamily: Platform.select({ ios: 'Georgia', android: 'serif', default: 'Georgia' }),
-  },
-  dossierScroll: {
-    flex: 1,
-  },
-  dossierContent: {
-    paddingHorizontal: Spacing.three,
-    paddingBottom: Spacing.three,
-  },
-  card: {
-    backgroundColor: CARD,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: LINE,
-    padding: Spacing.three,
-    gap: Spacing.two,
-  },
-  headerRow: {
+  captionRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: Spacing.two,
+    justifyContent: 'center',
+    gap: 16,
+    paddingHorizontal: 24,
+    paddingTop: 2,
+    paddingBottom: 6,
   },
-  headerCopy: {
+  captionItem: {
     flex: 1,
+    maxWidth: 210,
+    alignItems: 'center',
     gap: 2,
   },
-  commonName: {
-    color: INK,
-    fontSize: 26,
-    fontWeight: '700',
+  captionRule: {
+    width: StyleSheet.hairlineWidth,
+    alignSelf: 'stretch',
+    marginVertical: 4,
   },
-  binomial: {
-    color: MUTED,
-    fontSize: 15,
-    fontStyle: 'italic',
-    fontFamily: Platform.select({ ios: 'Georgia', android: 'serif', default: 'Georgia' }),
-  },
-  classBadge: {
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  classLabel: {
-    color: INK,
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.4,
-  },
-  banner: {
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    gap: 2,
-  },
-  bannerPrimary: {
-    color: INK,
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  bannerSecondary: {
-    color: MUTED,
-    fontSize: 13,
+  captionTitle: {
+    fontSize: 10,
     fontWeight: '600',
-  },
-  tileRow: {
-    flexDirection: 'row',
-    gap: Spacing.two,
-  },
-  tile: {
-    flex: 1,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: LINE,
-    padding: Spacing.two,
-    gap: 4,
-  },
-  tileLabel: {
-    color: MUTED,
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.5,
+    letterSpacing: 1.6,
     textTransform: 'uppercase',
   },
-  tileValue: {
-    color: INK,
-    fontSize: 14,
-    lineHeight: 19,
+  captionValue: {
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: 'center',
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 28,
+    paddingTop: 6,
+    paddingBottom: 28,
+  },
+  eggSeal: {
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  taxon: {
+    textAlign: 'center',
+    fontSize: 11,
     fontWeight: '600',
+    letterSpacing: 2.8,
+    textTransform: 'uppercase',
+  },
+  common: {
+    textAlign: 'center',
+    fontWeight: '500',
+    width: '100%',
+  },
+  scientific: {
+    textAlign: 'center',
+    fontSize: 15,
+    lineHeight: 20,
+    fontStyle: 'italic',
+    width: '100%',
+  },
+  shell: {
+    marginTop: 6,
+    textAlign: 'center',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  ledger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 22,
+  },
+  ledgerItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: 8,
+  },
+  ledgerValue: {
+    fontWeight: '500',
+    fontVariant: ['tabular-nums'],
+  },
+  ledgerCaption: {
+    textAlign: 'center',
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '600',
+  },
+  ledgerRule: {
+    width: StyleSheet.hairlineWidth,
+    alignSelf: 'stretch',
+    marginVertical: 8,
+  },
+  noteRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 16,
+    marginTop: 26,
+  },
+  note: {
+    flex: 1,
+    gap: 4,
+  },
+  noteRule: {
+    width: StyleSheet.hairlineWidth,
+  },
+  noteLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 2.2,
+    textTransform: 'uppercase',
+  },
+  noteValue: {
+    fontSize: 16,
+    lineHeight: 22,
   },
   section: {
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.6,
+    marginTop: 26,
+    marginBottom: 8,
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 2.2,
     textTransform: 'uppercase',
-    marginTop: Spacing.one,
   },
   factPage: {
-    paddingRight: Spacing.two,
-    minHeight: 72,
-    justifyContent: 'center',
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 14,
+    minHeight: 88,
+    paddingRight: 8,
+  },
+  factRule: {
+    width: 2,
+    borderRadius: 1,
   },
   factText: {
-    color: INK,
-    fontSize: 15,
-    lineHeight: 22,
-    fontFamily: Platform.select({ ios: 'Georgia', android: 'serif', default: 'Georgia' }),
-  },
-  scaleBlock: {
-    gap: 4,
-  },
-  scaleLabel: {
-    color: MUTED,
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-  },
-  scaleTrack: {
-    height: 6,
-    borderRadius: 999,
-    backgroundColor: '#2A241C',
-    overflow: 'hidden',
-  },
-  scaleFill: {
-    height: '100%',
-    borderRadius: 999,
-  },
-  scaleValue: {
-    color: INK,
-    fontSize: 13,
-    fontWeight: '600',
-    fontFamily: Platform.select({ ios: 'Georgia', android: 'serif', default: 'Georgia' }),
+    flex: 1,
+    fontSize: 17,
+    lineHeight: 26,
   },
   dots: {
     flexDirection: 'row',
     gap: 6,
-    marginTop: 8,
+    marginTop: 12,
   },
   dot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   careRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.two,
+    gap: 12,
   },
   pips: {
     flexDirection: 'row',
     gap: 6,
   },
   pip: {
-    width: 18,
+    width: 8,
     height: 8,
     borderRadius: 4,
   },
   careTag: {
-    color: INK,
-    fontSize: 15,
-    fontWeight: '800',
+    fontSize: 16,
   },
   careBody: {
-    color: MUTED,
-    fontSize: 14,
-    lineHeight: 20,
+    marginTop: 8,
+    fontSize: 15,
+    lineHeight: 22,
   },
   dock: {
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.two,
-    gap: Spacing.two,
-    backgroundColor: STUDIO,
-    borderTopWidth: 1,
-    borderTopColor: LINE,
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    gap: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
-  adopt: {
-    minHeight: 52,
-    borderRadius: 16,
-    backgroundColor: ADOPT,
+  begin: {
+    minHeight: 54,
+    borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  adoptLabel: {
-    color: ADOPT_TEXT,
-    fontSize: 17,
-    fontWeight: '800',
-    textAlign: 'center',
-  },
-  pass: {
-    minHeight: 58,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#C6B48A',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 18,
     paddingVertical: 8,
   },
-  passLabel: {
-    color: '#E7D7B0',
+  beginLabel: {
     fontSize: 16,
-    fontWeight: '800',
+    fontWeight: '600',
+    letterSpacing: 0.2,
     textAlign: 'center',
   },
   passHint: {
-    color: MUTED,
+    marginTop: 1,
     fontSize: 12,
     fontWeight: '600',
-    marginTop: 2,
+    textAlign: 'center',
+  },
+  earnHint: {
+    fontSize: 13,
+    lineHeight: 18,
     textAlign: 'center',
   },
   purchaseError: {
-    color: '#E7B2A2',
     fontSize: 13,
     fontWeight: '600',
     textAlign: 'center',
   },
   pickAnother: {
-    minHeight: 40,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
   pickAnotherLabel: {
-    color: INK,
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   modalRoot: {
     flex: 1,
@@ -1101,47 +1353,40 @@ const styles = StyleSheet.create({
   },
   modalScrim: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    backgroundColor: 'rgba(22, 16, 12, 0.46)',
   },
   modalCard: {
-    backgroundColor: CARD,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    borderWidth: 1,
-    borderColor: LINE,
-    padding: Spacing.four,
-    gap: Spacing.two,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    gap: 10,
   },
   modalTitle: {
-    color: INK,
-    fontSize: 22,
-    fontWeight: '800',
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: '500',
   },
   modalBody: {
-    color: MUTED,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 15,
+    lineHeight: 22,
   },
   fieldLabel: {
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.5,
+    marginTop: 6,
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 2.2,
     textTransform: 'uppercase',
   },
   input: {
     borderWidth: 1,
-    borderRadius: 12,
-    minHeight: 48,
-    paddingHorizontal: Spacing.three,
-    color: INK,
-    fontSize: 16,
-    fontWeight: '600',
-    backgroundColor: '#100E0C',
+    borderRadius: 16,
+    minHeight: 56,
+    paddingHorizontal: 16,
+    fontSize: 22,
   },
   nameError: {
-    color: '#E7A15A',
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '600',
   },
 });

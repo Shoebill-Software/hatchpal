@@ -1,8 +1,9 @@
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { SymbolView } from 'expo-symbols';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MilestoneDiagram } from '@/components/MilestoneDiagram';
-import { hexToRgba, useNestPalette } from '@/constants/nest';
+import { useNestPalette } from '@/constants/nest';
 import { Fonts, Spacing } from '@/constants/theme';
 import type { JournalMilestone } from '@/domain/milestones';
 import type { AudioMilestoneTrigger, CandlingFeatures, DevelopmentStage, SpeciesId } from '@/domain/types';
@@ -48,7 +49,7 @@ export function MilestoneDetailModal({ milestone, speciesId, visible, onClose }:
           style={[
             styles.sheet,
             {
-              backgroundColor: palette.background,
+              backgroundColor: palette.surface,
               maxHeight: height * 0.92,
               paddingBottom: insets.bottom + Spacing.three,
             },
@@ -61,40 +62,38 @@ export function MilestoneDetailModal({ milestone, speciesId, visible, onClose }:
               showsVerticalScrollIndicator={false}
               bounces>
               <View style={styles.headerRow}>
-                <View style={styles.headerCopy}>
-                  <Text style={[styles.day, { color: palette.textMuted }]}>{dayText}</Text>
-                  <View style={[styles.phase, { backgroundColor: hexToRgba(palette.action, 0.12) }]}>
-                    <Text style={[styles.phaseLabel, { color: palette.action }]}>
-                      {t(phaseKey(milestone.stage))}
-                    </Text>
-                  </View>
-                </View>
+                <Text style={[styles.kicker, { color: palette.textMuted }]}>
+                  {dayText}
+                  <Text style={{ color: palette.action }}>{`  ·  ${t(phaseKey(milestone.stage))}`}</Text>
+                </Text>
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={t('journal.close')}
                   hitSlop={8}
                   onPress={onClose}
-                  style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}>
+                  style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1 }]}>
                   <Text style={[styles.close, { color: palette.action }]}>{t('journal.close')}</Text>
                 </Pressable>
               </View>
 
-              <Text style={[styles.title, { color: palette.text }]}>
+              <Text accessibilityRole="header" style={[styles.title, { color: palette.text, fontFamily: Fonts?.serif }]}>
                 {milestone.title}
               </Text>
 
-              <MilestoneDiagram
-                stage={milestone.stage}
-                candling={milestone.candling}
-                speciesId={speciesId}
-                duringIncubation={milestone.duringIncubation}
-              />
-              <Text style={[styles.diagramCaption, { color: palette.textMuted }]}>{t('journal.diagram')}</Text>
+              <View style={[styles.figure, { backgroundColor: palette.background, borderColor: palette.border }]}>
+                <MilestoneDiagram
+                  stage={milestone.stage}
+                  candling={milestone.candling}
+                  speciesId={speciesId}
+                  duringIncubation={milestone.duringIncubation}
+                />
+                <Text style={[styles.caption, { color: palette.textMuted }]}>{t('journal.diagram')}</Text>
+              </View>
 
               <Text style={[styles.sectionLabel, { color: palette.textMuted }]}>
                 {t('journal.scientificObservation')}
               </Text>
-              <Text selectable style={[styles.body, { color: palette.text, fontFamily: Fonts.serif }]}>
+              <Text selectable style={[styles.body, { color: palette.text, fontFamily: Fonts?.serif }]}>
                 {milestone.scientificSummary}
               </Text>
 
@@ -112,12 +111,20 @@ export function MilestoneDetailModal({ milestone, speciesId, visible, onClose }:
                   }}
                   style={({ pressed }) => [
                     styles.soundButton,
-                    { backgroundColor: palette.action, opacity: pressed ? 0.86 : 1 },
+                    { backgroundColor: palette.action, opacity: pressed ? 0.88 : 1 },
                   ]}>
+                  <SymbolView
+                    name={{ ios: 'speaker.wave.2', android: 'volume_up', web: 'volume_up' }}
+                    size={16}
+                    tintColor={palette.actionText}
+                    fallback={<Text style={[styles.soundMark, { color: palette.actionText }]}>♪</Text>}
+                  />
                   <Text style={[styles.soundLabel, { color: palette.actionText }]}>{t('journal.replaySound')}</Text>
                 </Pressable>
               ) : (
-                <Text style={[styles.noSample, { color: palette.textMuted }]}>{t('journal.noSample')}</Text>
+                <Text style={[styles.noSample, { color: palette.textMuted, fontFamily: Fonts?.serif }]}>
+                  {t('journal.noSample')}
+                </Text>
               )}
             </ScrollView>
           ) : null}
@@ -157,14 +164,19 @@ function CandlingReadout({ candling }: { candling: CandlingFeatures }) {
   return (
     <View style={styles.readout}>
       <Text style={[styles.sectionLabel, { color: palette.textMuted }]}>{t('journal.candlingReadout')}</Text>
-      {rows.map((row) => (
-        <View
-          key={row.label}
-          style={[styles.readoutRow, { borderColor: palette.border, backgroundColor: palette.surface }]}>
-          <Text style={[styles.readoutLabel, { color: palette.textMuted }]}>{row.label}</Text>
-          <Text style={[styles.readoutValue, { color: palette.text }]}>{row.value}</Text>
-        </View>
-      ))}
+      <View style={[styles.ledger, { backgroundColor: palette.background, borderColor: palette.border }]}>
+        {rows.map((row, index) => (
+          <View
+            key={row.label}
+            style={[
+              styles.readoutRow,
+              index > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: palette.border } : null,
+            ]}>
+            <Text style={[styles.readoutLabel, { color: palette.textMuted }]}>{row.label}</Text>
+            <Text style={[styles.readoutValue, { color: palette.text, fontFamily: Fonts?.serif }]}>{row.value}</Text>
+          </View>
+        ))}
+      </View>
     </View>
   );
 }
@@ -225,8 +237,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   sheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     paddingTop: Spacing.two,
     width: '100%',
   },
@@ -239,12 +251,12 @@ const styles = StyleSheet.create({
     width: 42,
     height: 4,
     borderRadius: 2,
-    marginBottom: Spacing.two,
+    marginBottom: Spacing.three,
   },
   content: {
     paddingHorizontal: Spacing.four,
     paddingBottom: Spacing.three,
-    gap: Spacing.two,
+    gap: Spacing.three,
   },
   headerRow: {
     flexDirection: 'row',
@@ -252,93 +264,96 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: Spacing.three,
   },
-  headerCopy: {
+  kicker: {
     flex: 1,
-    gap: 8,
-  },
-  day: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-  },
-  phase: {
-    alignSelf: 'flex-start',
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  phaseLabel: {
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
   },
   close: {
     fontSize: 15,
-    fontWeight: '700',
-    paddingTop: 2,
+    fontWeight: '600',
   },
   title: {
-    fontSize: 26,
-    lineHeight: 32,
-    fontWeight: '700',
-  },
-  diagramCaption: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: '600',
     marginTop: -4,
+  },
+  figure: {
+    borderWidth: 1,
+    borderRadius: 20,
+    alignItems: 'center',
+    paddingTop: Spacing.two,
+    paddingBottom: Spacing.three,
+    paddingHorizontal: Spacing.three,
+    gap: 4,
+  },
+  caption: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.1,
+    textTransform: 'uppercase',
   },
   sectionLabel: {
     fontSize: 12,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    letterSpacing: 1.2,
     textTransform: 'uppercase',
-    marginTop: Spacing.one,
   },
   body: {
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: 17,
+    lineHeight: 26,
+    marginTop: -6,
   },
   readout: {
-    gap: 8,
+    gap: Spacing.two,
+  },
+  ledger: {
+    borderWidth: 1,
+    borderRadius: 16,
+    overflow: 'hidden',
   },
   readoutRow: {
-    borderWidth: 1,
-    borderRadius: 12,
     paddingHorizontal: Spacing.three,
-    paddingVertical: 10,
+    paddingVertical: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: Spacing.two,
+    gap: Spacing.three,
   },
   readoutLabel: {
     fontSize: 13,
+    lineHeight: 18,
     fontWeight: '600',
     flex: 1,
   },
   readoutValue: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600',
     textAlign: 'right',
     flexShrink: 1,
   },
   soundButton: {
-    minHeight: 48,
-    borderRadius: 14,
+    minHeight: 52,
+    borderRadius: 999,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: Spacing.two,
+    gap: 8,
+    marginTop: Spacing.one,
+  },
+  soundMark: {
+    fontSize: 16,
   },
   soundLabel: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   noSample: {
     fontSize: 14,
     lineHeight: 20,
     fontStyle: 'italic',
-    marginTop: Spacing.one,
   },
 });

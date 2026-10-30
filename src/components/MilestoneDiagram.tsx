@@ -108,11 +108,9 @@ function clampUnit(value: number): number {
 
 const styles = StyleSheet.create({
   plate: {
-    backgroundColor: '#F6EFE4',
-    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
-    minHeight: 210,
+    paddingVertical: 4,
+    minHeight: 200,
   },
 });

@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 
 import { hexToRgba, useNestPalette } from '@/constants/nest';
-import { Spacing } from '@/constants/theme';
+import { Fonts, Spacing } from '@/constants/theme';
 import type { WeightMark, WeightSample } from '@/domain/milestones';
 import type { SpeciesConfig } from '@/domain/types';
 import {
@@ -35,44 +35,48 @@ export function GrowthLog({
 
   return (
     <View style={styles.section}>
-      <Text style={[styles.heading, { color: palette.text }]}>{t('journal.growthTitle')}</Text>
-      <View style={styles.metrics}>
-        <Metric
-          label={t('journal.hatchWeight')}
-          value={massLabel(species.hatchWeightGrams, t)}
-        />
-        <Metric label={t('journal.recordedNow')} value={recorded} />
-        <Metric
-          label={t('journal.adultPlateau')}
-          value={massLabel(species.adultWeightGrams, t)}
-        />
-      </View>
+      <Text accessibilityRole="header" style={[styles.heading, { color: palette.textMuted }]}>
+        {t('journal.growthTitle')}
+      </Text>
+      <View style={[styles.panel, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+        <View style={styles.metrics}>
+          <Metric label={t('journal.hatchWeight')} value={massLabel(species.hatchWeightGrams, t)} />
+          <Metric label={t('journal.recordedNow')} value={recorded} />
+          <Metric label={t('journal.adultPlateau')} value={massLabel(species.adultWeightGrams, t)} />
+        </View>
 
-      {isHatched && samples.length > 0 ? (
-        <View style={[styles.panel, { backgroundColor: palette.surface, borderColor: palette.border }]}>
-          <Text style={[styles.panelTitle, { color: palette.textMuted }]}>{t('journal.weightLog')}</Text>
-          <WeightCurve samples={samples} />
-          <View style={styles.marks}>
-            {marks.map((mark) => (
-              <View key={`${mark.id}-${mark.epoch}`} style={styles.markRow}>
-                <View style={styles.markCopy}>
-                  <Text style={[styles.markTitle, { color: palette.text }]}>
-                    {mark.title}
-                  </Text>
-                  <Text style={[styles.markMeta, { color: palette.textMuted }]}>
-                    {markDetail(mark, t)}
+        <View style={[styles.rule, { backgroundColor: palette.border }]} />
+        {isHatched && samples.length > 0 ? (
+          <>
+            <Text style={[styles.panelTitle, { color: palette.textMuted }]}>{t('journal.weightLog')}</Text>
+            <WeightCurve samples={samples} />
+            <View style={styles.marks}>
+              {marks.map((mark, index) => (
+                <View
+                  key={`${mark.id}-${mark.epoch}`}
+                  style={[
+                    styles.markRow,
+                    index > 0 ? { borderTopColor: palette.border, borderTopWidth: StyleSheet.hairlineWidth } : null,
+                  ]}>
+                  <View style={styles.markCopy}>
+                    <Text style={[styles.markTitle, { color: palette.text, fontFamily: Fonts?.serif }]}>
+                      {mark.title}
+                    </Text>
+                    <Text style={[styles.markMeta, { color: palette.textMuted }]}>{markDetail(mark, t)}</Text>
+                  </View>
+                  <Text style={[styles.markMass, { color: palette.text, fontFamily: Fonts?.serif }]}>
+                    {massLabel(mark.grams, t)}
                   </Text>
                 </View>
-                <Text style={[styles.markMass, { color: palette.text }]}>
-                  {massLabel(mark.grams, t)}
-                </Text>
-              </View>
-            ))}
-          </View>
-        </View>
-      ) : (
-        <Text style={[styles.note, { color: palette.textMuted }]}>{t('journal.beforeHatchWeight')}</Text>
-      )}
+              ))}
+            </View>
+          </>
+        ) : (
+          <Text style={[styles.note, { color: palette.textMuted, fontFamily: Fonts?.serif }]}>
+            {t('journal.beforeHatchWeight')}
+          </Text>
+        )}
+      </View>
     </View>
   );
 }
@@ -80,9 +84,9 @@ export function GrowthLog({
 function Metric({ label, value }: { label: string; value: string }) {
   const palette = useNestPalette();
   return (
-    <View style={[styles.metric, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+    <View style={styles.metric}>
       <Text style={[styles.metricLabel, { color: palette.textMuted }]}>{label}</Text>
-      <Text style={[styles.metricValue, { color: palette.text }]}>{value}</Text>
+      <Text style={[styles.metricValue, { color: palette.text, fontFamily: Fonts?.serif }]}>{value}</Text>
     </View>
   );
 }
@@ -208,74 +212,83 @@ function markDetail(mark: WeightMark, t: TranslateFn): string {
 const styles = StyleSheet.create({
   section: {
     gap: Spacing.two,
-    marginTop: Spacing.three,
   },
   heading: {
-    fontSize: 18,
+    fontSize: 12,
     fontWeight: '700',
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    paddingHorizontal: 4,
+  },
+  panel: {
+    borderWidth: 1,
+    borderRadius: 22,
+    padding: Spacing.three,
+    gap: Spacing.three,
   },
   metrics: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Spacing.two,
+    gap: Spacing.three,
   },
   metric: {
     flexGrow: 1,
-    flexBasis: 140,
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: Spacing.two + 2,
+    flexBasis: 96,
     gap: 4,
-    minHeight: 72,
   },
   metricLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
-    letterSpacing: 0.2,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
   },
   metricValue: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 18,
+    lineHeight: 23,
+    fontWeight: '600',
   },
-  panel: {
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: Spacing.three,
-    gap: Spacing.two,
+  rule: {
+    height: StyleSheet.hairlineWidth,
   },
   panelTitle: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
-    letterSpacing: 0.4,
+    letterSpacing: 1.1,
     textTransform: 'uppercase',
   },
   marks: {
-    gap: Spacing.two,
+    marginHorizontal: -Spacing.three,
   },
   markRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: 10,
   },
   markCopy: {
     flex: 1,
     gap: 2,
   },
   markTitle: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600',
   },
   markMeta: {
     fontSize: 12,
     lineHeight: 16,
   },
   markMass: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
   },
   note: {
     fontSize: 14,
-    lineHeight: 20,
+    lineHeight: 21,
+    fontStyle: 'italic',
   },
 });

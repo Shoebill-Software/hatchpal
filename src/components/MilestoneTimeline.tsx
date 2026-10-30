@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AccessibilityInfo, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   cancelAnimation,
   Easing,
@@ -12,10 +12,11 @@ import Animated, {
 import { hexToRgba, useNestPalette, type NestPaletteTokens } from '@/constants/nest';
 import { Fonts, Spacing } from '@/constants/theme';
 import type { JournalMilestone, JournalMilestoneStatus } from '@/domain/milestones';
+import { useReduceMotion } from '@/hooks/useReduceMotion';
 import { formatBiologicalDay, formatLocaleDate, useTranslation } from '@/i18n';
-import { ImpactFeedbackStyle, triggerImpact } from '@/services/hapticFeedback';
 import type { TranslationKey } from '@/i18n/en';
 import type { TranslateFn } from '@/i18n/translate';
+import { ImpactFeedbackStyle, triggerImpact } from '@/services/hapticFeedback';
 
 export interface MilestoneTimelineProps {
   milestones: readonly JournalMilestone[];
@@ -27,116 +28,152 @@ export function MilestoneTimeline({ milestones, onSelect }: MilestoneTimelinePro
   const { t } = useTranslation();
   const [hintId, setHintId] = useState<string | null>(null);
   const reduceMotion = useReduceMotion();
+  const shell = milestones.filter((entry) => entry.duringIncubation);
+  const growth = milestones.filter((entry) => !entry.duringIncubation);
+  const chapters = [
+    shell.length > 0 ? { id: 'shell', title: t('journal.shellChapter'), entries: shell } : null,
+    growth.length > 0 ? { id: 'growth', title: t('journal.growthChapter'), entries: growth } : null,
+  ].filter((chapter) => chapter != null);
+
+  if (chapters.length === 0) {
+    return null;
+  }
 
   return (
-    <View style={styles.section}>
-      <Text style={[styles.heading, { color: palette.text }]}>{t('journal.timeline')}</Text>
-      {milestones.map((entry, index) => {
-        const next = milestones[index + 1];
-        const topColor = entry.status === 'upcoming' ? palette.border : palette.optimal;
-        const bottomColor = !next || next.status === 'upcoming' ? palette.border : palette.optimal;
-        const statusLabel = t(statusKey(entry.status));
-        const dayText = dayLabel(entry, t);
-        const date = formatLocaleDate(entry.unlockEpoch);
-        const dateText =
-          entry.status === 'upcoming' ? t('journal.expectedOn', { date }) : t('journal.unlockedOn', { date });
-        const title = entry.title;
-        const tooltip = tooltipFor(entry, t);
-        const openable = entry.status !== 'upcoming';
-
-        return (
-          <View key={entry.id} style={styles.row}>
-            <View style={styles.rail}>
-              <View
-                style={[
-                  styles.stem,
-                  { backgroundColor: index === 0 ? 'transparent' : topColor },
-                ]}
-              />
-              <View style={styles.nodeSlot}>
-                {entry.status === 'active' ? (
-                  <PulsingHalo color={palette.action} reduceMotion={reduceMotion} />
-                ) : null}
-                <View
-                  style={[
-                    styles.node,
-                    entry.status === 'completed'
-                      ? { backgroundColor: palette.optimal }
-                      : entry.status === 'active'
-                        ? { backgroundColor: palette.action }
-                        : {
-                            backgroundColor: palette.surface,
-                            borderWidth: 1.5,
-                            borderColor: palette.border,
-                          },
-                  ]}>
-                  {entry.status === 'completed' ? (
-                    <Text style={[styles.check, { color: palette.actionText }]}>✓</Text>
-                  ) : null}
-                </View>
-              </View>
-              <View
-                style={[
-                  styles.stem,
-                  styles.stemFlex,
-                  { backgroundColor: index === milestones.length - 1 ? 'transparent' : bottomColor },
-                ]}
-              />
-            </View>
-
-            <View style={styles.cardColumn}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`${dayText}. ${title}. ${statusLabel}. ${dateText}`}
-                accessibilityHint={openable ? undefined : tooltip}
-                accessibilityState={{ selected: entry.status === 'active' }}
+    <View style={styles.chapters}>
+      {chapters.map((chapter) => (
+        <View key={chapter.id} style={styles.chapter}>
+          <Text accessibilityRole="header" style={[styles.heading, { color: palette.textMuted }]}>
+            {chapter.title}
+          </Text>
+          <View style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+            {chapter.entries.map((entry, index) => (
+              <TimelineEntry
+                key={entry.id}
+                entry={entry}
+                index={index}
+                last={index === chapter.entries.length - 1}
+                hinted={hintId === entry.id}
+                reduceMotion={reduceMotion}
                 onPress={() => {
-                  if (!openable) {
+                  if (entry.status === 'upcoming') {
                     setHintId(entry.id);
+                    void triggerImpact(ImpactFeedbackStyle.Light);
                     return;
                   }
                   setHintId(null);
-                  void triggerImpact(ImpactFeedbackStyle.Light);
                   onSelect(entry);
                 }}
-                style={({ pressed }) => [
-                  styles.card,
-                  {
-                    backgroundColor:
-                      entry.status === 'active' ? hexToRgba(palette.action, 0.1) : palette.surface,
-                    borderColor: entry.status === 'active' ? palette.action : palette.border,
-                    opacity: entry.status === 'upcoming' ? 0.72 : pressed ? 0.9 : 1,
-                  },
-                ]}>
-                <View style={styles.cardHeader}>
-                  <Text style={[styles.day, { color: palette.textMuted }]}>{dayText}</Text>
-                  <View
-                    style={[
-                      styles.pill,
-                      { backgroundColor: hexToRgba(statusColor(entry.status, palette), 0.14) },
-                    ]}>
-                    <Text style={[styles.pillLabel, { color: statusColor(entry.status, palette) }]}>
-                      {statusLabel}
-                    </Text>
-                  </View>
-                </View>
-                <Text style={[styles.title, { color: palette.text }]}>{title}</Text>
-                <Text style={[styles.date, { color: palette.textMuted }]}>{dateText}</Text>
-              </Pressable>
-              {hintId === entry.id ? (
-                <Text
-                  accessibilityLiveRegion="polite"
-                  style={[styles.hint, { color: palette.textMuted, fontFamily: Fonts.serif }]}>
-                  {tooltip}
-                </Text>
-              ) : null}
-            </View>
+              />
+            ))}
           </View>
-        );
-      })}
+        </View>
+      ))}
     </View>
   );
 }
+
+function TimelineEntry({
+  entry,
+  index,
+  last,
+  hinted,
+  reduceMotion,
+  onPress,
+}: {
+  entry: JournalMilestone;
+  index: number;
+  last: boolean;
+  hinted: boolean;
+  reduceMotion: boolean;
+  onPress: () => void;
+}) {
+  const palette = useNestPalette();
+  const { t } = useTranslation();
+  const openable = entry.status !== 'upcoming';
+  const dayText = dayLabel(entry, t);
+  const date = formatLocaleDate(entry.unlockEpoch);
+  const dateText = entry.status === 'upcoming' ? t('journal.expectedOn', { date }) : t('journal.unlockedOn', { date });
+  const statusLabel = t(statusKey(entry.status));
+  const meta = entry.status === 'active' ? `${statusLabel} · ${dateText}` : dateText;
+  const line = hexToRgba(palette.text, 0.18);
+  const lineTop = index === 0 ? DOT_CENTER : 0;
+  const lineHeight = last ? (index === 0 ? 0 : DOT_CENTER) : undefined;
+
+  return (
+    <View
+      style={[
+        styles.entry,
+        !last ? { borderBottomColor: palette.border, borderBottomWidth: StyleSheet.hairlineWidth } : null,
+        entry.status === 'active' ? { backgroundColor: hexToRgba(palette.action, 0.07) } : null,
+      ]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${dayText}. ${entry.title}. ${statusLabel}. ${dateText}`}
+        accessibilityHint={openable ? undefined : tooltipFor(entry, t)}
+        accessibilityState={{ selected: entry.status === 'active' }}
+        onPress={onPress}
+        style={({ pressed }) => [styles.hit, { opacity: pressed ? 0.72 : 1 }]}>
+        <View
+          style={[
+            styles.accent,
+            { backgroundColor: entry.status === 'active' ? palette.action : 'transparent' },
+          ]}
+        />
+        <View style={styles.hitBody}>
+          <View style={styles.dayCol}>
+            <Text
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.65}
+              maxFontSizeMultiplier={1.3}
+              style={[
+                styles.dayNum,
+                {
+                  color: entry.status === 'upcoming' ? palette.textMuted : palette.text,
+                  fontFamily: Fonts?.serif,
+                },
+              ]}>
+              {formatBiologicalDay(entry.postHatchDay ?? entry.day)}
+            </Text>
+          </View>
+          <View style={styles.rail}>
+            <View
+              style={[
+                styles.line,
+                {
+                  backgroundColor: line,
+                  top: lineTop,
+                  height: lineHeight,
+                  bottom: last ? undefined : 0,
+                },
+              ]}
+            />
+            <View style={styles.dotWrap}>
+              {entry.status === 'active' ? (
+                <PulsingHalo color={palette.action} reduceMotion={reduceMotion} />
+              ) : null}
+              <View style={[styles.dot, dotStyle(entry.status, palette)]} />
+            </View>
+          </View>
+          <View style={styles.copy}>
+            <Text style={[styles.entryTitle, { color: palette.text, fontFamily: Fonts?.serif }]}>{entry.title}</Text>
+            <Text style={[styles.meta, { color: palette.textMuted }]}>{meta}</Text>
+          </View>
+        </View>
+      </Pressable>
+      {hinted ? (
+        <Text
+          accessibilityLiveRegion="polite"
+          style={[styles.hint, { color: palette.textMuted, fontFamily: Fonts?.serif }]}>
+          {tooltipFor(entry, t)}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+const DOT_CENTER = 18;
 
 function PulsingHalo({ color, reduceMotion }: { color: string; reduceMotion: boolean }) {
   const opacity = useSharedValue(reduceMotion ? 1 : 0.35);
@@ -167,40 +204,18 @@ function PulsingHalo({ color, reduceMotion }: { color: string; reduceMotion: boo
   );
 }
 
-function useReduceMotion(): boolean {
-  const [reduceMotion, setReduceMotion] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-    AccessibilityInfo.isReduceMotionEnabled()
-      .then((enabled) => {
-        if (active) {
-          setReduceMotion(enabled);
-        }
-      })
-      .catch(() => undefined);
-
-    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', (enabled) => {
-      setReduceMotion(enabled);
-    });
-
-    return () => {
-      active = false;
-      subscription.remove();
-    };
-  }, []);
-
-  return reduceMotion;
-}
-
-function statusColor(status: JournalMilestoneStatus, palette: NestPaletteTokens): string {
+function dotStyle(status: JournalMilestoneStatus, palette: NestPaletteTokens) {
   if (status === 'completed') {
-    return palette.optimal;
+    return { backgroundColor: palette.optimal, borderWidth: 0 };
   }
   if (status === 'active') {
-    return palette.action;
+    return { width: 9, height: 9, borderRadius: 5, backgroundColor: palette.action, borderWidth: 0 };
   }
-  return palette.neutral;
+  return {
+    backgroundColor: palette.surface,
+    borderWidth: 1.5,
+    borderColor: palette.border,
+  };
 }
 
 function statusKey(status: JournalMilestoneStatus): TranslationKey {
@@ -232,95 +247,95 @@ function tooltipFor(entry: JournalMilestone, t: TranslateFn): string {
 }
 
 const styles = StyleSheet.create({
-  section: {
-    gap: 0,
+  chapters: {
+    gap: Spacing.four,
   },
-  heading: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: Spacing.two,
-  },
-  row: {
-    flexDirection: 'row',
+  chapter: {
     gap: Spacing.two,
   },
+  heading: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    paddingHorizontal: 4,
+  },
+  card: {
+    borderWidth: 1,
+    borderRadius: 22,
+    overflow: 'hidden',
+  },
+  entry: {
+    backgroundColor: 'transparent',
+  },
+  hit: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    minHeight: 64,
+  },
+  accent: {
+    width: 3,
+  },
+  hitBody: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: 10,
+    paddingRight: Spacing.three,
+    paddingBottom: 12,
+  },
+  dayCol: {
+    width: 58,
+    alignItems: 'flex-end',
+    paddingTop: 8,
+  },
+  dayNum: {
+    width: '100%',
+    textAlign: 'right',
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
+  },
   rail: {
-    width: 28,
+    width: 18,
     alignItems: 'center',
   },
-  stem: {
-    width: 2,
-    height: 12,
+  line: {
+    position: 'absolute',
+    width: 1.5,
+    left: 8.25,
   },
-  stemFlex: {
-    flex: 1,
-    height: undefined,
-    minHeight: 12,
-  },
-  nodeSlot: {
-    width: 28,
-    height: 28,
+  dotWrap: {
+    marginTop: 9,
+    width: 18,
+    height: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
   halo: {
     position: 'absolute',
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    top: 0,
+    left: 0,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
   },
-  node: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
-  check: {
-    fontSize: 12,
-    fontWeight: '800',
-    lineHeight: 14,
-  },
-  cardColumn: {
+  copy: {
     flex: 1,
-    paddingBottom: Spacing.two,
-    gap: 6,
+    paddingTop: 7,
+    gap: 2,
   },
-  card: {
-    borderWidth: 1,
-    borderRadius: 16,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two + 2,
-    gap: 4,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing.two,
-  },
-  day: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-    textTransform: 'uppercase',
-    flex: 1,
-  },
-  pill: {
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  pillLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  title: {
+  entryTitle: {
     fontSize: 16,
-    fontWeight: '700',
     lineHeight: 21,
+    fontWeight: '600',
   },
-  date: {
+  meta: {
     fontSize: 13,
     lineHeight: 18,
   },
@@ -328,6 +343,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     fontStyle: 'italic',
-    paddingHorizontal: 4,
+    paddingHorizontal: Spacing.three,
+    paddingBottom: Spacing.three,
   },
 });

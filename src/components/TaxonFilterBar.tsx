@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { HATCHERY } from '@/components/adoptionAtmosphere';
+import { useHatcheryPalette } from '@/components/adoptionAtmosphere';
 import { ROSTER_FILTERS, type RosterFilter } from '@/data/species/roster';
 import { useTranslation } from '@/i18n';
 import type { TranslationKey } from '@/i18n/en';
@@ -20,6 +20,7 @@ export interface TaxonFilterBarProps {
 
 export function TaxonFilterBar({ value, onChange }: TaxonFilterBarProps) {
   const { t } = useTranslation();
+  const palette = useHatcheryPalette();
 
   return (
     <View style={styles.row}>
@@ -40,14 +41,14 @@ export function TaxonFilterBar({ value, onChange }: TaxonFilterBarProps) {
             style={({ pressed }) => [
               styles.hit,
               {
-                backgroundColor: selected ? 'rgba(246, 240, 230, 0.08)' : 'transparent',
-                borderColor: selected ? 'rgba(232, 220, 196, 0.28)' : 'rgba(232, 220, 196, 0.12)',
+                backgroundColor: selected ? `rgba(${palette.veil}, 0.08)` : 'transparent',
+                borderColor: `rgba(${palette.veil}, ${selected ? 0.28 : 0.12})`,
                 opacity: pressed ? 0.7 : 1,
               },
             ]}>
             <Text
               maxFontSizeMultiplier={1.15}
-              style={[styles.label, { color: selected ? HATCHERY.ink : HATCHERY.quiet }]}>
+              style={[styles.label, { color: selected ? palette.ink : palette.quiet }]}>
               {t(FILTER_LABEL[filter])}
             </Text>
           </Pressable>

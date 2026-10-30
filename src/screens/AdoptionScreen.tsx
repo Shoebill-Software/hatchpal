@@ -4,21 +4,28 @@ import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-na
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ADOPTION_ATMOSPHERE, HATCHERY } from '@/components/adoptionAtmosphere';
+import { ADOPTION_ATMOSPHERE, useHatcheryPalette } from '@/components/adoptionAtmosphere';
 import { ClutchRail } from '@/components/ClutchRail';
 import { HatcheryStage, HatcheryWash } from '@/components/HatcheryStage';
 import { NestStatusBar } from '@/components/NestStatusBar';
+import { SettingsButton, SettingsSheetHost, useSettings } from '@/components/SettingsMenu';
 import { TaxonFilterBar } from '@/components/TaxonFilterBar';
+import { PipTip } from '@/components/tutorial/PipTip';
+import { useHatcheryWelcome } from '@/components/tutorial/useHatcheryWelcome';
+import { WelcomeIntro } from '@/components/tutorial/WelcomeIntro';
 import { Fonts } from '@/constants/theme';
 import { listSpeciesConfigs } from '@/data/species';
 import { speciesMatchingFilter, type RosterFilter } from '@/data/species/roster';
+import { isReserveSpecies, type KeeperMilestone } from '@/domain/keeperRewards';
 import type { DifficultyTag, RosterTag, SpeciesConfig, SpeciesId } from '@/domain/types';
 import { useActivePet } from '@/hooks/useActivePet';
+import { KEEPER_PROGRESS_KEY, useKeeperAccess } from '@/hooks/useKeeperMilestones';
 import { useReduceMotion } from '@/hooks/useReduceMotion';
 import { useTranslation } from '@/i18n';
 import type { TranslationKey } from '@/i18n/en';
+import type { TranslateFn } from '@/i18n/translate';
 import { ImpactFeedbackStyle, triggerImpact } from '@/services/hapticFeedback';
-import { usePurchasesStore } from '@/store/usePurchasesStore';
+import { usePreferencesStore } from '@/store/usePreferencesStore';
 
 const SPECIES = listSpeciesConfigs();
 
@@ -53,7 +60,12 @@ export default function AdoptionScreen() {
     speciesId?: string | string[];
   }>();
   const { pet } = useActivePet();
-  const speciesAvailable = usePurchasesStore((state) => state.isSpeciesAvailable);
+  const palette = useHatcheryPalette();
+  const { visible: settingsVisible } = useSettings();
+  const welcomeVisible = useHatcheryWelcome(settingsVisible);
+  const completeWelcome = usePreferencesStore((state) => state.completeWelcome);
+  const skipAllTutorials = usePreferencesStore((state) => state.skipAllTutorials);
+  const { isAvailable, gateFor } = useKeeperAccess();
   const replacingParam = Array.isArray(params.replacing) ? params.replacing[0] : params.replacing;
   const addingParam = Array.isArray(params.adding) ? params.adding[0] : params.adding;
   const speciesParam = Array.isArray(params.speciesId) ? params.speciesId[0] : params.speciesId;
@@ -126,8 +138,8 @@ export default function AdoptionScreen() {
   };
 
   return (
-    <View style={styles.root}>
-      <NestStatusBar variant="light" />
+    <View style={[styles.root, { backgroundColor: palette.ground }]}>
+      <NestStatusBar />
       {selected ? <HatcheryWash speciesId={selected.id} /> : null}
       <View style={[styles.column, { paddingTop: Math.max(insets.top, 12), paddingBottom: insets.bottom + 10 }]}>
         <View style={styles.framed}>
@@ -138,15 +150,18 @@ export default function AdoptionScreen() {
                 accessibilityLabel={t('adoption.close')}
                 onPress={close}
                 hitSlop={8}
-                style={({ pressed }) => [styles.close, { opacity: pressed ? 0.6 : 1 }]}>
-                <Text style={styles.closeGlyph}>×</Text>
+                style={({ pressed }) => [
+                  styles.close,
+                  { opacity: pressed ? 0.6 : 1, backgroundColor: `rgba(${palette.veil}, 0.08)` },
+                ]}>
+                <Text style={[styles.closeGlyph, { color: palette.ink }]}>×</Text>
               </Pressable>
             </View>
             <Text
               accessibilityRole="header"
               numberOfLines={1}
               maxFontSizeMultiplier={1.15}
-              style={[styles.headerTitle, { fontFamily: Fonts?.serif }]}>
+              style={[styles.headerTitle, { fontFamily: Fonts?.serif, color: palette.ink }]}>
               {replacing ? t('adoption.replaceTitle') : t('adoption.title')}
             </Text>
             <View style={styles.sideEnd}>
@@ -157,10 +172,11 @@ export default function AdoptionScreen() {
                     current: index + 1,
                     total: roster.length,
                   })}
-                  style={styles.count}>
+                  style={[styles.count, { color: palette.quiet }]}>
                   {t('adoption.position', { current: index + 1, total: roster.length })}
                 </Text>
               ) : null}
+              <SettingsButton tint={palette.ink} />
             </View>
           </View>
           <TaxonFilterBar value={filter} onChange={setFilter} />
@@ -172,7 +188,7 @@ export default function AdoptionScreen() {
               species={selected}
               canGoBack={index > 0}
               canGoForward={index < roster.length - 1}
-              locked={!speciesAvailable(selected.id)}
+              locked={!isAvailable(selected.id)}
               onOpen={() => openId(selected.id)}
               onStep={step}
             />
@@ -183,7 +199,7 @@ export default function AdoptionScreen() {
         <ClutchRail
           species={roster}
           selectedId={selected?.id ?? selectedId}
-          isLocked={(id) => !speciesAvailable(id)}
+          isLocked={(id) => !isAvailable(id)}
           onSelect={choose}
         />
 
@@ -200,25 +216,53 @@ export default function AdoptionScreen() {
             }}
             style={({ pressed }) => [
               styles.study,
-              { opacity: pressed ? 0.88 : 1, transform: [{ scale: pressed ? 0.985 : 1 }] },
+              { backgroundColor: palette.amber, opacity: pressed ? 0.88 : 1, transform: [{ scale: pressed ? 0.985 : 1 }] },
             ]}>
-            <Text maxFontSizeMultiplier={1.15} style={styles.studyLabel}>
+            <Text maxFontSizeMultiplier={1.15} style={[styles.studyLabel, { color: palette.amberInk }]}>
               {t('adoption.study')}
             </Text>
           </Pressable>
-          <Text maxFontSizeMultiplier={1.15} style={styles.caption}>
-            {replacing ? t('adoption.replaceBody') : t('adoption.body')}
+          <Text maxFontSizeMultiplier={1.15} style={[styles.caption, { color: palette.quiet }]}>
+            {adoptionCaption(selected, isAvailable, gateFor, replacing, t)}
           </Text>
         </View>
       </View>
+      <PipTip />
+      <WelcomeIntro visible={welcomeVisible} mode="adopt" onFinish={completeWelcome} onSkip={skipAllTutorials} />
+      <SettingsSheetHost />
     </View>
   );
+}
+
+function adoptionCaption(
+  selected: SpeciesConfig | null,
+  isAvailable: (speciesId: string) => boolean,
+  gateFor: (speciesId: string) => KeeperMilestone | null,
+  replacing: boolean,
+  t: TranslateFn
+): string {
+  if (selected && !isAvailable(selected.id)) {
+    const gate = gateFor(selected.id);
+    if (gate) {
+      return t('adoption.earnHint', {
+        progress: t(KEEPER_PROGRESS_KEY[gate.id], { current: gate.progress, goal: gate.goal }),
+      });
+    }
+    if (isReserveSpecies(selected.id)) {
+      return t('adoption.reserveHint');
+    }
+  }
+  return replacing ? t('adoption.replaceBody') : t('adoption.body');
 }
 
 function SpeciesPlate({ species, compact }: { species: SpeciesConfig; compact: boolean }) {
   const { t } = useTranslation();
   const reduceMotion = useReduceMotion();
+  const palette = useHatcheryPalette();
+  const { width } = useWindowDimensions();
   const atmosphere = ADOPTION_ATMOSPHERE[species.id];
+  // iOS ignores minimumFontScale here and collapses the title, so the fit is computed instead.
+  const titleSize = Math.max(24, Math.min(34, Math.floor((Math.min(width, 480) - 56) / (species.commonName.length * 0.5))));
   const presence = useSharedValue(1);
   const seen = useRef<SpeciesId | null>(null);
 
@@ -243,15 +287,16 @@ function SpeciesPlate({ species, compact }: { species: SpeciesConfig; compact: b
       <Text
         numberOfLines={1}
         maxFontSizeMultiplier={1.15}
-        style={[styles.taxon, { color: atmosphere.rim }]}>
+        style={[styles.taxon, { color: palette.scheme === 'dark' ? atmosphere.rim : atmosphere.low }]}>
         {t(TAG_LABEL[species.tag])}
       </Text>
       <Text
         numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.72}
         maxFontSizeMultiplier={1.2}
-        style={[styles.common, { fontFamily: Fonts?.serif }]}>
+        style={[
+          styles.common,
+          { fontFamily: Fonts?.serif, color: palette.ink, fontSize: titleSize, lineHeight: Math.round(titleSize * 1.18) },
+        ]}>
         {species.commonName}
       </Text>
       <Text
@@ -259,11 +304,11 @@ function SpeciesPlate({ species, compact }: { species: SpeciesConfig; compact: b
         adjustsFontSizeToFit
         minimumFontScale={0.75}
         maxFontSizeMultiplier={1.15}
-        style={[styles.scientific, { fontFamily: Fonts?.serif }]}>
+        style={[styles.scientific, { fontFamily: Fonts?.serif, color: palette.muted }]}>
         {species.scientificName}
       </Text>
       {compact ? null : (
-        <Text numberOfLines={2} maxFontSizeMultiplier={1.15} style={styles.shell}>
+        <Text numberOfLines={2} maxFontSizeMultiplier={1.15} style={[styles.shell, { color: palette.muted }]}>
           {species.egg.description}
         </Text>
       )}
@@ -272,7 +317,7 @@ function SpeciesPlate({ species, compact }: { species: SpeciesConfig; compact: b
         adjustsFontSizeToFit
         minimumFontScale={0.8}
         maxFontSizeMultiplier={1.15}
-        style={styles.commitment}>
+        style={[styles.commitment, { color: palette.quiet }]}>
         {t('adoption.commitment', {
           days: species.incubationDays,
           care: t(DIFFICULTY_LABEL[species.showcase.difficultyTag]),
@@ -285,7 +330,6 @@ function SpeciesPlate({ species, compact }: { species: SpeciesConfig; compact: b
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: HATCHERY.ground,
   },
   column: {
     flex: 1,
@@ -294,6 +338,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 560,
     alignSelf: 'center',
+    zIndex: 2,
   },
   header: {
     flexDirection: 'row',
@@ -306,9 +351,11 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   sideEnd: {
-    width: 72,
-    alignItems: 'flex-end',
-    paddingRight: 8,
+    minWidth: 72,
+    flexShrink: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
   },
   close: {
     width: 40,
@@ -316,10 +363,8 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(246, 240, 230, 0.08)',
   },
   closeGlyph: {
-    color: HATCHERY.ink,
     fontSize: 28,
     lineHeight: 30,
     fontWeight: '300',
@@ -327,12 +372,10 @@ const styles = StyleSheet.create({
   headerTitle: {
     flex: 1,
     textAlign: 'center',
-    color: HATCHERY.ink,
     fontSize: 17,
     fontWeight: '500',
   },
   count: {
-    color: HATCHERY.quiet,
     fontSize: 13,
     fontVariant: ['tabular-nums'],
     fontWeight: '600',
@@ -360,7 +403,6 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   common: {
-    color: HATCHERY.ink,
     fontSize: 34,
     lineHeight: 40,
     fontWeight: '500',
@@ -368,7 +410,6 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   scientific: {
-    color: HATCHERY.muted,
     fontSize: 15,
     lineHeight: 20,
     fontStyle: 'italic',
@@ -377,7 +418,6 @@ const styles = StyleSheet.create({
   },
   shell: {
     marginTop: 6,
-    color: HATCHERY.muted,
     fontSize: 14,
     lineHeight: 20,
     textAlign: 'center',
@@ -386,7 +426,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
     width: '100%',
     textAlign: 'center',
-    color: HATCHERY.quiet,
     fontSize: 13,
     fontWeight: '600',
     letterSpacing: 0.2,
@@ -401,12 +440,10 @@ const styles = StyleSheet.create({
   study: {
     minHeight: 54,
     borderRadius: 999,
-    backgroundColor: HATCHERY.amber,
     alignItems: 'center',
     justifyContent: 'center',
   },
   studyLabel: {
-    color: HATCHERY.amberInk,
     fontSize: 16,
     fontWeight: '600',
     letterSpacing: 0.2,
@@ -414,7 +451,6 @@ const styles = StyleSheet.create({
   caption: {
     marginTop: 10,
     textAlign: 'center',
-    color: HATCHERY.quiet,
     fontSize: 13,
     lineHeight: 18,
   },
