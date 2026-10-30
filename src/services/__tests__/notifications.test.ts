@@ -135,19 +135,22 @@ describe('milestone notification scheduling', () => {
     expect(byDay.get(20)?.trigger.date).toBe(laidAt + 20 * 86400 * 1000);
     expect(byDay.get(21)?.trigger.date).toBe(laidAt + 21 * 86400 * 1000);
     expect(byDay.get(3)?.content).toMatchObject({
-      title: 'Blood vessels have formed',
-      subtitle: 'Pip',
-      body: 'Vital blood vessels have formed and can now be seen under light.',
+      title: 'Vitelline Circulation',
+      subtitle: 'Pip · Day 3',
+      body: 'Blood islands coalesce into the sinus terminalis. Faint embryonic heart begins pumping. Candle the shell to see it.',
       categoryIdentifier: 'hatchpal.milestone',
     });
     expect(byDay.get(19)?.content).toMatchObject({
-      title: 'Internal Pip Detected',
-      body: 'Faint tapping heard inside the shell. The beak has entered the air cell.',
+      title: 'Internal Pip',
+      subtitle: 'Pip · Day 19',
+      body: 'Beak penetrates the air cell. Pulmonary respiration initiates; faint clicking and peeping audible. Listen close.',
     });
     expect(byDay.get(20)?.content.body).toBe(
-      'The egg tooth has cracked the outer shell. Turning must cease.'
+      'Egg tooth fractures the outer calcified shell. Keep the nest still and warm.'
     );
-    expect(byDay.get(21)?.content.body).toBe('The chick is emerging from the shell.');
+    expect(byDay.get(21)?.content.body).toBe(
+      'Chick completes rotation around the blunt pole, pushes the cap open, and emerges wet and exhausted. Be there for the hatch.'
+    );
     expect(byDay.has(0)).toBe(false);
   });
 
@@ -175,12 +178,12 @@ describe('milestone notification scheduling', () => {
     expect(calls.map((call) => call.trigger.date)).toEqual(
       [19, 33, 47, 49, 50].map((day) => geckoLaid + day * 86400 * 1000)
     );
-    const internalPip = calls.find((call) => call.content.title === 'Internal Pip Detected');
-    expect(internalPip?.content.subtitle).toBe('Nova');
+    const internalPip = calls.find((call) => call.content.title === 'Internal Pip');
+    expect(internalPip?.content.subtitle).toBe('Nova · Day 47');
     expect(internalPip?.content.body).toBe(
-      'The snout has entered the air cell. Faint tapping or peeping can be heard.'
+      'Snout enters the air space. Pulmonary respiration starts while residual yolk continues to be absorbed. Listen close.'
     );
-    expect(calls.some((call) => call.content.body.includes('emerging'))).toBe(true);
+    expect(calls.some((call) => call.content.body.includes('Be there for the hatch.'))).toBe(true);
   });
 
   it('does not schedule when permission is denied and still resolves', async () => {
@@ -217,6 +220,23 @@ describe('milestone notification scheduling', () => {
     expect(notifications.cancelAllScheduledNotificationsAsync).toHaveBeenCalledTimes(1);
   });
 
+  it('does not schedule a hatched creature or an embryo already lost', async () => {
+    const hatched = await scheduleMilestoneNotifications(
+      pet({ laidAtEpoch: laidAt, isHatched: true }),
+      silkieChickenConfig,
+      laidAt
+    );
+    const lost = await scheduleMilestoneNotifications(
+      pet({ laidAtEpoch: laidAt, status: 'unviable' }),
+      silkieChickenConfig,
+      laidAt
+    );
+
+    expect(hatched).toEqual([]);
+    expect(lost).toEqual([]);
+    expect(notifications.scheduleNotificationAsync).not.toHaveBeenCalled();
+  });
+
   it('schedules nothing and does not throw when every milestone is already past', async () => {
     const now = laidAt + 40 * INCUBATION_DAY_MS;
     const ids = await scheduleMilestoneNotifications(pet({ laidAtEpoch: laidAt }), silkieChickenConfig, now);
@@ -235,7 +255,8 @@ describe('milestone notification scheduling', () => {
       'hatchpal.milestones',
       expect.objectContaining({
         name: 'Incubation milestones',
-        description: 'Offline alerts for biological incubation milestones.',
+        description:
+          'Offline alerts when an egg reaches a biological milestone, from the first vessels through hatch day.',
         importance: 6,
       })
     );

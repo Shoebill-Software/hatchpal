@@ -9,7 +9,7 @@ struct HatchPalWidget: Widget {
             HatchPalWidgetEntryView(entry: entry)
         }
         .configurationDisplayName("Nest")
-        .description("Incubation progress, warmth, and humidity for the egg in focus.")
+        .description("Incubation, weather, wishes, and nest climate for the egg in focus.")
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }

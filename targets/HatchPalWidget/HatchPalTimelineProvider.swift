@@ -1,76 +1,194 @@
 import Foundation
 import WidgetKit
 
-enum WidgetBand: String, Codable {
-    case optimal
-    case warning
+struct WidgetShell: Codable, Equatable {
+    let shape: String
+    let speckle: String
+    let body: String
+    let stroke: String
+    let highlight: String
+    let speckleColor: String
+    let shadow: String
+    let crack: String
 
-    init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        let raw = try container.decode(String.self)
-        self = raw == WidgetBand.optimal.rawValue ? .optimal : .warning
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        try container.encode(rawValue)
-    }
+    static let fallback = WidgetShell(
+        shape: "oval",
+        speckle: "fine",
+        body: "#F3E4B8",
+        stroke: "#D7C28A",
+        highlight: "#FFF8E6",
+        speckleColor: "#C4A66A",
+        shadow: "#3A2A1C",
+        crack: "#5C4030"
+    )
 }
 
-struct WidgetPayload: Codable, Equatable {
-    let petId: String
-    let speciesId: String
-    let nickname: String
-    let incubationDayDisplay: String
+struct WidgetFrame: Codable, Equatable {
+    let atEpoch: Int
+    let phase: String
+    let headline: String
+    let detail: String
+    let footer: String?
     let progressPct: Double
-    let temperatureCelsius: Double
-    let temperatureStatus: WidgetBand
-    let humidityPct: Double
-    let humidityStatus: WidgetBand
-    let isReadyToHatch: Bool
-    let lastUpdatedEpoch: Int
+    let temperatureText: String
+    let warmthLabel: String
+    let warmthOptimal: Bool
+    let humidityText: String
+    let humidityLabel: String
+    let humidityOptimal: Bool
+    let inSweetSpot: Bool
+    let onStrike: Bool
+    let pipped: Bool
+    let accessibilityLabel: String
 
     var progress: Double {
         min(1, max(0, progressPct))
     }
+}
 
-    var inSweetSpot: Bool {
-        temperatureStatus == .optimal && humidityStatus == .optimal
-    }
-
-    var warmthLabel: String {
-        temperatureStatus == .optimal ? "Optimal" : "Chilled"
-    }
-
-    var humidityLabel: String {
-        humidityStatus == .optimal ? "Optimal" : "Dry"
-    }
-
-    var temperatureText: String {
-        String(format: "%.1f°C", temperatureCelsius)
-    }
-
-    var humidityText: String {
-        String(format: "%.0f%%", humidityPct)
-    }
-
-    var speciesCommonName: String {
-        WidgetSpeciesNames.commonName(for: speciesId)
-    }
+struct WidgetPayload: Codable, Equatable {
+    let phase: String
+    let petId: String
+    let speciesId: String
+    let nickname: String
+    let commonName: String
+    let clutchLabel: String?
+    let hearts: Int
+    let shell: WidgetShell
+    let warmthTitle: String
+    let humidityTitle: String
+    let emptyTitle: String
+    let emptyBody: String
+    let unviableTitle: String
+    let unviableBody: String
+    let hatchedDetail: String
+    let frames: [WidgetFrame]
 
     static let placeholder = WidgetPayload(
+        phase: "incubating",
         petId: "preview",
         speciesId: "silkie_chicken",
         nickname: "Pip",
-        incubationDayDisplay: "Day 8 of 21",
-        progressPct: 8.0 / 21.0,
-        temperatureCelsius: 37.5,
-        temperatureStatus: .optimal,
-        humidityPct: 55,
-        humidityStatus: .optimal,
-        isReadyToHatch: false,
-        lastUpdatedEpoch: 0
+        commonName: "Silkie Chicken",
+        clutchLabel: nil,
+        hearts: 0,
+        shell: .fallback,
+        warmthTitle: "Warmth",
+        humidityTitle: "Humidity",
+        emptyTitle: "The nest is empty",
+        emptyBody: "Choose an egg in HatchPal",
+        unviableTitle: "The nest has gone cold",
+        unviableBody: "The embryo did not survive the prolonged climate drop.",
+        hatchedDetail: "Ready for the sanctuary",
+        frames: [
+            WidgetFrame(
+                atEpoch: 0,
+                phase: "incubating",
+                headline: "Day 8 of 21",
+                detail: "Mild day",
+                footer: "Wants a lullaby",
+                progressPct: 8.0 / 21.0,
+                temperatureText: "37.5°",
+                warmthLabel: "Optimal",
+                warmthOptimal: true,
+                humidityText: "55%",
+                humidityLabel: "Optimal",
+                humidityOptimal: true,
+                inSweetSpot: true,
+                onStrike: false,
+                pipped: false,
+                accessibilityLabel: "Pip, Silkie Chicken, Day 8 of 21, Mild day, warmth 37.5 degrees optimal, humidity 55 percent optimal"
+            ),
+        ]
     )
+}
+
+enum WidgetPayloadStore {
+    static let suiteName = "group.com.shoebillsoftware.hatchpal"
+    static let key = "hatchpal.widget.payload"
+
+    static func load() -> WidgetPayload? {
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            return nil
+        }
+        if let raw = defaults.string(forKey: key), let data = raw.data(using: .utf8) {
+            return decode(data)
+        }
+        if let data = defaults.data(forKey: key) {
+            return decode(data)
+        }
+        return nil
+    }
+
+    private static func decode(_ data: Data?) -> WidgetPayload? {
+        guard let data, !data.isEmpty else {
+            return nil
+        }
+        if let payload = try? JSONDecoder().decode(WidgetPayload.self, from: data) {
+            if payload.phase == "empty" || !payload.frames.isEmpty {
+                return payload
+            }
+        }
+        return legacy(data)
+    }
+
+    /// Payloads written before weather, wishes, and shell art shipped.
+    private static func legacy(_ data: Data) -> WidgetPayload? {
+        guard
+            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let petId = object["petId"] as? String,
+            !petId.isEmpty,
+            let nickname = object["nickname"] as? String,
+            let day = object["incubationDayDisplay"] as? String
+        else {
+            return nil
+        }
+        let speciesId = object["speciesId"] as? String ?? ""
+        let warmthOptimal = (object["temperatureStatus"] as? String) == "optimal"
+        let humidityOptimal = (object["humidityStatus"] as? String) == "optimal"
+        let ready = object["isReadyToHatch"] as? Bool ?? false
+        let progress = object["progressPct"] as? Double ?? 0
+        let temperature = object["temperatureCelsius"] as? Double ?? 0
+        let humidity = object["humidityPct"] as? Double ?? 0
+        let epoch = object["lastUpdatedEpoch"] as? Int ?? 0
+        let headline = ready ? "Ready to hatch" : day
+        let frame = WidgetFrame(
+            atEpoch: epoch,
+            phase: ready ? "ready" : "incubating",
+            headline: headline,
+            detail: "Mild day",
+            footer: nil,
+            progressPct: progress,
+            temperatureText: String(format: "%.1f°", temperature),
+            warmthLabel: warmthOptimal ? "Optimal" : "Needs care",
+            warmthOptimal: warmthOptimal,
+            humidityText: String(format: "%.0f%%", humidity),
+            humidityLabel: humidityOptimal ? "Optimal" : "Needs care",
+            humidityOptimal: humidityOptimal,
+            inSweetSpot: warmthOptimal && humidityOptimal,
+            onStrike: false,
+            pipped: false,
+            accessibilityLabel: "\(nickname), \(headline)"
+        )
+        return WidgetPayload(
+            phase: frame.phase,
+            petId: petId,
+            speciesId: speciesId,
+            nickname: nickname,
+            commonName: WidgetSpeciesNames.commonName(for: speciesId),
+            clutchLabel: nil,
+            hearts: 0,
+            shell: .fallback,
+            warmthTitle: "Warmth",
+            humidityTitle: "Humidity",
+            emptyTitle: "The nest is empty",
+            emptyBody: "Choose an egg in HatchPal",
+            unviableTitle: "The nest has gone cold",
+            unviableBody: "The embryo did not survive the prolonged climate drop.",
+            hatchedDetail: "Ready for the sanctuary",
+            frames: [frame]
+        )
+    }
 }
 
 enum WidgetSpeciesNames {
@@ -105,56 +223,54 @@ enum WidgetSpeciesNames {
     }
 }
 
-enum WidgetPayloadStore {
-    static let suiteName = "group.com.shoebillsoftware.hatchpal"
-    static let key = "hatchpal.widget.payload"
-
-    static func load() -> WidgetPayload? {
-        guard let defaults = UserDefaults(suiteName: suiteName) else {
-            return nil
-        }
-        if let raw = defaults.string(forKey: key), let data = raw.data(using: .utf8) {
-            return decode(data)
-        }
-        if let data = defaults.data(forKey: key) {
-            return decode(data)
-        }
-        return nil
-    }
-
-    private static func decode(_ data: Data?) -> WidgetPayload? {
-        guard let data, !data.isEmpty else {
-            return nil
-        }
-        let decoder = JSONDecoder()
-        return try? decoder.decode(WidgetPayload.self, from: data)
-    }
-}
-
 struct HatchPalEntry: TimelineEntry {
     let date: Date
     let payload: WidgetPayload?
+    let frame: WidgetFrame?
+}
+
+enum HatchPalTimeline {
+    static func entries(for payload: WidgetPayload?, now: Date) -> [HatchPalEntry] {
+        guard let payload else {
+            return [HatchPalEntry(date: now, payload: nil, frame: nil)]
+        }
+        if payload.phase == "empty" || payload.frames.isEmpty {
+            return [HatchPalEntry(date: now, payload: payload, frame: nil)]
+        }
+        let nowMs = Int(now.timeIntervalSince1970 * 1000)
+        let upcoming = payload.frames.sorted { $0.atEpoch < $1.atEpoch }
+        let current = upcoming.last(where: { $0.atEpoch <= nowMs }) ?? upcoming[0]
+        var built = [HatchPalEntry(date: now, payload: payload, frame: current)]
+        for frame in upcoming where frame.atEpoch > nowMs {
+            let date = Date(timeIntervalSince1970: Double(frame.atEpoch) / 1000)
+            if let last = built.last?.date, date.timeIntervalSince(last) < 1 {
+                continue
+            }
+            built.append(HatchPalEntry(date: date, payload: payload, frame: frame))
+        }
+        return built
+    }
+
+    static func refresh(after entries: [HatchPalEntry], now: Date) -> Date {
+        let last = entries.last?.date ?? now
+        return max(last.addingTimeInterval(20 * 60), now.addingTimeInterval(15 * 60))
+    }
 }
 
 struct HatchPalTimelineProvider: TimelineProvider {
     func placeholder(in context: Context) -> HatchPalEntry {
-        HatchPalEntry(date: Date(), payload: .placeholder)
+        HatchPalTimeline.entries(for: .placeholder, now: Date())[0]
     }
 
     func getSnapshot(in context: Context, completion: @escaping (HatchPalEntry) -> Void) {
         let stored = WidgetPayloadStore.load()
         let payload = context.isPreview ? (stored ?? .placeholder) : stored
-        completion(HatchPalEntry(date: Date(), payload: payload))
+        completion(HatchPalTimeline.entries(for: payload, now: Date())[0])
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<HatchPalEntry>) -> Void) {
-        let payload = WidgetPayloadStore.load()
         let now = Date()
-        let refresh = now.addingTimeInterval(45 * 60)
-        let entries = [
-            HatchPalEntry(date: now, payload: payload),
-            HatchPalEntry(date: refresh, payload: payload),
-        ]
-        completion(Timeline(entries: entries, policy: .after(refresh)))
+        let entries = HatchPalTimeline.entries(for: WidgetPayloadStore.load(), now: now)
+        completion(Timeline(entries: entries, policy: .after(HatchPalTimeline.refresh(after: entries, now: now))))
     }
 }

@@ -12,29 +12,7 @@ enum NestInk {
     static let track = Color(red: 58.0 / 255.0, green: 50.0 / 255.0, blue: 43.0 / 255.0)
     static let optimal = Color(red: 91.0 / 255.0, green: 191.0 / 255.0, blue: 122.0 / 255.0)
     static let warning = Color(red: 224.0 / 255.0, green: 161.0 / 255.0, blue: 90.0 / 255.0)
-}
-
-struct EggSilhouette: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let w = rect.width
-        let h = rect.height
-        let top = CGPoint(x: rect.minX + w * 0.50, y: rect.minY + h * 0.03)
-        let bottom = CGPoint(x: rect.minX + w * 0.50, y: rect.minY + h * 0.97)
-        path.move(to: top)
-        path.addCurve(
-            to: bottom,
-            control1: CGPoint(x: rect.minX + w * 1.02, y: rect.minY + h * 0.24),
-            control2: CGPoint(x: rect.minX + w * 0.94, y: rect.minY + h * 0.70)
-        )
-        path.addCurve(
-            to: top,
-            control1: CGPoint(x: rect.minX + w * 0.06, y: rect.minY + h * 0.70),
-            control2: CGPoint(x: rect.minX - w * 0.02, y: rect.minY + h * 0.24)
-        )
-        path.closeSubpath()
-        return path
-    }
+    static let strike = Color(red: 224.0 / 255.0, green: 122.0 / 255.0, blue: 106.0 / 255.0)
 }
 
 private struct NestCanvasBackground: ViewModifier {
@@ -47,111 +25,238 @@ private struct NestCanvasBackground: ViewModifier {
     }
 }
 
-struct EggProgressMark: View {
-    let progress: Double
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .stroke(NestInk.track, lineWidth: 4)
-            Circle()
-                .trim(from: 0, to: CGFloat(min(max(progress, 0), 1)))
-                .stroke(NestInk.progress, style: StrokeStyle(lineWidth: 4, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-            EggSilhouette()
-                .fill(NestInk.shell)
-                .overlay(EggSilhouette().stroke(NestInk.shellStroke, lineWidth: 1))
-                .padding(11)
-        }
-        .aspectRatio(1, contentMode: .fit)
-    }
-}
-
 struct BeaconDot: View {
     let sweet: Bool
+    let strike: Bool
+
+    private var color: Color {
+        if strike {
+            return NestInk.strike
+        }
+        return sweet ? NestInk.optimal : NestInk.warning
+    }
 
     var body: some View {
         Circle()
-            .fill(sweet ? NestInk.optimal : NestInk.warning)
+            .fill(color)
             .frame(width: 8, height: 8)
-            .accessibilityLabel(sweet ? "Temperature and humidity optimal" : "Nest climate needs care")
+            .background(Circle().fill(color.opacity(0.28)).frame(width: 14, height: 14))
+            .accessibilityHidden(true)
     }
 }
 
 struct SmallNestWidget: View {
     let payload: WidgetPayload?
+    let frame: WidgetFrame?
 
     var body: some View {
-        if let payload {
-            VStack(spacing: 6) {
-                ZStack(alignment: .topTrailing) {
-                    EggProgressMark(progress: payload.progress)
-                    BeaconDot(sweet: payload.inSweetSpot)
-                        .padding(2)
+        if let payload, let frame, payload.phase != "empty" {
+            living(payload: payload, frame: frame)
+        } else {
+            EmptyNestWidget(compact: true, payload: payload)
+        }
+    }
+
+    @ViewBuilder
+    private func living(payload: WidgetPayload, frame: WidgetFrame) -> some View {
+        let somber = frame.phase == "unviable"
+        let headlineColor: Color = frame.phase == "ready" ? NestInk.progress : (somber ? NestInk.muted : NestInk.text)
+        VStack(spacing: 4) {
+            ZStack(alignment: .topTrailing) {
+                SpeciesEggMark(
+                    shell: payload.shell,
+                    progress: frame.progressPct,
+                    pipped: frame.pipped,
+                    dimmed: somber
+                )
+                if frame.phase == "incubating" || frame.phase == "ready" {
+                    BeaconDot(sweet: frame.inSweetSpot, strike: frame.onStrike)
+                        .padding(1)
                 }
-                Text(payload.nickname)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(NestInk.text)
-                    .lineLimit(1)
-                Text(payload.incubationDayDisplay)
-                    .font(.caption2)
-                    .foregroundStyle(NestInk.muted)
-                    .lineLimit(1)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(payload.nickname), \(payload.incubationDayDisplay)")
-        } else {
-            EmptyNestWidget(compact: true)
+            Text(payload.nickname)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(NestInk.text)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .layoutPriority(1)
+            Text(frame.headline)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(headlineColor)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .layoutPriority(1)
+            if let footer = frame.footer, frame.phase != "unviable" {
+                Text(footer)
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(frame.onStrike ? NestInk.strike : NestInk.muted)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
+                    .layoutPriority(1)
+            }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(frame.accessibilityLabel)
     }
 }
 
 struct MediumNestWidget: View {
     let payload: WidgetPayload?
+    let frame: WidgetFrame?
 
     var body: some View {
-        if let payload {
-            HStack(alignment: .center, spacing: 12) {
-                VStack(spacing: 6) {
-                    EggProgressMark(progress: payload.progress)
-                        .frame(width: 78, height: 78)
-                    Text(payload.speciesCommonName)
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(NestInk.muted)
-                        .lineLimit(1)
-                    Text(payload.incubationDayDisplay)
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(NestInk.text)
-                        .minimumScaleFactor(0.7)
-                        .lineLimit(1)
-                }
-                .frame(maxWidth: .infinity)
+        if let payload, let frame, payload.phase != "empty" {
+            switch frame.phase {
+            case "unviable":
+                StatusNestWidget(
+                    payload: payload,
+                    frame: frame,
+                    title: payload.unviableTitle,
+                    message: payload.unviableBody,
+                    dimmed: true
+                )
+            case "hatched":
+                StatusNestWidget(
+                    payload: payload,
+                    frame: frame,
+                    title: frame.headline,
+                    message: payload.hatchedDetail,
+                    dimmed: false
+                )
+            default:
+                living(payload: payload, frame: frame)
+            }
+        } else {
+            EmptyNestWidget(compact: false, payload: payload)
+        }
+    }
 
-                VStack(spacing: 8) {
-                    TelemetryCard(
-                        title: "Warmth",
-                        value: payload.temperatureText,
-                        tag: payload.warmthLabel,
-                        optimal: payload.temperatureStatus == .optimal
-                    )
-                    TelemetryCard(
-                        title: "Humidity",
-                        value: payload.humidityText,
-                        tag: payload.humidityLabel,
-                        optimal: payload.humidityStatus == .optimal
-                    )
+    private func living(payload: WidgetPayload, frame: WidgetFrame) -> some View {
+        return HStack(alignment: .center, spacing: 10) {
+            ViewThatFits(in: .vertical) {
+                if frame.footer != nil {
+                    identityColumn(payload: payload, frame: frame, egg: 52, showsWeather: true, showsFooter: true)
                 }
-                .frame(maxWidth: .infinity)
+                identityColumn(payload: payload, frame: frame, egg: 64, showsWeather: true, showsFooter: false)
+                identityColumn(payload: payload, frame: frame, egg: 72, showsWeather: false, showsFooter: false)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(
-                "\(payload.nickname), \(payload.speciesCommonName), \(payload.incubationDayDisplay), warmth \(payload.temperatureText) \(payload.warmthLabel), humidity \(payload.humidityText) \(payload.humidityLabel)"
-            )
-        } else {
-            EmptyNestWidget(compact: false)
+
+            VStack(spacing: 6) {
+                TelemetryCard(
+                    title: payload.warmthTitle,
+                    value: frame.temperatureText,
+                    tag: frame.warmthLabel,
+                    optimal: frame.warmthOptimal,
+                    strike: frame.onStrike && !frame.warmthOptimal
+                )
+                TelemetryCard(
+                    title: payload.humidityTitle,
+                    value: frame.humidityText,
+                    tag: frame.humidityLabel,
+                    optimal: frame.humidityOptimal,
+                    strike: frame.onStrike && !frame.humidityOptimal
+                )
+            }
+            .frame(maxWidth: .infinity)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(frame.accessibilityLabel)
+    }
+
+    private func identityColumn(
+        payload: WidgetPayload,
+        frame: WidgetFrame,
+        egg: CGFloat,
+        showsWeather: Bool,
+        showsFooter: Bool
+    ) -> some View {
+        let headlineColor: Color = frame.phase == "ready" ? NestInk.progress : NestInk.text
+        return VStack(spacing: 2) {
+            ZStack(alignment: .topTrailing) {
+                SpeciesEggMark(
+                    shell: payload.shell,
+                    progress: frame.progressPct,
+                    pipped: frame.pipped,
+                    dimmed: false
+                )
+                BeaconDot(sweet: frame.inSweetSpot, strike: frame.onStrike)
+            }
+            .frame(width: egg, height: egg)
+            Text(payload.nickname)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(NestInk.text)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(frame.headline)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(headlineColor)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            if showsWeather {
+                Text(frame.detail)
+                    .font(.caption2)
+                    .foregroundStyle(NestInk.muted)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
+            }
+            if showsFooter, let footer = frame.footer {
+                Text(footer)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(frame.onStrike ? NestInk.strike : NestInk.progress)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
+            }
+        }
+    }
+}
+
+private struct StatusNestWidget: View {
+    let payload: WidgetPayload
+    let frame: WidgetFrame
+    let title: String
+    let message: String
+    let dimmed: Bool
+
+    var body: some View {
+        HStack(spacing: 12) {
+            SpeciesEggMark(
+                shell: payload.shell,
+                progress: dimmed ? frame.progressPct : 1,
+                pipped: frame.pipped && !dimmed,
+                dimmed: dimmed
+            )
+            .frame(width: 78, height: 78)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(payload.nickname)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(NestInk.muted)
+                    .lineLimit(1)
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(NestInk.text)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.75)
+                Text(message)
+                    .font(.caption2)
+                    .foregroundStyle(NestInk.muted)
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.8)
+                if let footer = frame.footer {
+                    Text(footer)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(NestInk.progress)
+                        .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(frame.accessibilityLabel)
     }
 }
 
@@ -160,9 +265,17 @@ private struct TelemetryCard: View {
     let value: String
     let tag: String
     let optimal: Bool
+    let strike: Bool
+
+    private var tagColor: Color {
+        if strike {
+            return NestInk.strike
+        }
+        return optimal ? NestInk.optimal : NestInk.warning
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 2) {
             Text(title)
                 .font(.caption2.weight(.medium))
                 .foregroundStyle(NestInk.muted)
@@ -173,36 +286,47 @@ private struct TelemetryCard: View {
                 .lineLimit(1)
             Text(tag)
                 .font(.caption2.weight(.semibold))
-                .foregroundStyle(optimal ? NestInk.optimal : NestInk.warning)
+                .foregroundStyle(tagColor)
+                .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.vertical, 6)
         .background(NestInk.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 
 private struct EmptyNestWidget: View {
     let compact: Bool
+    let payload: WidgetPayload?
+
+    private var title: String {
+        payload?.emptyTitle ?? "The nest is empty"
+    }
+
+    private var detail: String {
+        payload?.emptyBody ?? "Choose an egg in HatchPal"
+    }
 
     var body: some View {
         VStack(spacing: 8) {
-            EggSilhouette()
-                .stroke(NestInk.track, style: StrokeStyle(lineWidth: 1.5, dash: [3, 3]))
-                .frame(width: compact ? 52 : 64, height: compact ? 68 : 82)
-            Text("The nest is empty")
+            EggArtwork(shell: WidgetShell.fallback, pipped: false)
+                .frame(width: compact ? 46 : 58, height: compact ? 62 : 78)
+                .opacity(0.35)
+            Text(title)
                 .font(compact ? .caption.weight(.semibold) : .subheadline.weight(.semibold))
                 .foregroundStyle(NestInk.text)
                 .multilineTextAlignment(.center)
             if !compact {
-                Text("Choose an egg in HatchPal")
+                Text(detail)
                     .font(.caption2)
                     .foregroundStyle(NestInk.muted)
+                    .multilineTextAlignment(.center)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("The nest is empty. Choose an egg in HatchPal.")
+        .accessibilityLabel("\(title). \(detail)")
     }
 }
 
@@ -214,9 +338,9 @@ struct HatchPalWidgetEntryView: View {
         Group {
             switch family {
             case .systemMedium:
-                MediumNestWidget(payload: entry.payload)
+                MediumNestWidget(payload: entry.payload, frame: entry.frame)
             default:
-                SmallNestWidget(payload: entry.payload)
+                SmallNestWidget(payload: entry.payload, frame: entry.frame)
             }
         }
         .widgetURL(cradleURL)

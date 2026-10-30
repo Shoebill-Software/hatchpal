@@ -51,7 +51,9 @@ export function syncNotificationsForStoredPets(pets: readonly PetInstance[]): Pr
   return enqueue(async () => {
     const notifications = await import('./notifications');
     const allowed = await alertsAllowed();
-    const incubating = allowed ? pets.filter((pet) => !pet.isHatched) : [];
+    const incubating = allowed
+      ? pets.filter((pet) => !pet.isHatched && pet.status !== 'unviable')
+      : [];
     if (incubating.length === 0) {
       await notifications.cancelAllPetNotifications();
       return;

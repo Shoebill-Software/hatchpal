@@ -1,14 +1,19 @@
 import { silkieChickenConfig } from '@/data/species/chicken';
+import { emuConfig } from '@/data/species/emu';
+import { emptyCareLog } from '@/domain/nestCare';
 import { createPetInstance } from '@/domain/petIntegrity';
 import type { PetInstance } from '@/domain/types';
+import { translate } from '@/i18n';
 
 import {
   APP_GROUP_ID,
   WIDGET_PAYLOAD_KEY,
   buildWidgetPayload,
+  clutchContext,
+  emptyWidgetPayload,
   formatIncubationDay,
   publishWidgetForPet,
-  toWidgetBand,
+  widgetFrameEpochs,
   widgetSyncReason,
   type WidgetDefaultsClient,
   type WidgetPayload,
@@ -16,6 +21,7 @@ import {
 } from '../widgetBridge';
 
 const dayMs = 86_400_000;
+const hourMs = 60 * 60 * 1000;
 const baseEpoch = 1_700_000_000_000;
 
 function petAt(nowEpoch: number, patch: Partial<PetInstance> = {}): PetInstance {
@@ -30,8 +36,8 @@ function petAt(nowEpoch: number, patch: Partial<PetInstance> = {}): PetInstance 
   };
 }
 
-function watch(pet: WidgetWatchState['activePet'], hasHydrated = true): WidgetWatchState {
-  return { hasHydrated, activePet: pet };
+function watch(pet: WidgetWatchState['activePet'], hasHydrated = true, extra: Partial<WidgetWatchState> = {}): WidgetWatchState {
+  return { hasHydrated, activePet: pet, ...extra };
 }
 
 function stamp(pet: PetInstance): NonNullable<WidgetWatchState['activePet']> {
@@ -40,6 +46,9 @@ function stamp(pet: PetInstance): NonNullable<WidgetWatchState['activePet']> {
     isHatched: pet.isHatched,
     lastWarmedEpoch: pet.lastWarmedEpoch,
     lastMistedEpoch: pet.lastMistedEpoch,
+    nickname: pet.nickname,
+    status: pet.status,
+    care: pet.care,
   };
 }
 
@@ -67,52 +76,149 @@ describe('Widget bridge', () => {
     expect(formatIncubationDay(40, 21)).toBe('Day 21 of 21');
   });
 
-  it('collapses climate readings outside the sweet spot to a warning band', () => {
-    expect(toWidgetBand('optimal')).toBe('optimal');
-    expect(toWidgetBand('too_cold')).toBe('warning');
-    expect(toWidgetBand('too_warm')).toBe('warning');
-    expect(toWidgetBand('dry')).toBe('warning');
-    expect(toWidgetBand('humid')).toBe('warning');
+  it('samples wish windows and the next incubation day inside the horizon', () => {
+    const now = baseEpoch + 20 * hourMs;
+    const epochs = widgetFrameEpochs(baseEpoch, now);
+    expect(epochs[0]).toBe(now);
+    expect(epochs).toContain(baseEpoch + dayMs);
+    expect(epochs).toContain(baseEpoch + 24 * hourMs);
+    expect(epochs.every((epoch, index) => index === 0 || epoch > epochs[index - 1]!)).toBe(true);
+    expect(epochs[epochs.length - 1]).toBeLessThanOrEqual(now + 18 * hourMs);
   });
 
-  it('serializes the active egg with decayed climate and incubation progress', () => {
-    const now = baseEpoch + 8 * dayMs;
-    const payload = buildWidgetPayload(petAt(now), now);
-    expect(payload).toEqual<WidgetPayload>({
-      petId: 'pet-1',
-      speciesId: 'silkie_chicken',
-      nickname: 'Pip',
-      incubationDayDisplay: 'Day 8 of 21',
-      progressPct: 8 / 21,
-      temperatureCelsius: expect.any(Number),
-      temperatureStatus: 'warning',
-      humidityPct: expect.any(Number),
-      humidityStatus: 'warning',
-      isReadyToHatch: false,
-      lastUpdatedEpoch: now,
-    });
-    expect(payload?.temperatureCelsius).toBeLessThan(silkieChickenConfig.temperatureTargetCelsius);
-    expect(payload?.humidityPct).toBeLessThan(silkieChickenConfig.humidityTargetPct);
-    expect(payload?.progressPct).toBeGreaterThan(0);
-    expect(payload?.progressPct).toBeLessThanOrEqual(1);
+  it('names a second cradle only when the nest holds more than one egg', () => {
+    expect(clutchContext({ cradleOrder: ['a'], activePetIndex: 0 })).toBeNull();
+    expect(clutchContext({ cradleOrder: ['a', 'b'], activePetIndex: 1 })).toEqual({ index: 1, count: 2 });
   });
 
-  it('reports an optimal nest immediately after the egg is laid', () => {
+  it('paints a fresh egg in the sweet spot, with its shell, weather, and first wish', () => {
     const payload = buildWidgetPayload(petAt(baseEpoch), baseEpoch);
-    expect(payload?.temperatureCelsius).toBe(silkieChickenConfig.temperatureTargetCelsius);
-    expect(payload?.temperatureStatus).toBe('optimal');
-    expect(payload?.humidityPct).toBe(silkieChickenConfig.humidityTargetPct);
-    expect(payload?.humidityStatus).toBe('optimal');
-    expect(payload?.incubationDayDisplay).toBe('Day 0 of 21');
-    expect(payload?.isReadyToHatch).toBe(false);
+    const frame = payload?.frames[0];
+    expect(payload?.phase).toBe('incubating');
+    expect(payload?.nickname).toBe('Pip');
+    expect(payload?.commonName).toBe('Silkie Chicken');
+    expect(payload?.shell).toEqual({
+      shape: 'oval',
+      speckle: 'fine',
+      body: '#F3E4B8',
+      stroke: '#D7C28A',
+      highlight: '#FFF8E6',
+      speckleColor: '#C4A66A',
+      shadow: '#3A2A1C',
+      crack: '#5C4030',
+    });
+    expect(frame).toMatchObject({
+      atEpoch: baseEpoch,
+      phase: 'incubating',
+      headline: 'Day 0 of 21',
+      detail: translate('weather.mild'),
+      warmthLabel: translate('climate.optimal'),
+      warmthOptimal: true,
+      humidityLabel: translate('climate.optimal'),
+      humidityOptimal: true,
+      inSweetSpot: true,
+      onStrike: false,
+      pipped: false,
+      temperatureText: '37.5°',
+      humidityText: '55%',
+      footer: translate('widget.wish.lullaby'),
+    });
+    expect(payload?.frames.length).toBeGreaterThan(8);
+    expect(payload?.frames.some((entry) => entry.warmthLabel === translate('climate.tooCold'))).toBe(true);
+    expect(payload?.frames.some((entry) => entry.atEpoch === baseEpoch + 6 * hourMs)).toBe(true);
+    expect(payload?.frames.every((entry) => entry.phase !== 'unviable')).toBe(true);
+    expect(frame?.accessibilityLabel).toContain('Pip');
+    expect(frame?.accessibilityLabel).toContain('Warmth 37.5°');
   });
 
-  it('marks the egg ready once incubation progress reaches the hatch boundary', () => {
+  it('lets a tended nest cool on the home screen before the embryo is lost', () => {
+    const now = baseEpoch + 10 * hourMs;
+    const payload = buildWidgetPayload(petAt(baseEpoch), now);
+    const frame = payload?.frames[0];
+    expect(frame?.phase).toBe('incubating');
+    expect(frame?.warmthOptimal).toBe(false);
+    expect(frame?.warmthLabel).toBe(translate('climate.tooCold'));
+    expect(frame?.headline).toBe('Day 0 of 21');
+    const later = payload?.frames[payload.frames.length - 1];
+    expect(later && frame && later.atEpoch > frame.atEpoch).toBe(true);
+    expect(Number.parseFloat(later?.temperatureText ?? '0')).toBeLessThan(
+      Number.parseFloat(frame?.temperatureText ?? '0')
+    );
+  });
+
+  it('tells the truth when neglect has already ended the incubation', () => {
+    const now = baseEpoch + 8 * dayMs;
+    const payload = buildWidgetPayload(petAt(baseEpoch), now);
+    expect(payload?.phase).toBe('unviable');
+    expect(payload?.frames).toHaveLength(1);
+    expect(payload?.frames[0]).toMatchObject({
+      phase: 'unviable',
+      headline: translate('widget.goneCold'),
+      detail: translate('nest.unviableBody'),
+    });
+    expect(payload?.unviableTitle).toBe(translate('nest.unviableTitle'));
+    expect(payload?.frames[0]?.accessibilityLabel).toContain(translate('nest.unviableTitle'));
+  });
+
+  it('marks a tended egg ready at the hatch boundary', () => {
     const now = baseEpoch + silkieChickenConfig.incubationDays * dayMs;
-    const payload = buildWidgetPayload(petAt(now), now);
-    expect(payload?.progressPct).toBe(1);
-    expect(payload?.isReadyToHatch).toBe(true);
-    expect(payload?.incubationDayDisplay).toBe('Day 21 of 21');
+    const tended = buildWidgetPayload(
+      petAt(baseEpoch, {
+        lastWarmedEpoch: now,
+        lastMistedEpoch: now,
+        currentTemperatureCelsius: silkieChickenConfig.temperatureTargetCelsius,
+        currentHumidityPct: silkieChickenConfig.humidityTargetPct,
+      }),
+      now
+    );
+    expect(tended?.phase).toBe('ready');
+    expect(tended?.frames[0]).toMatchObject({
+      phase: 'ready',
+      headline: translate('widget.ready'),
+      progressPct: 1,
+      inSweetSpot: true,
+    });
+  });
+
+  it('holds a hatched creature as one sanctuary frame', () => {
+    const payload = buildWidgetPayload(petAt(baseEpoch, { isHatched: true, hatchedAtEpoch: baseEpoch }), baseEpoch + hourMs);
+    expect(payload?.phase).toBe('hatched');
+    expect(payload?.frames).toHaveLength(1);
+    expect(payload?.frames[0]?.headline).toBe(translate('widget.hatched'));
+    expect(payload?.frames[0]?.detail).toBe(translate('widget.hatchedDetail'));
+  });
+
+  it('says a dry-country egg likes it dry instead of asking for mist', () => {
+    const emu = {
+      ...createPetInstance({
+        id: 'emu-1',
+        speciesId: 'emu',
+        nickname: 'Stripe',
+        nowEpoch: baseEpoch,
+      }),
+      care: { ...emptyCareLog(), grantedWindows: [0] },
+    };
+    const payload = buildWidgetPayload(emu, baseEpoch);
+    expect(payload?.frames[0]?.footer).toBe(translate('care.prefersDry'));
+    expect(payload?.shell.shape).toBe('elliptical');
+    expect(payload?.frames[0]?.humidityLabel).toBe(translate('climate.optimal'));
+    expect(emuConfig.humidityTargetPct).toBeLessThanOrEqual(35);
+  });
+
+  it('freezes the picture when the device clock rolls backward', () => {
+    const payload = buildWidgetPayload(
+      petAt(baseEpoch, { lastVerifiedEpoch: baseEpoch + 2 * hourMs }),
+      baseEpoch
+    );
+    expect(payload?.frames).toHaveLength(1);
+    expect(payload?.frames[0]?.detail).toBe(translate('widget.clockPaused'));
+    expect(payload?.phase).not.toBe('unviable');
+  });
+
+  it('labels a second nest when the clutch is passed in', () => {
+    const payload = buildWidgetPayload(petAt(baseEpoch), baseEpoch, { index: 1, count: 2 });
+    expect(payload?.clutchLabel).toBe('Nest 2 of 2');
+    expect(payload?.frames[0]?.footer).toContain('Wants a lullaby');
   });
 
   it('writes the shared JSON payload and asks WidgetKit to reload every timeline', () => {
@@ -125,28 +231,37 @@ describe('Widget bridge', () => {
     const parsed = JSON.parse(stored.value ?? '{}') as WidgetPayload;
     expect(Object.keys(parsed).sort()).toEqual(
       [
-        'humidityPct',
-        'humidityStatus',
-        'incubationDayDisplay',
-        'isReadyToHatch',
-        'lastUpdatedEpoch',
+        'clutchLabel',
+        'commonName',
+        'emptyBody',
+        'emptyTitle',
+        'frames',
+        'hatchedDetail',
+        'hearts',
+        'humidityTitle',
         'nickname',
         'petId',
-        'progressPct',
+        'phase',
+        'shell',
         'speciesId',
-        'temperatureCelsius',
-        'temperatureStatus',
+        'unviableBody',
+        'unviableTitle',
+        'warmthTitle',
       ].sort()
     );
     expect(WIDGET_PAYLOAD_KEY).toBe('hatchpal.widget.payload');
+    expect(parsed.frames[0]?.temperatureText).toBe('37.5°');
   });
 
-  it('clears the shared payload when the nest is empty and still reloads timelines', () => {
+  it('publishes an explicit empty nest instead of leaving a stale egg behind', () => {
     const client = memoryClient();
     client.set(WIDGET_PAYLOAD_KEY, '{"petId":"stale"}');
     const payload = publishWidgetForPet(null, baseEpoch, { client, reload: true });
-    expect(payload).toBeNull();
-    expect(client.snapshot()).toEqual({ value: null, reloads: 1 });
+    expect(payload).toEqual(emptyWidgetPayload());
+    expect(payload.phase).toBe('empty');
+    expect(payload.frames).toEqual([]);
+    expect(client.snapshot().reloads).toBe(1);
+    expect(JSON.parse(client.snapshot().value ?? '{}')).toMatchObject({ phase: 'empty' });
   });
 
   it('can write telemetry without reloading when a caller asks to defer the refresh', () => {
@@ -156,7 +271,7 @@ describe('Widget bridge', () => {
     expect(client.snapshot().reloads).toBe(0);
   });
 
-  it('reloads after adoption, warming, misting, and hatching, and ignores the display clock', () => {
+  it('reloads after care, loss, rename, and a clutch change, and ignores an unchanged egg', () => {
     const laid = stamp(petAt(baseEpoch));
     const cold = watch(null, false);
     expect(widgetSyncReason(cold, watch(null, false))).toBeNull();
@@ -172,9 +287,24 @@ describe('Widget bridge', () => {
     const hatched = { ...misted, isHatched: true };
     expect(widgetSyncReason(watch(misted), watch(hatched))).toBe('hatch');
 
+    const lost = { ...misted, status: 'unviable' };
+    expect(widgetSyncReason(watch(misted), watch(lost))).toBe('loss');
+
+    const renamed = { ...misted, nickname: 'Pebble' };
+    expect(widgetSyncReason(watch(misted), watch(renamed))).toBe('rename');
+
+    const loved = { ...misted, care: { hearts: 1 } };
+    expect(widgetSyncReason(watch(misted), watch(loved))).toBe('care');
+
     const other = { ...hatched, id: 'pet-2' };
     expect(widgetSyncReason(watch(hatched), watch(other))).toBe('focus');
     expect(widgetSyncReason(watch(hatched), watch(null))).toBe('clear');
     expect(widgetSyncReason(watch(misted), watch({ ...misted }))).toBeNull();
+    expect(
+      widgetSyncReason(
+        watch(misted, true, { cradleOrder: ['pet-1'], activePetIndex: 0 }),
+        watch(misted, true, { cradleOrder: ['pet-1', 'pet-2'], activePetIndex: 0 })
+      )
+    ).toBe('clutch');
   });
 });

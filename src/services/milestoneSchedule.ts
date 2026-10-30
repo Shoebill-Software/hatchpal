@@ -1,7 +1,7 @@
 import { getSortedMilestones } from '@/domain/milestones';
 import type { BiologicalMilestone, DevelopmentStage, PetInstance, SpeciesConfig, SpeciesId } from '@/domain/types';
 
-import { milestoneAlertCopy } from './notificationCopy';
+import { milestoneAlertCopy, milestoneAlertSubtitle } from './notificationCopy';
 
 /** One incubation day, in milliseconds. Matches `day * 86400 * 1000`. */
 export const INCUBATION_DAY_MS = 86400 * 1000;
@@ -32,6 +32,7 @@ export function milestoneNotificationId(petId: string, day: number): string {
 /**
  * Upcoming biological alerts whose trigger is strictly after `nowEpoch`.
  * Day 0 (cleavage / the moment of laying) is the adoption itself and is never alerted.
+ * A hatched creature or an embryo already lost to the cold has nothing left to announce.
  */
 export function selectUpcomingMilestoneAlerts(
   pet: PetInstance,
@@ -41,8 +42,10 @@ export function selectUpcomingMilestoneAlerts(
   if (!Number.isFinite(pet.laidAtEpoch) || !Number.isFinite(nowEpoch)) {
     return [];
   }
+  if (pet.isHatched || pet.status === 'unviable') {
+    return [];
+  }
 
-  const nickname = pet.nickname.trim().length > 0 ? pet.nickname.trim() : species.commonName;
   const alerts: MilestoneAlert[] = [];
 
   for (const milestone of getSortedMilestones(species.milestones)) {
@@ -68,7 +71,7 @@ export function selectUpcomingMilestoneAlerts(
       triggerEpoch,
       identifier: milestoneNotificationId(pet.id, milestone.day),
       title: copy.title,
-      subtitle: nickname,
+      subtitle: milestoneAlertSubtitle(pet.nickname, milestone.day, species.commonName),
       body: copy.body,
     });
   }
