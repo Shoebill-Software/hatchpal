@@ -7,7 +7,7 @@ import {
 
 import { usePreferencesStore } from '@/store/usePreferencesStore';
 
-import { SOUND_EFFECT_IDS, type SoundEffectId } from './soundCues';
+import { LOOPING_EFFECT_IDS, SOUND_EFFECT_IDS, type SoundEffectId } from './soundCues';
 
 const SOUND_SOURCES: Record<SoundEffectId, number> = {
   tap: require('../../assets/audio/tap.wav'),
@@ -16,8 +16,18 @@ const SOUND_SOURCES: Record<SoundEffectId, number> = {
   shell_crack: require('../../assets/audio/shell_crack.wav'),
   hatch_call: require('../../assets/audio/hatch_call.wav'),
   heartbeat: require('../../assets/audio/heartbeat.wav'),
-  thermal_hum: require('../../assets/audio/thermal_hum.wav'),
-  mist_whoosh: require('../../assets/audio/mist_whoosh.wav'),
+  ember_loop: require('../../assets/audio/ember_loop.wav'),
+  warm_settle: require('../../assets/audio/warm_settle.wav'),
+  mist_spritz_a: require('../../assets/audio/mist_spritz_a.wav'),
+  mist_spritz_b: require('../../assets/audio/mist_spritz_b.wav'),
+  mist_spritz_c: require('../../assets/audio/mist_spritz_c.wav'),
+  mist_settle: require('../../assets/audio/mist_settle.wav'),
+  perfect_chime: require('../../assets/audio/perfect_chime.wav'),
+  wish_granted: require('../../assets/audio/wish_granted.wav'),
+  pip_blip_a: require('../../assets/audio/pip_blip_a.wav'),
+  pip_blip_b: require('../../assets/audio/pip_blip_b.wav'),
+  pip_blip_c: require('../../assets/audio/pip_blip_c.wav'),
+  pip_peep: require('../../assets/audio/pip_peep.wav'),
 };
 
 const DEFAULT_VOLUME: Record<SoundEffectId, number> = {
@@ -27,8 +37,18 @@ const DEFAULT_VOLUME: Record<SoundEffectId, number> = {
   shell_crack: 0.7,
   hatch_call: 0.82,
   heartbeat: 0.34,
-  thermal_hum: 0.28,
-  mist_whoosh: 0.4,
+  ember_loop: 0.5,
+  warm_settle: 0.46,
+  mist_spritz_a: 0.5,
+  mist_spritz_b: 0.5,
+  mist_spritz_c: 0.5,
+  mist_settle: 0.4,
+  perfect_chime: 0.5,
+  wish_granted: 0.55,
+  pip_blip_a: 0.16,
+  pip_blip_b: 0.16,
+  pip_blip_c: 0.16,
+  pip_peep: 0.5,
 };
 
 type CueSubscription = {
@@ -87,6 +107,10 @@ export async function preloadSoundEffects(
 
 /** Drops every loaded player. Safe to call when the last sensory screen unmounts. */
 export function unloadSoundEffects(): void {
+  for (const id of [...loopFades.keys()]) {
+    clearLoopFade(id);
+  }
+  loopWanted.clear();
   for (const id of [...cues.keys()]) {
     disposeCue(id);
   }
@@ -149,6 +173,78 @@ export async function playSoundEffect(id: SoundEffectId, options?: PlaySoundOpti
   }
 }
 
+const loopWanted = new Map<SoundEffectId, boolean>();
+const loopFades = new Map<SoundEffectId, ReturnType<typeof setInterval>>();
+const LOOP_FADE_STEP_MS = 30;
+
+function clearLoopFade(id: SoundEffectId): void {
+  const timer = loopFades.get(id);
+  if (timer != null) {
+    clearInterval(timer);
+    loopFades.delete(id);
+  }
+}
+
+/** Starts a looping cue, or keeps it running if it already is. */
+export async function startLoop(id: SoundEffectId, options?: PlaySoundOptions): Promise<void> {
+  if (!usePreferencesStore.getState().soundEnabled) {
+    return;
+  }
+  loopWanted.set(id, true);
+  try {
+    await configureSensoryAudio();
+    if (!loopWanted.get(id)) {
+      return;
+    }
+    const cue = ensureCue(id);
+    if (!cue) {
+      return;
+    }
+    clearLoopFade(id);
+    const requested = options?.volume;
+    cue.player.loop = true;
+    cue.player.volume =
+      requested != null && Number.isFinite(requested) ? Math.min(1, Math.max(0, requested)) : DEFAULT_VOLUME[id];
+    if (!cue.player.playing) {
+      cue.player.play();
+    }
+  } catch {
+    // Sensory audio never blocks incubation.
+  }
+}
+
+/** Fades a looping cue out and rewinds it for the next start. */
+export function stopLoop(id: SoundEffectId, fadeMs = 240): void {
+  loopWanted.set(id, false);
+  const cue = cues.get(id);
+  if (!cue) {
+    return;
+  }
+  clearLoopFade(id);
+  const startVolume = cue.player.volume;
+  const steps = Math.max(1, Math.round(fadeMs / LOOP_FADE_STEP_MS));
+  let step = 0;
+  const timer = setInterval(() => {
+    step += 1;
+    const current = cues.get(id);
+    if (!current || current.token !== cue.token || loopWanted.get(id)) {
+      clearLoopFade(id);
+      return;
+    }
+    try {
+      current.player.volume = startVolume * Math.max(0, 1 - step / steps);
+      if (step >= steps) {
+        clearLoopFade(id);
+        current.player.pause();
+        void current.player.seekTo(0).catch(() => undefined);
+      }
+    } catch {
+      clearLoopFade(id);
+    }
+  }, LOOP_FADE_STEP_MS);
+  loopFades.set(id, timer);
+}
+
 function ensureCue(id: SoundEffectId): LoadedCue | null {
   const existing = cues.get(id);
   if (existing) {
@@ -160,7 +256,7 @@ function ensureCue(id: SoundEffectId): LoadedCue | null {
       updateInterval: 200,
       keepAudioSessionActive: true,
     });
-    player.loop = false;
+    player.loop = LOOPING_EFFECT_IDS.includes(id);
     player.volume = DEFAULT_VOLUME[id];
 
     const cue: LoadedCue = {
@@ -171,7 +267,7 @@ function ensureCue(id: SoundEffectId): LoadedCue | null {
     };
 
     cue.subscription = player.addListener('playbackStatusUpdate', (status: AudioStatus) => {
-      if (!status.didJustFinish) {
+      if (!status.didJustFinish || LOOPING_EFFECT_IDS.includes(id)) {
         return;
       }
       if (id === 'heartbeat') {

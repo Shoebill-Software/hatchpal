@@ -46,19 +46,31 @@ describe('English dictionary', () => {
     expect(translate('journal.scientificObservation')).toBe('Scientific Observation');
     expect(translate('journal.candlingReadout')).toBe('Candling Readout');
     expect(translate('journal.replaySound')).toBe('Replay Sound');
+    expect(translate('journal.subtitle')).toBe('A record of this nest, written as it happens.');
+    expect(translate('journal.shellChapter')).toBe('In the shell');
+    expect(translate('journal.growthChapter')).toBe('After emergence');
+    expect(translate('journal.adoptedLabel')).toBe('Adopted');
     expect(translate('journal.weightLog')).toBe('Weight log');
     expect(translate('journal.beforeHatchWeight')).toBe('Mass is logged from emergence.');
     expect(translate('climate.driftWarmth', { temp: '37.5' })).toBe('Settles near 37.5°.');
-    expect(translate('climate.strike', { temp: '37.5', humidity: '55' })).toBe(
-      'On strike until the nest is near 37.5° and 55%.'
-    );
+    expect(translate('climate.strike', { temp: '37.5', humidity: '55' })).toContain('37.5°');
+    expect(translate('climate.strike', { temp: '37.5', humidity: '55' })).toContain('Twelve more hours');
+    expect(translate('tutorial.stakes.body')).toContain('full day');
+    expect(translate('tutorial.stakes.body')).toContain('Twelve hours');
+    expect(translate('keeper.first_hatch.progress', { current: 0, goal: 1 })).toBe('Hatches 0 of 1');
     expect(translate('settings.appearance.light')).toBe('Light');
     expect(translate('settings.appearance.dark')).toBe('Dark');
     expect(translate('metric.ageDay', { day: 3 })).toBe('Day 3');
     expect(translate('tutorial.step', { current: 2, total: 5 })).toBe('Step 2 of 5');
     expect(translate('tutorial.heart.body')).toContain('Day 3');
     expect(translate('tutorial.heart.body')).toContain('None');
-    expect(translate('tutorial.begin')).toBe('Begin Incubation');
+    expect(translate('tutorial.hello.title', { name: 'Pebble' })).toBe('Meet Pebble!');
+    expect(translate('care.wishGranted', { hearts: 3 })).toBe('Wish granted! ♥ 3');
+    expect(translate('alert.subtitle', { name: 'Pip', day: 19 })).toBe('Pip · Day 19');
+    expect(translate('alert.cue.still')).toBe('Keep the nest still and warm.');
+    expect(translate('widget.ready')).toBe('Ready to hatch');
+    expect(translate('widget.wish.lullaby')).toBe('Wants a lullaby');
+    expect(translate('widget.clutch', { index: 2, count: 3 })).toBe('Nest 2 of 3');
   });
 
   it('formats a fresh mist and an older mist without leaving template tokens', () => {

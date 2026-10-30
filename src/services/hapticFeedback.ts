@@ -20,6 +20,17 @@ export function triggerImpact(style: Haptics.ImpactFeedbackStyle): Promise<void>
   );
 }
 
+/** The lightest detent tick, for dials and gauges. No-ops when haptics are disabled. */
+export function triggerSelection(): Promise<void> {
+  if (!hapticsAllowed()) {
+    return Promise.resolve();
+  }
+  return Haptics.selectionAsync().then(
+    () => undefined,
+    () => undefined
+  );
+}
+
 /** Success, warning, or error notification haptic. No-ops when haptics are disabled. */
 export function triggerNotification(type: Haptics.NotificationFeedbackType): Promise<void> {
   if (!hapticsAllowed()) {

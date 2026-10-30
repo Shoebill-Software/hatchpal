@@ -2,7 +2,13 @@ import { useCallback, useEffect } from 'react';
 import { AppState } from 'react-native';
 
 import type { DevelopmentStage } from '@/domain/types';
-import { playSoundEffect, retainSoundEffects, type PlaySoundOptions } from '@/services/audio';
+import {
+  playSoundEffect,
+  retainSoundEffects,
+  startLoop,
+  stopLoop,
+  type PlaySoundOptions,
+} from '@/services/audio';
 import {
   nestPipIntervalMs,
   resolveNestPipEffect,
@@ -12,6 +18,8 @@ import { usePreferencesStore } from '@/store/usePreferencesStore';
 
 export type SoundEffectsApi = {
   play: (id: SoundEffectId, options?: PlaySoundOptions) => void;
+  loop: (id: SoundEffectId, options?: PlaySoundOptions) => void;
+  stop: (id: SoundEffectId, fadeMs?: number) => void;
 };
 
 /** Preloads the biological cue registry and releases it when this screen unmounts. */
@@ -25,7 +33,15 @@ export function useSoundEffects(): SoundEffectsApi {
     void playSoundEffect(id, options);
   }, []);
 
-  return { play };
+  const loop = useCallback((id: SoundEffectId, options?: PlaySoundOptions) => {
+    void startLoop(id, options);
+  }, []);
+
+  const stop = useCallback((id: SoundEffectId, fadeMs?: number) => {
+    stopLoop(id, fadeMs);
+  }, []);
+
+  return { play, loop, stop };
 }
 
 /**
